@@ -2583,13 +2583,13 @@
         const roofSummary = useMemo(() => {
           if(roof.covering === "SHINGLE"){
             const kind = SHINGLE_KIND.find(x=>x.code===roof.shingleKind)?.label || "Shingles";
-            return `${kind} • ${roof.shingleLength} • ${roof.shingleExposure}`;
+            return `${kind} * ${roof.shingleLength} * ${roof.shingleExposure}`;
           }
           if(roof.covering === "METAL"){
             const kind = METAL_KIND.find(x=>x.code===roof.metalKind)?.label || "Metal";
-            return `${kind} • ${roof.metalPanelWidth}`;
+            return `${kind} * ${roof.metalPanelWidth}`;
           }
-          return roof.otherDesc ? `Other • ${roof.otherDesc}` : "Other";
+          return roof.otherDesc ? `Other * ${roof.otherDesc}` : "Other";
         }, [roof]);
 
         // === TS SVG ===
@@ -2611,7 +2611,7 @@
               />
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+                {ts.data.dir}{ts.data.locked ? " * LOCKED" : ""}
               </text>
 
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
@@ -2644,7 +2644,7 @@
               />
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+                {ts.data.dir}{ts.data.locked ? " * LOCKED" : ""}
               </text>
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
               <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
@@ -2668,7 +2668,7 @@
                 strokeWidth={isSel ? 3 : 2}
               />
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
-                {obs.name} • {obs.data.code}
+                {obs.name} * {obs.data.code}
               </text>
               {isSel && !obs.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
@@ -2693,7 +2693,7 @@
                 strokeWidth={2}
               />
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
-                {obs.name} • {obs.data.code}
+                {obs.name} * {obs.data.code}
               </text>
             </g>
           );
@@ -2740,7 +2740,7 @@
             }
             return `${entry.mode} ${entry.size}"`;
           });
-          return parts.join(" • ");
+          return parts.join(" * ");
         };
 
         const hailIndicatorSummary = useMemo(() => {
@@ -2915,7 +2915,7 @@
 
         const photoCaption = (label, photo) => {
           if(photo?.name){
-            return `${label} • ${photo.name}`;
+            return `${label} * ${photo.name}`;
           }
           return label;
         };
@@ -2926,7 +2926,7 @@
             : entry.mode === "spatter"
               ? "Spatter"
               : "Dent";
-          return `${base} ${idx + 1} • ${entry.size}"`;
+          return `${base} ${idx + 1} * ${entry.size}"`;
         };
 
         const collectTsPhotos = (ts) => {
@@ -2935,10 +2935,10 @@
             photos.push({ url: ts.data.overviewPhoto.url, caption: photoCaption("Test square overview", ts.data.overviewPhoto) });
           }
           (ts.data.bruises || []).forEach((b, idx) => {
-            if(b.photo?.url) photos.push({ url: b.photo.url, caption: photoCaption(`Bruise ${idx + 1} • ${b.size}"`, b.photo) });
+            if(b.photo?.url) photos.push({ url: b.photo.url, caption: photoCaption(`Bruise ${idx + 1} * ${b.size}"`, b.photo) });
           });
           (ts.data.conditions || []).forEach((c, idx) => {
-            if(c.photo?.url) photos.push({ url: c.photo.url, caption: photoCaption(`Condition ${idx + 1} • ${c.code}`, c.photo) });
+            if(c.photo?.url) photos.push({ url: c.photo.url, caption: photoCaption(`Condition ${idx + 1} * ${c.code}`, c.photo) });
           });
           return photos;
         };
@@ -3334,7 +3334,7 @@
                 <div className="navCard">
                   <div className="navRow">
                     <div className="zBtns">
-                      <button className="zBtn" onClick={zoomOut}>−</button>
+                      <button className="zBtn" onClick={zoomOut}>-</button>
                       <button className="zBtn" onClick={zoomIn}>+</button>
                       <button className="zBtn" onClick={zoomFit}>Fit</button>
                       <button className="zBtn" onClick={zoomReset}>Reset</button>
@@ -3343,7 +3343,7 @@
                   </div>
                   <div className="hint">
                     <div><b>iPad:</b> pinch to zoom (2 fingers), drag to pan (1 finger on empty space).</div>
-                    <div><b>Mouse:</b> Shift+drag (pan), Ctrl/⌘+wheel (zoom).</div>
+                    <div><b>Mouse:</b> Shift+drag (pan), Ctrl/Cmd+wheel (zoom).</div>
                   </div>
                 </div>
               </div>
@@ -3444,7 +3444,7 @@
                 }}>
                   <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Upload a roof diagram to begin</div>
                   <div className="tiny" style={{marginTop:6}}>
-                    Tap “Upload Image” (PNG/JPG). Then place test squares and markers.
+                    Tap "Upload Image" (PNG/JPG). Then place test squares and markers.
                   </div>
                   <div style={{marginTop:12}}>
                     <label className="btn btnPrimary" style={{display:"inline-block", cursor:"pointer"}}>
@@ -3651,34 +3651,34 @@
 
                                 {type==="ts" && (
                                   <span>
-                                    {item.data.dir} • {(item.data.bruises||[]).length} hits
-                                    {item.data.conditions?.length ? ` • ${item.data.conditions.length} conditions` : ""}
-                                    {item.data.overviewPhoto ? " • photo" : ""}
+                                    {item.data.dir} * {(item.data.bruises||[]).length} hits
+                                    {item.data.conditions?.length ? ` * ${item.data.conditions.length} conditions` : ""}
+                                    {item.data.overviewPhoto ? " * photo" : ""}
                                   </span>
                                 )}
 
                                 {type==="apt" && (
                                   <span>
-                                    {item.data.type} • {item.data.dir}
-                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no hail"}
+                                    {item.data.type} * {item.data.dir}
+                                    {isDamaged(item) ? ` * ${damageSummary(item)}` : " * no hail"}
                                   </span>
                                 )}
 
                                 {type==="ds" && (
                                   <span>
-                                    {item.data.dir} • {item.data.material} • {item.data.style}
-                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no hail"}
+                                    {item.data.dir} * {item.data.material} * {item.data.style}
+                                    {isDamaged(item) ? ` * ${damageSummary(item)}` : " * no hail"}
                                   </span>
                                 )}
 
                                 {type==="obs" && (
                                   <span>
-                                    {item.data.code} {item.data.points?.length ? "• area" : "• pin"}
+                                    {item.data.code} {item.data.points?.length ? "* area" : "* pin"}
                                   </span>
                                 )}
                                 {type==="wind" && (
                                   <span>
-                                    {item.data.dir} • Creased: {item.data.creasedCount || 0} • Torn/Missing: {item.data.tornMissingCount || 0}
+                                    {item.data.dir} * Creased: {item.data.creasedCount || 0} * Torn/Missing: {item.data.tornMissingCount || 0}
                                   </span>
                                 )}
                               </div>
@@ -3857,7 +3857,7 @@
                               <div className="row" style={{marginBottom:8}}>
                                 <div style={{flex:1}}>
                                   <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
-                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
+                                  <div className="tiny">Add one entry per dent or spatter. Use "Spatter + Dent" when both happen at the same spot.</div>
                                 </div>
                                 <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
                                   Add
@@ -3950,7 +3950,7 @@
                               <div className="row" style={{marginBottom:8}}>
                                 <div style={{flex:1}}>
                                   <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
-                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
+                                  <div className="tiny">Add one entry per dent or spatter. Use "Spatter + Dent" when both happen at the same spot.</div>
                                 </div>
                                 <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
                                   Add
@@ -4023,7 +4023,7 @@
                                   style={{flex:"0 0 auto"}}
                                   onClick={()=>updateItemData("creasedCount", Math.max(0, (activeItem.data.creasedCount || 0) - 1))}
                                 >
-                                  −
+                                  -
                                 </button>
                                 <input
                                   className="inp"
@@ -4050,7 +4050,7 @@
                                   style={{flex:"0 0 auto"}}
                                   onClick={()=>updateItemData("tornMissingCount", Math.max(0, (activeItem.data.tornMissingCount || 0) - 1))}
                                 >
-                                  −
+                                  -
                                 </button>
                                 <input
                                   className="inp"
@@ -4102,7 +4102,7 @@
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Code</div>
                               <select className="inp" value={activeItem.data.code} onChange={(e)=>updateItemData("code", e.target.value)}>
-                                {OBS_CODES.map(c => <option key={c.code} value={c.code}>{c.code} — {c.label}</option>)}
+                                {OBS_CODES.map(c => <option key={c.code} value={c.code}>{c.code} -- {c.label}</option>)}
                               </select>
                               <div className="tiny" style={{marginTop:6}}>Tip: drag to draw a purple observation area, then drag the corners to match the shape.</div>
                               {activeItem.data.code === "DDM" && (
@@ -4162,7 +4162,7 @@
                               <tr key={dir}>
                                 <td style={{fontWeight:1300}}>{dir}</td>
                                 <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
-                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
+                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "--"}</td>
                                 <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
                                 <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
                               </tr>
@@ -4188,8 +4188,8 @@
                             return (
                               <tr key={dir}>
                                 <td style={{fontWeight:1300}}>{dir}</td>
-                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
-                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "--"}</td>
+                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "--"}</td>
                               </tr>
                             );
                           })}
@@ -4212,7 +4212,7 @@
                 <div className="reportHeaderText">
                   <div className="hdrLine1">{reportData.project.projectName || residenceName}</div>
                   <div className="hdrLine2">Facts-only report builder (no causation)</div>
-                  <div className="hdrLine3">Front faces: {reportData.project.frontFaces || frontFaces || "—"}</div>
+                  <div className="hdrLine3">Front faces: {reportData.project.frontFaces || frontFaces || "--"}</div>
                 </div>
                 <div className="reportActions">
                   <button className="hdrBtn" onClick={() => saveState("manual")}>Save</button>
@@ -4867,7 +4867,7 @@
                           <div className="sectionTitle">{card.title}</div>
                           {testSquareSummary && (
                             <div className="inlineHelp" style={{marginBottom:10}}>
-                              Diagram summary: {testSquareSummary.count} test squares, max size {testSquareSummary.maxSize || "—"}, directions {testSquareSummary.directions}.
+                              Diagram summary: {testSquareSummary.count} test squares, max size {testSquareSummary.maxSize || "--"}, directions {testSquareSummary.directions}.
                             </div>
                           )}
                           <div className="lbl">Observed conditions</div>
@@ -4959,8 +4959,8 @@
             <div className="printPage">
               <div className="printHeader">
                 <div>
-                  <div className="printTitle">{residenceName} • Roof Diagram Export</div>
-                  <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                  <div className="printTitle">{residenceName} * Roof Diagram Export</div>
+                  <div className="tiny">Roof: {roofSummary} * Front faces: {frontFaces}</div>
                 </div>
               </div>
 
@@ -5014,7 +5014,7 @@
                       <tr key={`print-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
                         <td>{dashboard[dir].tsHits}</td>
-                        <td>{dashboard[dir].tsMaxHail>0 ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
+                        <td>{dashboard[dir].tsMaxHail>0 ? `${dashboard[dir].tsMaxHail}"` : "--"}</td>
                         <td>{dashboard[dir].wind.creased}</td>
                         <td>{dashboard[dir].wind.torn_missing}</td>
                       </tr>
@@ -5034,8 +5034,8 @@
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`print-hail-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].aptMax>0 ? `${dashboard[dir].aptMax}"` : "—"}</td>
-                        <td>{dashboard[dir].dsMax>0 ? `${dashboard[dir].dsMax}"` : "—"}</td>
+                        <td>{dashboard[dir].aptMax>0 ? `${dashboard[dir].aptMax}"` : "--"}</td>
+                        <td>{dashboard[dir].dsMax>0 ? `${dashboard[dir].dsMax}"` : "--"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5051,8 +5051,8 @@
                     const tsPhotos = collectTsPhotos(ts);
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
-                        <div style={{fontWeight:1200}}>{ts.name} • {ts.data.dir}</div>
-                        <div className="tiny">Hits: {(ts.data.bruises||[]).length} • Conditions: {(ts.data.conditions||[]).length}</div>
+                        <div style={{fontWeight:1200}}>{ts.name} * {ts.data.dir}</div>
+                        <div className="tiny">Hits: {(ts.data.bruises||[]).length} * Conditions: {(ts.data.conditions||[]).length}</div>
                         {tsPhotos.map((p, idx) => (
                           <PrintPhoto
                             key={`${ts.id}-photo-${idx}`}
@@ -5092,8 +5092,8 @@
                 <div className="printGrid" style={{marginTop:10}}>
                   {items.filter(i => i.type === "wind").map(w => (
                     <div className="printCard" key={`wind-${w.id}`}>
-                      <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>
-                      <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
+                      <div style={{fontWeight:1200}}>{w.name} * {w.data.dir}</div>
+                      <div className="tiny">Creased: {w.data.creasedCount || 0} * Torn/Missing: {w.data.tornMissingCount || 0}</div>
                       {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (
                         <>
                           {w.data.creasedPhoto?.url && (
@@ -5145,10 +5145,10 @@
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`hail-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "—"}</td>
+                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "--"}</td>
+                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "--"}</td>
+                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "--"}</td>
+                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "--"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5157,7 +5157,7 @@
                 <div className="printGrid">
                   {items.filter(i => i.type === "apt" || i.type === "ds").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
-                      <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>
+                      <div style={{fontWeight:1200}}>{it.name} * {it.type === "apt" ? "Appurtenance" : "Downspout"} * {it.data.dir}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
                       {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (
                         (it.data.damageEntries || []).map((entry, idx) => (
@@ -5200,7 +5200,7 @@
                 <div className="printGrid">
                   {items.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
-                      <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>
+                      <div style={{fontWeight:1200}}>{obs.name} * {obs.data.code}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
                       {obs.data.photo?.url ? (
                         <PrintPhoto
