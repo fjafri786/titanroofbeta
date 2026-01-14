@@ -73,7 +73,7 @@
         grid-template-columns: 1fr minmax(320px, 420px);
         height:100vh;
         min-height: 100vh;
-        animation: viewEnter 0.22s ease;
+        animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
       /* ========= CANVAS ZONE ========= */
@@ -388,29 +388,37 @@
         cursor:pointer;
         white-space:nowrap;
       }
+      .viewTabsDock{
+        display:flex;
+        justify-content:flex-end;
+        padding:10px 16px 14px;
+        background:#fff;
+        border-top:1px solid var(--border);
+      }
       .viewTabs{
         display:flex;
-        align-items:flex-end;
-        gap:12px;
-        padding:0 4px;
-        border-bottom:1px solid rgba(255,255,255,0.35);
+        align-items:center;
+        gap:6px;
+        padding:4px;
+        border-radius:999px;
+        background:#F8FAFC;
+        border:1px solid rgba(226,232,240,0.9);
       }
       .viewTabs button{
         border:none;
         background:transparent;
-        color:#fff;
+        color: var(--sub);
         font-size:12px;
         font-weight:1200;
-        padding:6px 2px 8px;
+        padding:6px 14px;
         cursor:pointer;
-        opacity:0.75;
-        border-bottom:2px solid transparent;
-        transition: opacity 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        border-radius:999px;
+        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
       }
       .viewTabs button.active{
-        opacity:1;
-        border-color:#fff;
-        transform: translateY(1px);
+        background: linear-gradient(135deg, rgba(14,165,233,0.95), rgba(59,130,246,0.95));
+        color:#fff;
+        box-shadow: 0 10px 16px rgba(2,6,23,0.12);
       }
 
       .hdrEditPanel{
@@ -736,7 +744,7 @@
         flex-direction:column;
         height:100vh;
         background: linear-gradient(180deg, rgba(14,165,233,0.10), rgba(139,92,246,0.12) 55%, rgba(245,247,251,1) 100%);
-        animation: viewEnter 0.22s ease;
+        animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .reportView .pHeader{
         background: linear-gradient(135deg, rgba(14,165,233,0.92), rgba(59,130,246,0.9), rgba(168,85,247,0.85));
@@ -856,6 +864,8 @@
       /* ========= EXPORT / PRINT ========= */
       .printSheet{
         display:none;
+        color:#0F172A;
+        font-size:12px;
       }
       .printHeader{
         display:flex;
@@ -869,11 +879,16 @@
         font-weight:1300;
       }
       .printSection{
-        margin-bottom:18px;
+        margin-bottom:16px;
         page-break-inside: avoid;
+        border:1px solid rgba(226,232,240,0.9);
+        border-radius:14px;
+        padding:14px;
+        background:#fff;
       }
       .printPage{
         page-break-after: always;
+        padding: 8px 0;
       }
       .printPage:last-child{
         page-break-after: auto;
@@ -887,17 +902,18 @@
         position:relative;
         width:100%;
         aspect-ratio: 1024 / 720;
-        border-radius:16px;
+        border-radius:12px;
         border:1px solid rgba(226,232,240,0.95);
         overflow:hidden;
         background:#fff;
       }
       .printSection h3{
         margin:0 0 8px 0;
-        font-size:14px;
+        font-size:13px;
         font-weight:1200;
         text-transform:uppercase;
         letter-spacing:0.4px;
+        color:#0F172A;
       }
       .printGrid{
         display:grid;
@@ -908,7 +924,7 @@
         border:1px solid rgba(226,232,240,0.95);
         border-radius:12px;
         padding:10px;
-        background:#fff;
+        background:#F8FAFC;
         break-inside: avoid;
       }
       .printPhoto{
@@ -941,19 +957,24 @@
       .printTitlePage{
         display:flex;
         flex-direction:column;
-        justify-content:center;
-        min-height: 100vh;
-        gap:16px;
+        justify-content:flex-start;
+        min-height: auto;
+        gap:12px;
+        padding:28px 24px;
+        border:1px solid rgba(226,232,240,0.9);
+        border-radius:16px;
+        background:#fff;
       }
       .printTitleHero{
-        font-size:28px;
+        font-size:24px;
         font-weight:1300;
+        color: var(--navy);
       }
       .printMetaGrid{
         display:grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap:12px;
-        margin-top:12px;
+        margin-top:6px;
       }
       .printMetaCard{
         border:1px solid rgba(226,232,240,0.95);
@@ -965,24 +986,25 @@
         margin:0;
         padding-left:18px;
         display:grid;
-        gap:6px;
-        font-size:13px;
+        gap:4px;
+        font-size:12px;
       }
       .printBlock{
         white-space:pre-wrap;
-        font-size:13px;
-        line-height:1.5;
+        font-size:12px;
+        line-height:1.55;
+        color:#1F2937;
       }
       .printKeyValue{
         display:grid;
-        grid-template-columns: 140px 1fr;
-        gap:8px;
-        font-size:13px;
+        grid-template-columns: 170px 1fr;
+        gap:6px 10px;
+        font-size:12px;
       }
       .printDivider{
         height:1px;
         background: rgba(226,232,240,0.95);
-        margin:12px 0;
+        margin:10px 0;
       }
 
       .authOverlay{
@@ -1023,6 +1045,13 @@
       @keyframes viewEnter{
         from{ opacity:0; transform: translateY(6px); }
         to{ opacity:1; transform: translateY(0); }
+      }
+
+      @media (prefers-reduced-motion: reduce){
+        .app,
+        .reportView{
+          animation: none;
+        }
       }
 
       @media print{
@@ -3114,28 +3143,33 @@
                   {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
                 </button>
               )}
-              <div className="viewTabs" role="tablist" aria-label="View mode">
-                <button
-                  type="button"
-                  className={viewMode === "diagram" ? "active" : ""}
-                  onClick={() => setViewMode("diagram")}
-                >
-                  Diagram
-                </button>
-                <button
-                  type="button"
-                  className={viewMode === "report" ? "active" : ""}
-                  onClick={() => setViewMode("report")}
-                >
-                  Report
-                </button>
-              </div>
               <div className="hdrEditIcon" onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }} title="Edit header info">
                 <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
               </div>
               <div className="hdrEditIcon" onClick={()=>setHdrCollapsed(v=>!v)} title={hdrCollapsed ? "Expand header" : "Collapse header"}>
                 <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
               </div>
+            </div>
+          </div>
+        );
+
+        const viewModeTabs = (
+          <div className="viewTabsDock" role="tablist" aria-label="View mode">
+            <div className="viewTabs">
+              <button
+                type="button"
+                className={viewMode === "diagram" ? "active" : ""}
+                onClick={() => setViewMode("diagram")}
+              >
+                Diagram
+              </button>
+              <button
+                type="button"
+                className={viewMode === "report" ? "active" : ""}
+                onClick={() => setViewMode("report")}
+              >
+                Report
+              </button>
             </div>
           </div>
         );
@@ -3983,6 +4017,8 @@
                 )}
               </div>
 
+              {viewModeTabs}
+
               {/* DASHBOARDS */}
               <div className="dashDock">
                 <div className="dashTitle">
@@ -4686,6 +4722,7 @@
                 </>
               )}
             </div>
+            {viewModeTabs}
           </div>
           )}
 
