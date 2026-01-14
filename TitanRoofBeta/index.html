@@ -7,6 +7,7 @@
 
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
@@ -73,7 +74,7 @@
         grid-template-columns: 1fr minmax(320px, 420px);
         height:100vh;
         min-height: 100vh;
-        animation: viewEnter 0.22s ease;
+        animation: diagramEnter 0.3s ease;
       }
 
       /* ========= CANVAS ZONE ========= */
@@ -388,29 +389,37 @@
         cursor:pointer;
         white-space:nowrap;
       }
+      .viewTabsDock{
+        display:flex;
+        justify-content:flex-end;
+        padding:12px 16px;
+        background:#fff;
+        border-bottom:1px solid var(--border);
+      }
       .viewTabs{
         display:flex;
-        align-items:flex-end;
-        gap:12px;
-        padding:0 4px;
-        border-bottom:1px solid rgba(255,255,255,0.35);
+        align-items:center;
+        gap:6px;
+        padding:4px;
+        border-radius:999px;
+        background:#F8FAFC;
+        border:1px solid rgba(226,232,240,0.9);
       }
       .viewTabs button{
         border:none;
         background:transparent;
-        color:#fff;
+        color: var(--sub);
         font-size:12px;
         font-weight:1200;
-        padding:6px 2px 8px;
+        padding:6px 14px;
         cursor:pointer;
-        opacity:0.75;
-        border-bottom:2px solid transparent;
-        transition: opacity 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        border-radius:999px;
+        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
       }
       .viewTabs button.active{
-        opacity:1;
-        border-color:#fff;
-        transform: translateY(1px);
+        background: linear-gradient(135deg, rgba(14,165,233,0.95), rgba(59,130,246,0.95));
+        color:#fff;
+        box-shadow: 0 10px 16px rgba(2,6,23,0.12);
       }
 
       .hdrEditPanel{
@@ -736,7 +745,7 @@
         flex-direction:column;
         height:100vh;
         background: linear-gradient(180deg, rgba(14,165,233,0.10), rgba(139,92,246,0.12) 55%, rgba(245,247,251,1) 100%);
-        animation: viewEnter 0.22s ease;
+        animation: reportEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .reportView .pHeader{
         background: linear-gradient(135deg, rgba(14,165,233,0.92), rgba(59,130,246,0.9), rgba(168,85,247,0.85));
@@ -781,6 +790,116 @@
         display:flex;
         flex-direction:column;
         gap:16px;
+      }
+
+      .diagramPages{
+        position:absolute;
+        right:16px;
+        top:16px;
+        z-index: 80;
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+      .pageCard{
+        background: rgba(255,255,255,0.92);
+        border:1px solid rgba(226,232,240,0.9);
+        border-radius:16px;
+        padding:10px;
+        box-shadow: var(--shadowSoft);
+        min-width: 220px;
+      }
+      .pageTitle{
+        font-size:12px;
+        font-weight:1200;
+        color: var(--sub);
+        margin-bottom:8px;
+        text-transform:uppercase;
+        letter-spacing:0.4px;
+      }
+      .pageControls{
+        display:flex;
+        gap:8px;
+        align-items:center;
+      }
+      .pageSelect{
+        flex:1;
+        padding:8px 10px;
+        border-radius:10px;
+        border:1px solid rgba(226,232,240,0.95);
+        font-size:12px;
+        font-weight:1100;
+        background:#fff;
+      }
+      .pageNavBtn{
+        padding:8px 10px;
+        border-radius:10px;
+        border:1px solid rgba(226,232,240,0.95);
+        background:#fff;
+        cursor:pointer;
+        font-size:12px;
+        font-weight:1100;
+      }
+      .pageNavBtn:disabled{
+        opacity:0.5;
+        cursor:not-allowed;
+      }
+
+      .exportOverlay{
+        position:fixed;
+        inset:0;
+        background: rgba(15,23,42,0.45);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index: 250;
+        backdrop-filter: blur(4px);
+      }
+      .exportCard{
+        width: min(520px, 92%);
+        background:#fff;
+        border-radius:16px;
+        border:1px solid rgba(226,232,240,0.95);
+        box-shadow: 0 24px 48px rgba(2,6,23,0.2);
+        padding:18px;
+      }
+      .exportTitle{
+        font-size:16px;
+        font-weight:1200;
+        margin-bottom:6px;
+        color: var(--navy);
+      }
+      .exportHint{
+        font-size:12px;
+        color: var(--sub);
+        margin-bottom:14px;
+      }
+      .exportList{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        margin-bottom:14px;
+      }
+      .exportOption{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        padding:10px 12px;
+        border-radius:12px;
+        border:1px solid rgba(226,232,240,0.95);
+        cursor:pointer;
+        font-size:12px;
+        font-weight:1200;
+        background:#fff;
+      }
+      .exportOption.active{
+        border-color: rgba(14,165,233,0.45);
+        background: rgba(14,165,233,0.08);
+      }
+      .exportActions{
+        display:flex;
+        justify-content:flex-end;
+        gap:10px;
       }
       .reportCard{
         background:#fff;
@@ -856,6 +975,8 @@
       /* ========= EXPORT / PRINT ========= */
       .printSheet{
         display:none;
+        color:#0F172A;
+        font-size:12px;
       }
       .printHeader{
         display:flex;
@@ -869,11 +990,16 @@
         font-weight:1300;
       }
       .printSection{
-        margin-bottom:18px;
+        margin-bottom:16px;
         page-break-inside: avoid;
+        border:1px solid rgba(226,232,240,0.9);
+        border-radius:14px;
+        padding:14px;
+        background:#fff;
       }
       .printPage{
         page-break-after: always;
+        padding: 8px 0;
       }
       .printPage:last-child{
         page-break-after: auto;
@@ -887,17 +1013,18 @@
         position:relative;
         width:100%;
         aspect-ratio: 1024 / 720;
-        border-radius:16px;
+        border-radius:12px;
         border:1px solid rgba(226,232,240,0.95);
         overflow:hidden;
         background:#fff;
       }
       .printSection h3{
         margin:0 0 8px 0;
-        font-size:14px;
+        font-size:13px;
         font-weight:1200;
         text-transform:uppercase;
         letter-spacing:0.4px;
+        color:#0F172A;
       }
       .printGrid{
         display:grid;
@@ -908,7 +1035,7 @@
         border:1px solid rgba(226,232,240,0.95);
         border-radius:12px;
         padding:10px;
-        background:#fff;
+        background:#F8FAFC;
         break-inside: avoid;
       }
       .printPhoto{
@@ -941,19 +1068,24 @@
       .printTitlePage{
         display:flex;
         flex-direction:column;
-        justify-content:center;
-        min-height: 100vh;
-        gap:16px;
+        justify-content:flex-start;
+        min-height: auto;
+        gap:12px;
+        padding:28px 24px;
+        border:1px solid rgba(226,232,240,0.9);
+        border-radius:16px;
+        background:#fff;
       }
       .printTitleHero{
-        font-size:28px;
+        font-size:22px;
         font-weight:1300;
+        color: var(--navy);
       }
       .printMetaGrid{
         display:grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap:12px;
-        margin-top:12px;
+        margin-top:6px;
       }
       .printMetaCard{
         border:1px solid rgba(226,232,240,0.95);
@@ -965,24 +1097,25 @@
         margin:0;
         padding-left:18px;
         display:grid;
-        gap:6px;
-        font-size:13px;
+        gap:4px;
+        font-size:12px;
       }
       .printBlock{
         white-space:pre-wrap;
-        font-size:13px;
-        line-height:1.5;
+        font-size:12px;
+        line-height:1.55;
+        color:#1F2937;
       }
       .printKeyValue{
         display:grid;
-        grid-template-columns: 140px 1fr;
-        gap:8px;
-        font-size:13px;
+        grid-template-columns: 170px 1fr;
+        gap:6px 10px;
+        font-size:12px;
       }
       .printDivider{
         height:1px;
         background: rgba(226,232,240,0.95);
-        margin:12px 0;
+        margin:10px 0;
       }
 
       .authOverlay{
@@ -1020,9 +1153,21 @@
         margin-top:8px;
       }
 
-      @keyframes viewEnter{
+      @keyframes diagramEnter{
         from{ opacity:0; transform: translateY(6px); }
         to{ opacity:1; transform: translateY(0); }
+      }
+
+      @keyframes reportEnter{
+        from{ opacity:0; transform: translateY(16px) scale(0.98); }
+        to{ opacity:1; transform: translateY(0) scale(1); }
+      }
+
+      @media (prefers-reduced-motion: reduce){
+        .app,
+        .reportView{
+          animation: none;
+        }
       }
 
       @media print{
@@ -1345,6 +1490,11 @@
       };
 
       const STORAGE_KEY = "titanroof.v2.5.state";
+      const PDF_WORKER_SRC = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+      if(window.pdfjsLib?.GlobalWorkerOptions){
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
+      }
 
       function App(){
         const viewportRef = useRef(null);
@@ -1357,6 +1507,9 @@
         const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
 
+        const initialPage = { id: uid(), name: "Page 1", bg: null };
+        const [diagramPages, setDiagramPages] = useState([initialPage]);
+        const [activePageId, setActivePageId] = useState(initialPage.id);
         const [items, setItems] = useState([]);
         const [selectedId, setSelectedId] = useState(null);
         const [panelView, setPanelView] = useState("items"); // items | props
@@ -1364,6 +1517,8 @@
         const [isAuthenticated, setIsAuthenticated] = useState(false);
         const [passwordInput, setPasswordInput] = useState("");
         const [passwordError, setPasswordError] = useState("");
+        const [exportDialogOpen, setExportDialogOpen] = useState(false);
+        const [exportTargetPageId, setExportTargetPageId] = useState(initialPage.id);
 
         // Drag states:
         // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
@@ -1462,8 +1617,7 @@
           shingleExposure: "5 inch exposure",
           metalKind: "SS",
           metalPanelWidth: "24 inch",
-          otherDesc: "",
-          diagramBg: null
+          otherDesc: ""
         });
 
         // Dash collapse
@@ -1471,8 +1625,13 @@
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
-
-        const activeItem = items.find(i => i.id === selectedId);
+        const activePage = diagramPages.find(page => page.id === activePageId) || diagramPages[0];
+        const activePageIndex = Math.max(0, diagramPages.findIndex(page => page.id === activePage?.id));
+        const pageItems = items.filter(i => i.pageId === activePage?.id);
+        const exportPage = diagramPages.find(page => page.id === exportTargetPageId) || activePage;
+        const exportItems = items.filter(i => i.pageId === exportPage?.id);
+        const exportReady = Boolean(exportPage?.bg?.url);
+        const activeItem = pageItems.find(i => i.id === selectedId);
         const updateReportSection = (section, field, value) => {
           setReportData(prev => ({
             ...prev,
@@ -1574,8 +1733,6 @@
           }
         };
 
-        useEffect(() => () => revokeFileObj(roof.diagramBg), []);
-
         useEffect(() => {
           setReportData(prev => {
             if(prev.project.projectName) return prev;
@@ -1634,6 +1791,10 @@
           }
           return { ...it, data };
         };
+        const serializePage = (page) => ({
+          ...page,
+          bg: serializeFile(page.bg)
+        });
         const reviveItem = (it) => {
           const nextType = it.type === "app" ? "apt" : it.type;
           const nextName = nextType === "apt" && (it.name || "").startsWith("APP-")
@@ -1701,15 +1862,22 @@
           }
           return { ...it, type: nextType, name: nextName, data };
         };
+        const revivePage = (page, fallbackName) => ({
+          id: page.id || uid(),
+          name: page.name || fallbackName,
+          bg: reviveFileObj(page.bg)
+        });
 
         const buildState = useCallback(() => ({
           residenceName,
           frontFaces,
-          roof: { ...roof, diagramBg: serializeFile(roof.diagramBg) },
+          roof: { ...roof },
+          diagramPages: diagramPages.map(serializePage),
+          activePageId,
           items: items.map(serializeItem),
           counts: counts.current,
           reportData
-        }), [residenceName, frontFaces, roof, items, reportData]);
+        }), [residenceName, frontFaces, roof, diagramPages, activePageId, items, reportData]);
 
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
@@ -1727,9 +1895,24 @@
               setFrontFaces(parsed.frontFaces || "North");
               setRoof(prev => ({
                 ...prev,
-                ...parsed.roof,
-                diagramBg: reviveFileObj(parsed.roof.diagramBg)
+                ...parsed.roof
               }));
+              let restoredPages = null;
+              if(parsed.diagramPages?.length){
+                restoredPages = parsed.diagramPages.map((page, idx) => revivePage(page, `Page ${idx + 1}`));
+              } else if(parsed.roof?.diagramBg){
+                restoredPages = [{
+                  id: parsed.activePageId || initialPage.id,
+                  name: "Page 1",
+                  bg: reviveFileObj(parsed.roof.diagramBg)
+                }];
+              }
+              if(restoredPages?.length){
+                setDiagramPages(restoredPages);
+                const nextActivePageId = parsed.activePageId || restoredPages[0]?.id || initialPage.id;
+                setActivePageId(nextActivePageId);
+                setExportTargetPageId(nextActivePageId);
+              }
               if(parsed.reportData){
                 setReportData(prev => ({
                   ...prev,
@@ -1745,7 +1928,11 @@
                 }));
               }
               const revivedItems = (parsed.items || []).map(reviveItem);
-              setItems(revivedItems);
+              const fallbackPageId = parsed.activePageId || restoredPages?.[0]?.id || initialPage.id;
+              setItems(revivedItems.map(item => ({
+                ...item,
+                pageId: item.pageId || fallbackPageId
+              })));
               if(parsed.counts){
                 counts.current = {
                   ts: parsed.counts.ts ?? 1,
@@ -1950,12 +2137,15 @@
         // Fit when BG first set
         const bgWasSetRef = useRef(false);
         useEffect(() => {
-          if(roof.diagramBg?.url && !bgWasSetRef.current){
+          bgWasSetRef.current = false;
+        }, [activePageId]);
+        useEffect(() => {
+          if(activePage?.bg?.url && !bgWasSetRef.current){
             bgWasSetRef.current = true;
             setTimeout(() => zoomFit(), 0);
           }
-          if(!roof.diagramBg?.url) bgWasSetRef.current = false;
-        }, [roof.diagramBg?.url]);
+          if(!activePage?.bg?.url) bgWasSetRef.current = false;
+        }, [activePage?.bg?.url]);
 
         const onWheel = (e) => {
           e.preventDefault();
@@ -2042,8 +2232,7 @@
           pinchRef.current.lastCenterY = center.y;
         };
 
-        // === DASHBOARD STATS ===
-        const dashboard = useMemo(() => {
+        const buildDashboardStats = (itemList) => {
           const stats = {};
           WIND_DIRS.forEach(d => {
             stats[d] = {
@@ -2055,7 +2244,7 @@
             };
           });
 
-          items.forEach(item => {
+          itemList.forEach(item => {
             if(item.type === "ts"){
               const d = item.data.dir;
               if(!stats[d]) return;
@@ -2092,7 +2281,11 @@
           });
 
           return stats;
-        }, [items]);
+        };
+
+        // === DASHBOARD STATS ===
+        const dashboard = useMemo(() => buildDashboardStats(pageItems), [pageItems]);
+        const exportDashboard = useMemo(() => buildDashboardStats(exportItems), [exportItems]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -2138,7 +2331,7 @@
 
         // === FACTORY / UPDATERS ===
         const createItem = (type, pos) => {
-          const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5 };
+          const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5, pageId: activePage?.id };
           if(pos?.points && pos.points.length){
             const bb = bboxFromPoints(pos.points);
             base.x = (bb.minX + bb.maxX) / 2;
@@ -2241,16 +2434,62 @@
         };
 
         // === Files ===
+        const loadPdfPages = async (file) => {
+          if(!window.pdfjsLib){
+            throw new Error("PDF support is unavailable.");
+          }
+          const data = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+          const pages = [];
+          for(let i = 1; i <= pdf.numPages; i++){
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2 });
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: context, viewport }).promise;
+            const dataUrl = canvas.toDataURL("image/png");
+            pages.push({
+              id: uid(),
+              name: `Page ${i}`,
+              bg: { name: `${file.name} - Page ${i}`, url: dataUrl, dataUrl }
+            });
+          }
+          return pages;
+        };
+
         const setDiagramBg = async (file) => {
-          const diagramBg = await fileToObj(file);
-          setRoof(prev => {
-            revokeFileObj(prev.diagramBg);
-            return { ...prev, diagramBg };
-          });
+          if(!file) return;
+          const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+          let pages = [];
+          if(isPdf){
+            try{
+              pages = await loadPdfPages(file);
+            } catch (err){
+              console.warn("Failed to load PDF", err);
+              alert("Unable to open that PDF. Please try a different file.");
+              return;
+            }
+          } else {
+            const diagramBg = await fileToObj(file);
+            pages = [{ id: uid(), name: "Page 1", bg: diagramBg }];
+          }
+          if(!pages.length) return;
+          setDiagramPages(pages);
+          setActivePageId(pages[0].id);
+          setExportTargetPageId(pages[0].id);
+          setItems([]);
+          setSelectedId(null);
+          setPanelView("items");
+          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1 };
         };
 
         const clearDiagram = () => {
-          setRoof(prev => { revokeFileObj(prev.diagramBg); return { ...prev, diagramBg:null }; });
+          const freshPageId = uid();
+          setDiagramPages([{ id: freshPageId, name: "Page 1", bg: null }]);
+          setActivePageId(freshPageId);
+          setExportTargetPageId(freshPageId);
           // clear all items
           items.forEach(it => {
             if(it.type === "ts"){
@@ -2464,7 +2703,7 @@
 
         // === Delete selected ===
         const deleteSelected = () => {
-          const target = items.find(i => i.id === selectedId);
+          const target = pageItems.find(i => i.id === selectedId);
           if(target){
             if(target.type === "ts"){
               revokeFileObj(target.data.overviewPhoto);
@@ -2507,7 +2746,7 @@
 
         // === HIT TEST ===
         const findHit = (norm) => {
-          const sel = items.find(i => i.id === selectedId && (i.type === "ts" || (i.type === "obs" && i.data.points?.length)));
+          const sel = pageItems.find(i => i.id === selectedId && (i.type === "ts" || (i.type === "obs" && i.data.points?.length)));
           if(sel && !sel.data.locked){
             const pts = sel.data.points || [];
             const rr = 0.016;
@@ -2520,7 +2759,7 @@
             }
           }
 
-          const rev = [...items].reverse();
+          const rev = [...pageItems].reverse();
           for(const it of rev){
             if(it.type === "ts" || (it.type === "obs" && it.data.points?.length)){
               const poly = it.data.points || [];
@@ -2560,7 +2799,7 @@
             return;
           }
 
-          if(!roof.diagramBg?.url){
+          if(!activePage?.bg?.url){
             setSelectedId(null);
             setPanelView("items");
             return;
@@ -2577,7 +2816,7 @@
             setPanelView("props");
             if(isMobile) setMobilePanelOpen(true);
 
-            const it = items.find(x => x.id === hit.id);
+            const it = pageItems.find(x => x.id === hit.id);
             if(!it) return;
 
             if(hit.kind === "poly-handle" && !it.data.locked){
@@ -2701,7 +2940,7 @@
 
           if(drag.mode === "ts-point"){
             e.preventDefault();
-            const it = items.find(x => x.id === drag.id);
+            const it = pageItems.find(x => x.id === drag.id);
             if(!it) return;
             const pts = (it.data.points||[]).map(p => ({...p}));
             if(pts[drag.pointIndex]){
@@ -2712,7 +2951,7 @@
 
           if(drag.mode === "obs-point"){
             e.preventDefault();
-            const it = items.find(x => x.id === drag.id);
+            const it = pageItems.find(x => x.id === drag.id);
             if(!it) return;
             const pts = (it.data.points||[]).map(p => ({...p}));
             if(pts[drag.pointIndex]){
@@ -2790,9 +3029,9 @@
         // === Grouped list ===
         const grouped = useMemo(() => {
           const g = { ts:[], apt:[], ds:[], obs:[], wind:[] };
-          items.forEach(i => g[i.type] && g[i.type].push(i));
+          pageItems.forEach(i => g[i.type] && g[i.type].push(i));
           return g;
-        }, [items]);
+        }, [pageItems]);
 
         // === Roof summary line ===
         const roofSummary = useMemo(() => {
@@ -2958,14 +3197,14 @@
           return parts.join(" • ");
         };
 
-        const hailIndicatorSummary = useMemo(() => {
+        const buildHailIndicatorSummary = (itemList) => {
           const base = {
             N: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
             S: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
             E: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
             W: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } }
           };
-          items.forEach(it => {
+          itemList.forEach(it => {
             if(!(it.type === "apt" || it.type === "ds")) return;
             const dir = it.data.dir;
             if(!base[dir]) return;
@@ -2980,7 +3219,10 @@
             });
           });
           return base;
-        }, [items]);
+        };
+
+        const hailIndicatorSummary = useMemo(() => buildHailIndicatorSummary(pageItems), [pageItems]);
+        const exportHailIndicatorSummary = useMemo(() => buildHailIndicatorSummary(exportItems), [exportItems]);
 
         const photoCaption = (label, photo) => {
           if(photo?.name){
@@ -3092,6 +3334,12 @@
           if(isMobile) setMobilePanelOpen(true);
         };
 
+        const switchPage = (pageId) => {
+          setActivePageId(pageId);
+          setSelectedId(null);
+          setPanelView("items");
+        };
+
         const headerContent = (
           <div className="pHeader">
             <div className="hdrText">
@@ -3108,34 +3356,48 @@
                 <button className="hdrBtn" onClick={() => setMobilePanelOpen(false)}>Close</button>
               )}
               <button className="hdrBtn" onClick={() => saveState("manual")}>Save</button>
-              <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
+              <button
+                className="hdrBtn"
+                onClick={() => {
+                  saveState("manual");
+                  setExportTargetPageId(activePage?.id || exportTargetPageId);
+                  setExportDialogOpen(true);
+                }}
+              >
+                Export
+              </button>
               {viewMode === "diagram" && (
                 <button className="hdrBtn" onClick={() => setDashCollapsed(v => !v)}>
                   {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
                 </button>
               )}
-              <div className="viewTabs" role="tablist" aria-label="View mode">
-                <button
-                  type="button"
-                  className={viewMode === "diagram" ? "active" : ""}
-                  onClick={() => setViewMode("diagram")}
-                >
-                  Diagram
-                </button>
-                <button
-                  type="button"
-                  className={viewMode === "report" ? "active" : ""}
-                  onClick={() => setViewMode("report")}
-                >
-                  Report
-                </button>
-              </div>
               <div className="hdrEditIcon" onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }} title="Edit header info">
                 <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
               </div>
               <div className="hdrEditIcon" onClick={()=>setHdrCollapsed(v=>!v)} title={hdrCollapsed ? "Expand header" : "Collapse header"}>
                 <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
               </div>
+            </div>
+          </div>
+        );
+
+        const viewModeTabs = (
+          <div className="viewTabsDock" role="tablist" aria-label="View mode">
+            <div className="viewTabs">
+              <button
+                type="button"
+                className={viewMode === "diagram" ? "active" : ""}
+                onClick={() => setViewMode("diagram")}
+              >
+                Diagram
+              </button>
+              <button
+                type="button"
+                className={viewMode === "report" ? "active" : ""}
+                onClick={() => setViewMode("report")}
+              >
+                Report
+              </button>
             </div>
           </div>
         );
@@ -3150,10 +3412,10 @@
           "Inspection Summary",
           "Roof Diagram",
           "Dashboard",
-          `Test Squares (${items.filter(i => i.type === "ts").length})`,
-          `Wind Observations (${items.filter(i => i.type === "wind").length})`,
-          `Appurtenances + Downspouts (${items.filter(i => i.type === "apt" || i.type === "ds").length})`,
-          `Observations (${items.filter(i => i.type === "obs").length})`
+          `Test Squares (${exportItems.filter(i => i.type === "ts").length})`,
+          `Wind Observations (${exportItems.filter(i => i.type === "wind").length})`,
+          `Appurtenances + Downspouts (${exportItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
+          `Observations (${exportItems.filter(i => i.type === "obs").length})`
         ];
 
         return (
@@ -3177,6 +3439,40 @@
                   <button className="btn btnPrimary" type="submit">Unlock</button>
                 </div>
               </form>
+            </div>
+          )}
+          {exportDialogOpen && (
+            <div className="exportOverlay">
+              <div className="exportCard">
+                <div className="exportTitle">Export diagram PDF</div>
+                <div className="exportHint">Choose a diagram page to export as a standalone PDF.</div>
+                <div className="exportList">
+                  {diagramPages.map((page, idx) => (
+                    <div
+                      key={page.id}
+                      className={"exportOption " + (exportTargetPageId === page.id ? "active" : "")}
+                      onClick={() => setExportTargetPageId(page.id)}
+                    >
+                      <span>{page.name || `Page ${idx + 1}`}</span>
+                      <span className="tiny">{page.bg?.url ? "Ready" : "No diagram"}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="exportActions">
+                  <button className="btn" type="button" onClick={() => setExportDialogOpen(false)}>Cancel</button>
+                  <button
+                    className="btn btnPrimary"
+                    type="button"
+                    onClick={() => {
+                      setExportDialogOpen(false);
+                      setExportMode(true);
+                    }}
+                    disabled={!exportTargetPageId || !exportReady}
+                  >
+                    Export Selected
+                  </button>
+                </div>
+              </div>
             </div>
           )}
           {viewMode === "diagram" ? (
@@ -3224,6 +3520,41 @@
                 />
               </div>
 
+              <div className="diagramPages">
+                <div className="pageCard">
+                  <div className="pageTitle">Diagram Page</div>
+                  <div className="pageControls">
+                    <button
+                      className="pageNavBtn"
+                      type="button"
+                      disabled={activePageIndex <= 0}
+                      onClick={() => switchPage(diagramPages[activePageIndex - 1]?.id)}
+                    >
+                      Prev
+                    </button>
+                    <select
+                      className="pageSelect"
+                      value={activePage?.id || ""}
+                      onChange={(e) => switchPage(e.target.value)}
+                    >
+                      {diagramPages.map(page => (
+                        <option key={page.id} value={page.id}>
+                          {page.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="pageNavBtn"
+                      type="button"
+                      disabled={activePageIndex >= diagramPages.length - 1}
+                      onClick={() => switchPage(diagramPages[activePageIndex + 1]?.id)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* NAV */}
               <div className="navTools">
                 <div className="navCard">
@@ -3260,7 +3591,7 @@
                   }}
                 >
                   <div className="sheet">
-                    {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+                    {activePage?.bg?.url && <img className="bgImg" src={activePage.bg.url} alt="Roof diagram" />}
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
@@ -3269,9 +3600,9 @@
                         </pattern>
                       </defs>
 
-                      <rect width="100%" height="100%" fill="url(#grid)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
-                      {items.filter(i => i.type === "ts").map(renderTS)}
-                      {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsArea)}
+                      <rect width="100%" height="100%" fill="url(#grid)" opacity={activePage?.bg?.url ? 0.45 : 1} />
+                      {pageItems.filter(i => i.type === "ts").map(renderTS)}
+                      {pageItems.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsArea)}
 
                       {drag && drag.mode === "ts-draw" && (
                         <rect
@@ -3299,7 +3630,7 @@
                       )}
                     </svg>
 
-                    {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                    {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
                       const isSel = selectedId === i.id;
                       const m = markerMeta(i);
                       return (
@@ -3322,7 +3653,7 @@
                 </div>
               </div>
 
-              {!roof.diagramBg?.url && (
+              {!activePage?.bg?.url && (
                 <div style={{
                   position:"absolute",
                   left:"50%",
@@ -3339,12 +3670,12 @@
                 }}>
                   <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Upload a roof diagram to begin</div>
                   <div className="tiny" style={{marginTop:6}}>
-                    Tap “Upload Image” (PNG/JPG). Then place test squares and markers.
+                    Tap “Upload Image/PDF” (PNG/JPG/PDF). Then place test squares and markers.
                   </div>
                   <div style={{marginTop:12}}>
                     <label className="btn btnPrimary" style={{display:"inline-block", cursor:"pointer"}}>
-                      Upload Image
-                      <input type="file" accept="image/*" style={{display:"none"}}
+                      Upload Image/PDF
+                      <input type="file" accept="image/*,application/pdf" style={{display:"none"}}
                         onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
                     </label>
                   </div>
@@ -3388,8 +3719,8 @@
                       </select>
                     </div>
                     <div style={{flex:1}}>
-                      <div className="lbl">Diagram Image</div>
-                      <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+                      <div className="lbl">Diagram Image / PDF</div>
+                      <input className="inp" type="file" accept="image/*,application/pdf" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
                     </div>
                   </div>
 
@@ -3455,6 +3786,8 @@
                   </div>
                 </div>
               )}
+
+              {viewModeTabs}
 
               <div className="pScroll">
                 {/* ITEMS LIST */}
@@ -3541,7 +3874,7 @@
                       );
                     })}
 
-                    {!items.length && <div className="muted">No items yet. Use the Toolkit to place test squares or markers.</div>}
+                    {!pageItems.length && <div className="muted">No items yet. Use the Toolkit to place test squares or markers.</div>}
                   </div>
                 )}
 
@@ -4108,6 +4441,7 @@
                 </button>
               ))}
             </div>
+            {viewModeTabs}
             <div className="reportContent">
               {reportTab === "project" && (
                 <>
@@ -4697,7 +5031,7 @@
               />
               <div className="mobileDock">
                 <button className="btn btnPrimary" onClick={() => { setPanelView("items"); setMobilePanelOpen(true); }}>
-                  Items ({items.length})
+                  Items ({pageItems.length})
                 </button>
                 <button
                   className={"btn " + (activeItem ? "btnPrimary" : "")}
@@ -4714,9 +5048,9 @@
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">TitanRoof Version 3</div>
+                <div className="printTitleHero">Property Inspection Report</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
-                <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                <div className="tiny">Diagram: {exportPage?.name || "Page 1"}</div>
                 <div className="printMetaGrid">
                   <div className="printMetaCard">
                     <div className="lbl">Property</div>
@@ -4734,6 +5068,13 @@
                     <div className="printBlock">Report #: {valueOrDash(reportData.project.reportNumber)}</div>
                     <div className="printBlock">Client File: {valueOrDash(reportData.writer.clientFile)}</div>
                     <div className="printBlock">Haag File: {valueOrDash(reportData.writer.haagFile)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">General Overview</div>
+                    <div className="printBlock">Roof: {roofSummary}</div>
+                    <div className="printBlock">Front faces: {frontFaces}</div>
+                    <div className="printBlock">Orientation: {valueOrDash(reportData.project.orientation)}</div>
+                    <div className="printBlock">Diagram: {exportPage?.name || "Page 1"}</div>
                   </div>
                 </div>
               </div>
@@ -4919,24 +5260,24 @@
               <div className="printHeader">
                 <div>
                   <div className="printTitle">{residenceName} • Roof Diagram Export</div>
-                  <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                  <div className="tiny">Diagram: {exportPage?.name || "Page 1"} • Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 </div>
               </div>
 
               <div className="printDiagramWrap">
                 <div className="printDiagramSheet">
-                  {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+                  {exportPage?.bg?.url && <img className="bgImg" src={exportPage.bg.url} alt="Roof diagram" />}
                   <svg className="gridSvg" width="100%" height="100%" viewBox="0 0 1024 720" preserveAspectRatio="xMidYMid meet">
                     <defs>
                       <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
                         <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
                       </pattern>
                     </defs>
-                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
-                    {items.filter(i => i.type === "ts").map(renderTSPrint)}
-                    {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsAreaPrint)}
+                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={exportPage?.bg?.url ? 0.45 : 1} />
+                    {exportItems.filter(i => i.type === "ts").map(renderTSPrint)}
+                    {exportItems.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsAreaPrint)}
                   </svg>
-                  {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                  {exportItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
                     const m = markerMeta(i);
                     return (
                       <div
@@ -4972,10 +5313,10 @@
                     {WIND_DIRS.map(dir => (
                       <tr key={`print-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].tsHits}</td>
-                        <td>{dashboard[dir].tsMaxHail>0 ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
-                        <td>{dashboard[dir].wind.creased}</td>
-                        <td>{dashboard[dir].wind.torn_missing}</td>
+                        <td>{exportDashboard[dir].tsHits}</td>
+                        <td>{exportDashboard[dir].tsMaxHail>0 ? `${exportDashboard[dir].tsMaxHail}"` : "—"}</td>
+                        <td>{exportDashboard[dir].wind.creased}</td>
+                        <td>{exportDashboard[dir].wind.torn_missing}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -4993,8 +5334,8 @@
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`print-hail-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].aptMax>0 ? `${dashboard[dir].aptMax}"` : "—"}</td>
-                        <td>{dashboard[dir].dsMax>0 ? `${dashboard[dir].dsMax}"` : "—"}</td>
+                        <td>{exportDashboard[dir].aptMax>0 ? `${exportDashboard[dir].aptMax}"` : "—"}</td>
+                        <td>{exportDashboard[dir].dsMax>0 ? `${exportDashboard[dir].dsMax}"` : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5006,7 +5347,7 @@
               <div className="printSection">
                 <h3>Test Squares</h3>
                 <div className="printGrid">
-                  {items.filter(i => i.type === "ts").map(ts => {
+                  {exportItems.filter(i => i.type === "ts").map(ts => {
                     const tsPhotos = collectTsPhotos(ts);
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
@@ -5042,14 +5383,14 @@
                     {WIND_DIRS.map(dir => (
                       <tr key={`wind-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].wind.creased}</td>
-                        <td>{dashboard[dir].wind.torn_missing}</td>
+                        <td>{exportDashboard[dir].wind.creased}</td>
+                        <td>{exportDashboard[dir].wind.torn_missing}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <div className="printGrid" style={{marginTop:10}}>
-                  {items.filter(i => i.type === "wind").map(w => (
+                  {exportItems.filter(i => i.type === "wind").map(w => (
                     <div className="printCard" key={`wind-${w.id}`}>
                       <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>
                       <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
@@ -5104,17 +5445,17 @@
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`hail-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "—"}</td>
+                        <td>{exportHailIndicatorSummary[dir].apt.spatter ? `${exportHailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
+                        <td>{exportHailIndicatorSummary[dir].apt.dent ? `${exportHailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
+                        <td>{exportHailIndicatorSummary[dir].ds.spatter ? `${exportHailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
+                        <td>{exportHailIndicatorSummary[dir].ds.dent ? `${exportHailIndicatorSummary[dir].ds.dent}"` : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
                 <div className="printGrid">
-                  {items.filter(i => i.type === "apt" || i.type === "ds").map(it => (
+                  {exportItems.filter(i => i.type === "apt" || i.type === "ds").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
                       <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
@@ -5157,7 +5498,7 @@
               <div className="printSection">
                 <h3>Observations</h3>
                 <div className="printGrid">
-                  {items.filter(i => i.type === "obs").map(obs => (
+                  {exportItems.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
                       <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
