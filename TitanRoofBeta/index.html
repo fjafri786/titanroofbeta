@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-    <title>TitanRoof (Roof Diagram v3.0)</title>
+    <title>TitanRoof (Roof Diagram)</title>
 
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -1275,9 +1275,6 @@
       const createDefaultReportData = () => ({
         project: {
           reportNumber: "",
-          claimNumber: "",
-          jobNumber: "",
-          insuredName: "",
           projectName: "",
           address: "",
           city: "",
@@ -1287,8 +1284,7 @@
           inspectionStartTime: "",
           inspectionEndTime: "",
           frontFaces: "",
-          frontFacesDegrees: "",
-          structureFaces: "",
+          structureOrientation: "",
           partiesPresent: []
         },
         description: {
@@ -1544,9 +1540,15 @@
                 diagramBg: reviveFileObj(parsed.roof.diagramBg)
               }));
               if(parsed.reportData){
+                const legacyOrientation = parsed.reportData.project?.structureOrientation || parsed.reportData.project?.structureFaces;
                 setReportData({
                   ...createDefaultReportData(),
                   ...parsed.reportData,
+                  project: {
+                    ...createDefaultReportData().project,
+                    ...parsed.reportData.project,
+                    structureOrientation: legacyOrientation || ""
+                  },
                   description: {
                     ...createDefaultReportData().description,
                     ...parsed.reportData.description,
@@ -3245,7 +3247,7 @@
         }, [reportData.inspection]);
 
         const projectComplete = Boolean(
-          (reportData.project.projectName || reportData.project.insuredName) &&
+          reportData.project.projectName &&
           reportData.project.address &&
           reportData.project.inspectionDate &&
           reportData.project.frontFaces
@@ -4259,30 +4261,18 @@
                 {reportTab === "project" && (
                   <>
                     <div className="sectionCard">
-                      <div className="sectionTitle">Project Header</div>
+                      <div className="sectionTitle">Project information</div>
                       <div className="formGrid">
                         <div>
-                          <div className="lbl">Report / Claim / Job #</div>
-                          <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateProjectField("reportNumber", e.target.value)} placeholder="Report #" />
-                        </div>
-                        <div>
-                          <div className="lbl">Claim #</div>
-                          <input className="inp" value={reportData.project.claimNumber} onChange={(e)=>updateProjectField("claimNumber", e.target.value)} placeholder="Claim #" />
-                        </div>
-                        <div>
-                          <div className="lbl">Job #</div>
-                          <input className="inp" value={reportData.project.jobNumber} onChange={(e)=>updateProjectField("jobNumber", e.target.value)} placeholder="Job #" />
-                        </div>
-                        <div>
-                          <div className="lbl">Insured</div>
-                          <input className="inp" value={reportData.project.insuredName} onChange={(e)=>updateProjectField("insuredName", e.target.value)} placeholder="Insured name" />
+                          <div className="lbl">Report / Claim / Job number</div>
+                          <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateProjectField("reportNumber", e.target.value)} placeholder="Report / Claim / Job #" />
                         </div>
                         <div>
                           <div className="lbl">Project name</div>
                           <input className="inp" value={reportData.project.projectName} onChange={(e)=>updateProjectField("projectName", e.target.value)} placeholder="Residence name" />
                         </div>
                         <div style={{gridColumn:"1 / -1"}}>
-                          <div className="lbl">Address</div>
+                          <div className="lbl">Property address</div>
                           <textarea className="inp" value={reportData.project.address} onChange={(e)=>updateProjectField("address", e.target.value)} placeholder="Street address" />
                         </div>
                         <div>
@@ -4323,20 +4313,8 @@
                           </select>
                         </div>
                         <div>
-                          <div className="lbl">Front faces degrees (optional)</div>
-                          <input className="inp" value={reportData.project.frontFacesDegrees} onChange={(e)=>updateProjectField("frontFacesDegrees", e.target.value)} placeholder="e.g., 15°" />
-                        </div>
-                        <div>
-                          <div className="lbl">Structure faces approximately</div>
-                          <select className="inp" value={reportData.project.structureFaces} onChange={(e)=>updateProjectField("structureFaces", e.target.value)}>
-                            <option value="">Select</option>
-                            {CARDINAL_SIMPLE.map(dir => (
-                              <option key={dir} value={`Faced approximately ${dir.toLowerCase()}`}>
-                                Faced approximately {dir.toLowerCase()}
-                              </option>
-                            ))}
-                            <option value="Other">Other</option>
-                          </select>
+                          <div className="lbl">General orientation</div>
+                          <input className="inp" value={reportData.project.structureOrientation} onChange={(e)=>updateProjectField("structureOrientation", e.target.value)} placeholder="e.g., Faced approximately west" />
                         </div>
                       </div>
                     </div>
@@ -4769,7 +4747,7 @@
                 {reportTab === "background" && (
                   <>
                     <div className="sectionCard">
-                      <div className="sectionTitle">Reported Event Info</div>
+                      <div className="sectionTitle">Reported information</div>
                       <div className="formGrid">
                         <div>
                           <div className="lbl">Reported date of loss</div>
