@@ -1373,7 +1373,7 @@
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v2.5.state";
+      const STORAGE_KEY = "titanroof.v3.1.state";
 
       function App(){
         const viewportRef = useRef(null);
@@ -1703,6 +1703,10 @@
               }
               data.damageEntries = legacyEntries;
             }
+            if(nextType === "ds" && data.index == null){
+              const parsedIndex = parseInt((nextName || "").split("-")[1], 10);
+              data.index = Number.isFinite(parsedIndex) ? parsedIndex : 1;
+            }
             delete data.spatter;
             delete data.dent;
             delete data.damageMode;
@@ -1857,10 +1861,17 @@
 
         const isMobile = viewportSize.w <= 820;
         const previousToolbarLock = useRef(toolbarLocked);
+        const previousToolbarPos = useRef(toolbarPos);
 
         useEffect(() => {
           previousToolbarLock.current = toolbarLocked;
         }, [toolbarLocked]);
+
+        useEffect(() => {
+          if(!isMobile){
+            previousToolbarPos.current = toolbarPos;
+          }
+        }, [toolbarPos, isMobile]);
 
         useEffect(() => {
           if(isMobile){
@@ -1869,6 +1880,7 @@
             setToolbarPos({ x: window.innerWidth / 2, y: 10 });
           } else {
             setToolbarLocked(previousToolbarLock.current);
+            setToolbarPos(previousToolbarPos.current || { x: 20, y: 80 });
             setMobilePanelOpen(false);
           }
         }, [isMobile]);
