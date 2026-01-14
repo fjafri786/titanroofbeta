@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-    <title>TitanRoof (Roof Diagram v2.6)</title>
+    <title>TitanRoof (Roof Diagram v3.0)</title>
 
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -47,6 +47,17 @@
         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
         /* iOS momentum scrolling inside panels */
         -webkit-text-size-adjust: 100%;
+      }
+
+      .topBar{
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 8px;
+        background: #DC2626;
+        z-index: 200;
+        box-shadow: 0 2px 6px rgba(220,38,38,0.35);
       }
 
       .app{
@@ -368,6 +379,32 @@
         cursor:pointer;
         white-space:nowrap;
       }
+      .viewSwitch{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        padding:4px;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,0.28);
+        background: rgba(255,255,255,0.14);
+      }
+      .viewSwitch button{
+        border:none;
+        background:transparent;
+        color:#fff;
+        font-size:12px;
+        font-weight:1200;
+        padding:6px 12px;
+        border-radius:999px;
+        cursor:pointer;
+        opacity:0.85;
+      }
+      .viewSwitch button.active{
+        background:#fff;
+        color:#0B2A3A;
+        opacity:1;
+        box-shadow: 0 6px 12px rgba(2,6,23,0.15);
+      }
 
       .hdrEditPanel{
         padding: 12px 16px;
@@ -686,6 +723,125 @@
       .dashBlue{ color:#1D4ED8; }
       .dashDark{ color:#111827; }
 
+      /* ========= REPORT VIEW ========= */
+      .reportView{
+        display:flex;
+        flex-direction:column;
+        height:100vh;
+        background: var(--bg);
+      }
+      .reportTabs{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        padding:10px 16px;
+        background:#fff;
+        border-bottom: 1px solid var(--border);
+      }
+      .reportTabBtn{
+        border:1px solid rgba(148,163,184,0.35);
+        background:#fff;
+        color: var(--navy);
+        padding:8px 14px;
+        border-radius:999px;
+        font-size:12px;
+        font-weight:1200;
+        cursor:pointer;
+      }
+      .reportTabBtn.active{
+        background: var(--navy2);
+        border-color: rgba(14,51,72,0.55);
+        color:#fff;
+        box-shadow: 0 10px 16px rgba(2,6,23,0.12);
+      }
+      .statusDot{
+        display:inline-block;
+        width:8px;
+        height:8px;
+        border-radius:999px;
+        background: rgba(148,163,184,0.7);
+        margin-left:6px;
+      }
+      .statusDot.ready{ background: #16A34A; }
+      .reportContent{
+        flex:1;
+        overflow:auto;
+        padding:16px;
+        display:flex;
+        flex-direction:column;
+        gap:16px;
+      }
+      .reportCard{
+        background:#fff;
+        border:1px solid var(--border);
+        border-radius:16px;
+        padding:14px;
+        box-shadow: var(--shadowSoft);
+      }
+      .reportSectionTitle{
+        font-size:12px;
+        font-weight:1200;
+        text-transform:uppercase;
+        color: var(--sub);
+        letter-spacing:0.45px;
+        margin-bottom:10px;
+      }
+      .reportGrid{
+        display:grid;
+        gap:12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .inlineTag{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 10px;
+        border-radius:999px;
+        border:1px solid rgba(226,232,240,0.95);
+        background:#F8FAFC;
+        font-size:12px;
+        font-weight:1100;
+        color: var(--navy);
+      }
+      .chipList{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+      }
+      .chip{
+        display:flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 10px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.35);
+        background:#fff;
+        font-size:12px;
+        font-weight:1100;
+        cursor:pointer;
+        user-select:none;
+      }
+      .chip.active{
+        border-color: rgba(14,165,233,0.4);
+        background: rgba(14,165,233,0.12);
+        color:#0B2A3A;
+      }
+      .sectionHint{
+        font-size:12px;
+        color: var(--sub);
+        margin-top:8px;
+      }
+      .personRow{
+        display:grid;
+        gap:10px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        align-items:center;
+      }
+      .personActions{
+        display:flex;
+        justify-content:flex-end;
+      }
+
       /* ========= EXPORT / PRINT ========= */
       .printSheet{
         display:none;
@@ -774,7 +930,7 @@
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel{ display:none !important; }
+        .canvasZone, .panel, .reportView{ display:none !important; }
         .printSheet{
           display:block;
           padding:24px;
@@ -904,6 +1060,7 @@
   </head>
 
   <body>
+    <div class="topBar"></div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -963,8 +1120,55 @@
         { code:"MP", label:"Mechanical Puncture/Tear" }
       ];
 
+      const REPORT_TABS = [
+        { key: "project", label: "Project" },
+        { key: "description", label: "Description" },
+        { key: "background", label: "Background" },
+        { key: "inspection", label: "Inspection" }
+      ];
+
+      const PARTY_ROLES = ["Homeowner", "Insured", "Contractor", "Public Adjuster", "Engineer", "Other"];
+      const OCCUPANCY_TYPES = ["Single-family", "Multi-family", "Commercial", "Industrial", "Other"];
+      const FRAMING_TYPES = ["Wood", "Steel", "Masonry", "Other"];
+      const FOUNDATION_TYPES = ["Slab", "Pier & Beam", "Basement", "Other"];
+      const EXTERIOR_FINISHES = ["Brick", "Vinyl Siding", "Stucco", "Fiber Cement", "Stone", "Wood", "Other"];
+      const TRIM_COMPONENTS = ["Fascia", "Soffit", "Window Trim", "Door Trim", "Corner Trim", "Other"];
+      const WINDOW_TYPES = ["Single-hung", "Double-hung", "Fixed", "Sliding", "Casement", "Other"];
+      const GARAGE_DOOR_MATERIALS = ["Steel", "Wood", "Aluminum", "Composite", "Other"];
+      const GARAGE_ELEVATIONS = ["Front", "Rear", "Left", "Right", "Other"];
+      const FENCE_TYPES = ["Wood", "Chain Link", "Vinyl", "Metal", "Masonry", "Other"];
+      const FENCE_LOCATIONS = ["Front", "Rear", "Left", "Right", "Perimeter", "Interior"];
+      const TERRAIN_TYPES = ["Flat", "Sloped", "Mixed"];
+      const VEGETATION_TYPES = ["Front Yard", "Rear Yard", "Perimeter", "Minimal", "Dense", "Other"];
+      const ROOF_GEOMETRIES = ["Gable", "Hip", "Gable/Hip Combination", "Flat", "Other"];
+      const ROOF_APPURTENANCES = ["Vent Stacks", "Roof Vents", "Ridge Vents", "Chimney", "Skylights", "Solar", "Other"];
+      const BACKGROUND_CONCERNS = ["Hail", "Wind", "Water Intrusion", "Interior Staining", "Other"];
+      const OBSERVED_CONDITIONS = ["Spatter Marks", "Dents", "Creases", "Tears", "Displaced Elements", "Other"];
+
+      const INSPECTION_COMPONENTS = [
+        { key: "roofCovering", label: "Roof covering" },
+        { key: "ridge", label: "Ridge" },
+        { key: "guttersDownspouts", label: "Gutters & Downspouts" },
+        { key: "appurtenances", label: "Roof Appurtenances" },
+        { key: "windowsScreens", label: "Windows & Screens" },
+        { key: "garageDoors", label: "Garage Doors" },
+        { key: "fence", label: "Fence" },
+        { key: "otherExterior", label: "Other Exterior Components" }
+      ];
+
       const uid = () => Math.random().toString(36).substr(2, 9);
       const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+      const buildInspectionDefaults = () => INSPECTION_COMPONENTS.reduce((acc, comp) => ({
+        ...acc,
+        [comp.key]: {
+          conditions: [],
+          none: false,
+          maxSize: "",
+          directions: [],
+          notes: "",
+          photos: []
+        }
+      }), {});
 
       function parseSize(s){
         if(!s) return 0;
@@ -1071,6 +1275,68 @@
         const [hdrCollapsed, setHdrCollapsed] = useState(true);
         const [residenceName, setResidenceName] = useState("Enter Name");
         const [frontFaces, setFrontFaces] = useState("North"); // display "Front faces: North"
+        const [viewMode, setViewMode] = useState("diagram");
+        const [reportTab, setReportTab] = useState("project");
+        const [reportData, setReportData] = useState({
+          project: {
+            reportNumber: "",
+            projectName: "",
+            address: "",
+            city: "",
+            state: "Texas",
+            zip: "",
+            inspectionDate: "",
+            startTime: "",
+            endTime: "",
+            orientation: "",
+            parties: []
+          },
+          description: {
+            occupancy: "",
+            stories: "",
+            framing: "",
+            foundation: "",
+            exteriorFinishes: [],
+            trimComponents: [],
+            windowType: "",
+            windowScreens: "",
+            garagePresent: "",
+            garageBays: "",
+            garageDoors: "",
+            garageDoorMaterial: "",
+            garageElevation: "",
+            fencingPresent: "",
+            fenceType: "",
+            fenceLocations: [],
+            terrain: "",
+            vegetation: "",
+            roofGeometry: "",
+            roofCovering: "",
+            shingleLength: "",
+            shingleExposure: "",
+            ridgeWidth: "",
+            ridgeExposure: "",
+            roofSlopes: "",
+            guttersPresent: "",
+            downspoutsPresent: "",
+            roofAppurtenances: [],
+            eagleView: "",
+            roofArea: "",
+            attachmentLetter: ""
+          },
+          background: {
+            dateOfLoss: "",
+            source: "",
+            concerns: [],
+            notes: "",
+            accessObtained: "",
+            limitations: []
+          },
+          inspection: {
+            performed: "",
+            components: buildInspectionDefaults()
+          }
+        });
 
         // Roof properties
         const [roof, setRoof] = useState({
@@ -1091,8 +1357,129 @@
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
 
         const activeItem = items.find(i => i.id === selectedId);
+        const updateReportSection = (section, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            [section]: {
+              ...prev[section],
+              [field]: value
+            }
+          }));
+        };
+        const toggleReportList = (section, field, value) => {
+          setReportData(prev => {
+            const current = prev[section][field] || [];
+            const nextList = current.includes(value)
+              ? current.filter(v => v !== value)
+              : [...current, value];
+            return {
+              ...prev,
+              [section]: {
+                ...prev[section],
+                [field]: nextList
+              }
+            };
+          });
+        };
+        const updateInspection = (componentKey, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            inspection: {
+              ...prev.inspection,
+              components: {
+                ...prev.inspection.components,
+                [componentKey]: {
+                  ...prev.inspection.components[componentKey],
+                  [field]: value
+                }
+              }
+            }
+          }));
+        };
+        const toggleInspectionList = (componentKey, field, value) => {
+          setReportData(prev => {
+            const current = prev.inspection.components[componentKey][field] || [];
+            const nextList = current.includes(value)
+              ? current.filter(v => v !== value)
+              : [...current, value];
+            return {
+              ...prev,
+              inspection: {
+                ...prev.inspection,
+                components: {
+                  ...prev.inspection.components,
+                  [componentKey]: {
+                    ...prev.inspection.components[componentKey],
+                    [field]: nextList
+                  }
+                }
+              }
+            };
+          });
+        };
+        const addParty = () => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: [
+                ...prev.project.parties,
+                { id: uid(), name: "", role: "", company: "", contact: "" }
+              ]
+            }
+          }));
+        };
+        const updateParty = (id, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: prev.project.parties.map(p => (p.id === id ? { ...p, [field]: value } : p))
+            }
+          }));
+        };
+        const removeParty = (id) => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: prev.project.parties.filter(p => p.id !== id)
+            }
+          }));
+        };
 
         useEffect(() => () => revokeFileObj(roof.diagramBg), []);
+
+        useEffect(() => {
+          setReportData(prev => {
+            if(prev.project.projectName) return prev;
+            return {
+              ...prev,
+              project: {
+                ...prev.project,
+                projectName: residenceName
+              }
+            };
+          });
+        }, [residenceName]);
+
+        useEffect(() => {
+          setReportData(prev => {
+            const nextDesc = { ...prev.description };
+            if(!nextDesc.roofCovering){
+              nextDesc.roofCovering = roof.covering === "SHINGLE" ? "Shingle" : (roof.covering === "METAL" ? "Metal" : "Other");
+            }
+            if(roof.covering === "SHINGLE"){
+              if(!nextDesc.shingleLength){
+                nextDesc.shingleLength = roof.shingleLength;
+              }
+              if(!nextDesc.shingleExposure){
+                nextDesc.shingleExposure = roof.shingleExposure;
+              }
+            }
+            return { ...prev, description: nextDesc };
+          });
+        }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
 
         const serializeFile = (obj) => obj ? { name: obj.name, dataUrl: obj.dataUrl || obj.url } : null;
         const serializeDamageEntries = (entries) => (entries || []).map(entry => ({
@@ -1194,8 +1581,9 @@
           frontFaces,
           roof: { ...roof, diagramBg: serializeFile(roof.diagramBg) },
           items: items.map(serializeItem),
-          counts: counts.current
-        }), [residenceName, frontFaces, roof, items]);
+          counts: counts.current,
+          reportData
+        }), [residenceName, frontFaces, roof, items, reportData]);
 
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
@@ -1216,6 +1604,20 @@
                 ...parsed.roof,
                 diagramBg: reviveFileObj(parsed.roof.diagramBg)
               }));
+              if(parsed.reportData){
+                setReportData(prev => ({
+                  ...prev,
+                  ...parsed.reportData,
+                  inspection: {
+                    ...prev.inspection,
+                    ...parsed.reportData.inspection,
+                    components: {
+                      ...buildInspectionDefaults(),
+                      ...(parsed.reportData.inspection?.components || {})
+                    }
+                  }
+                }));
+              }
               const revivedItems = (parsed.items || []).map(reviveItem);
               setItems(revivedItems);
               if(parsed.counts){
@@ -1540,6 +1942,33 @@
 
           return stats;
         }, [items]);
+
+        const completeness = useMemo(() => {
+          const projectComplete = Boolean(
+            reportData.project.projectName &&
+            reportData.project.address &&
+            reportData.project.inspectionDate
+          );
+          const descriptionComplete = Boolean(
+            reportData.description.occupancy &&
+            reportData.description.roofGeometry
+          );
+          const inspectionStarted = reportData.inspection.performed === "no"
+            || reportData.inspection.performed === "yes"
+            || Object.values(reportData.inspection.components).some(component => (
+              component.none ||
+              component.conditions.length ||
+              component.maxSize ||
+              component.directions.length ||
+              component.notes ||
+              component.photos.length
+            ));
+          return {
+            project: projectComplete,
+            description: descriptionComplete,
+            inspection: inspectionStarted
+          };
+        }, [reportData]);
 
         // === FACTORY / UPDATERS ===
         const createItem = (type, pos) => {
@@ -2489,8 +2918,57 @@
           if(isMobile) setMobilePanelOpen(true);
         };
 
+        const headerContent = (
+          <div className="pHeader">
+            <div className="hdrText">
+              <div className="hdrLine1">{residenceName}</div>
+              {!hdrCollapsed && (
+                <>
+                  <div className="hdrLine2">{roofSummary}</div>
+                  <div className="hdrLine3">Front faces: {frontFaces}</div>
+                </>
+              )}
+            </div>
+            <div className="hdrActions">
+              {isMobile && viewMode === "diagram" && (
+                <button className="hdrBtn" onClick={() => setMobilePanelOpen(false)}>Close</button>
+              )}
+              <button className="hdrBtn" onClick={() => saveState("manual")}>Save</button>
+              <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
+              {viewMode === "diagram" && (
+                <button className="hdrBtn" onClick={() => setDashCollapsed(v => !v)}>
+                  {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
+                </button>
+              )}
+              <div className="viewSwitch" role="tablist" aria-label="View mode">
+                <button
+                  type="button"
+                  className={viewMode === "diagram" ? "active" : ""}
+                  onClick={() => setViewMode("diagram")}
+                >
+                  Diagram
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === "report" ? "active" : ""}
+                  onClick={() => setViewMode("report")}
+                >
+                  Report
+                </button>
+              </div>
+              <div className="hdrEditIcon" onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }} title="Edit header info">
+                <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
+              </div>
+              <div className="hdrEditIcon" onClick={()=>setHdrCollapsed(v=>!v)} title={hdrCollapsed ? "Expand header" : "Collapse header"}>
+                <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
+              </div>
+            </div>
+          </div>
+        );
+
         return (
           <>
+          {viewMode === "diagram" ? (
           <div className="app">
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
@@ -2665,33 +3143,7 @@
 
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "")}>
-              <div className="pHeader">
-                <div className="hdrText">
-                  <div className="hdrLine1">{residenceName}</div>
-                  {!hdrCollapsed && (
-                    <>
-                      <div className="hdrLine2">{roofSummary}</div>
-                      <div className="hdrLine3">Front faces: {frontFaces}</div>
-                    </>
-                  )}
-                </div>
-                <div className="hdrActions">
-                  {isMobile && (
-                    <button className="hdrBtn" onClick={() => setMobilePanelOpen(false)}>Close</button>
-                  )}
-                  <button className="hdrBtn" onClick={() => saveState("manual")}>Save</button>
-                  <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
-                  <button className="hdrBtn" onClick={() => setDashCollapsed(v => !v)}>
-                    {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
-                  </button>
-                  <div className="hdrEditIcon" onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }} title="Edit header info">
-                    <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
-                  </div>
-                  <div className="hdrEditIcon" onClick={()=>setHdrCollapsed(v=>!v)} title={hdrCollapsed ? "Expand header" : "Collapse header"}>
-                    <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
-                  </div>
-                </div>
-              </div>
+              {headerContent}
 
               {hdrEditOpen && (
                 <div className="hdrEditPanel">
@@ -3395,8 +3847,570 @@
               </div>
             </div>
           </div>
+          ) : (
+          <div className="reportView">
+            {headerContent}
+            {hdrEditOpen && (
+              <div className="hdrEditPanel">
+                <div className="rowTop" style={{marginBottom:10}}>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Residence / Property</div>
+                    <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
+                  </div>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Front Faces</div>
+                    <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
+                      <option value="North">North</option>
+                      <option value="South">South</option>
+                      <option value="East">East</option>
+                      <option value="West">West</option>
+                      <option value="Northeast">Northeast</option>
+                      <option value="Northwest">Northwest</option>
+                      <option value="Southeast">Southeast</option>
+                      <option value="Southwest">Southwest</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="reportTabs">
+              {REPORT_TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={"reportTabBtn " + (reportTab === tab.key ? "active" : "")}
+                  onClick={() => setReportTab(tab.key)}
+                >
+                  {tab.label}
+                  {tab.key === "project" && (
+                    <span className={"statusDot " + (completeness.project ? "ready" : "")} />
+                  )}
+                  {tab.key === "description" && (
+                    <span className={"statusDot " + (completeness.description ? "ready" : "")} />
+                  )}
+                  {tab.key === "inspection" && (
+                    <span className={"statusDot " + (completeness.inspection ? "ready" : "")} />
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="reportContent">
+              {reportTab === "project" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Project Information</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Report / Claim / Job #</div>
+                        <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateReportSection("project", "reportNumber", e.target.value)} placeholder="Enter number" />
+                      </div>
+                      <div>
+                        <div className="lbl">Project Name</div>
+                        <input className="inp" value={reportData.project.projectName} onChange={(e)=>updateReportSection("project", "projectName", e.target.value)} placeholder="Morris residence" />
+                      </div>
+                      <div>
+                        <div className="lbl">Property Address</div>
+                        <input className="inp" value={reportData.project.address} onChange={(e)=>updateReportSection("project", "address", e.target.value)} placeholder="Street address" />
+                      </div>
+                      <div>
+                        <div className="lbl">City</div>
+                        <input className="inp" value={reportData.project.city} onChange={(e)=>updateReportSection("project", "city", e.target.value)} placeholder="City" />
+                      </div>
+                      <div>
+                        <div className="lbl">State</div>
+                        <input className="inp" value={reportData.project.state} onChange={(e)=>updateReportSection("project", "state", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">ZIP</div>
+                        <input className="inp" value={reportData.project.zip} onChange={(e)=>updateReportSection("project", "zip", e.target.value)} placeholder="Zip" />
+                      </div>
+                      <div>
+                        <div className="lbl">Inspection Date</div>
+                        <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Start Time</div>
+                        <input className="inp" type="time" value={reportData.project.startTime} onChange={(e)=>updateReportSection("project", "startTime", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">End Time</div>
+                        <input className="inp" type="time" value={reportData.project.endTime} onChange={(e)=>updateReportSection("project", "endTime", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Front Faces (from diagram)</div>
+                        <div className="inlineTag">{frontFaces}</div>
+                      </div>
+                      <div>
+                        <div className="lbl">General Orientation</div>
+                        <input className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)} placeholder="Faced approximately west" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Parties Present</div>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+                      <div className="tiny">List everyone present during the inspection.</div>
+                      <button className="btn btnPrimary" type="button" onClick={addParty}>Add Person</button>
+                    </div>
+                    <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                      {reportData.project.parties.map(person => (
+                        <div key={person.id} className="personRow">
+                          <div>
+                            <div className="lbl">Name</div>
+                            <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Name" />
+                          </div>
+                          <div>
+                            <div className="lbl">Role</div>
+                            <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
+                              <option value="">Select</option>
+                              {PARTY_ROLES.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Company</div>
+                            <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company (optional)" />
+                          </div>
+                          <div>
+                            <div className="lbl">Contact</div>
+                            <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone/email (optional)" />
+                          </div>
+                          <div className="personActions">
+                            <button className="btn btnDanger" type="button" onClick={() => removeParty(person.id)}>Remove</button>
+                          </div>
+                        </div>
+                      ))}
+                      {!reportData.project.parties.length && (
+                        <div className="tiny">No parties added yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
 
-          {isMobile && (
+              {reportTab === "description" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Structure</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Occupancy Type</div>
+                        <select className="inp" value={reportData.description.occupancy} onChange={(e)=>updateReportSection("description", "occupancy", e.target.value)}>
+                          <option value="">Select</option>
+                          {OCCUPANCY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Number of Stories</div>
+                        <input className="inp" value={reportData.description.stories} onChange={(e)=>updateReportSection("description", "stories", e.target.value)} placeholder="e.g., 1, 2" />
+                      </div>
+                      <div>
+                        <div className="lbl">Framing Type</div>
+                        <select className="inp" value={reportData.description.framing} onChange={(e)=>updateReportSection("description", "framing", e.target.value)}>
+                          <option value="">Select</option>
+                          {FRAMING_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Foundation Type</div>
+                        <select className="inp" value={reportData.description.foundation} onChange={(e)=>updateReportSection("description", "foundation", e.target.value)}>
+                          <option value="">Select</option>
+                          {FOUNDATION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Exterior Wall Finishes</div>
+                      <div className="chipList">
+                        {EXTERIOR_FINISHES.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.exteriorFinishes.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "exteriorFinishes", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Trim Components Present</div>
+                      <div className="chipList">
+                        {TRIM_COMPONENTS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.trimComponents.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "trimComponents", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">Window Type</div>
+                        <select className="inp" value={reportData.description.windowType} onChange={(e)=>updateReportSection("description", "windowType", e.target.value)}>
+                          <option value="">Select</option>
+                          {WINDOW_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Screens Present</div>
+                        <select className="inp" value={reportData.description.windowScreens} onChange={(e)=>updateReportSection("description", "windowScreens", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Garage</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Garage Present</div>
+                        <select className="inp" value={reportData.description.garagePresent} onChange={(e)=>updateReportSection("description", "garagePresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Garage Bays</div>
+                        <input className="inp" value={reportData.description.garageBays} onChange={(e)=>updateReportSection("description", "garageBays", e.target.value)} placeholder="e.g., 2" />
+                      </div>
+                      <div>
+                        <div className="lbl">Overhead Doors</div>
+                        <input className="inp" value={reportData.description.garageDoors} onChange={(e)=>updateReportSection("description", "garageDoors", e.target.value)} placeholder="Number of doors" />
+                      </div>
+                      <div>
+                        <div className="lbl">Door Panel Material</div>
+                        <select className="inp" value={reportData.description.garageDoorMaterial} onChange={(e)=>updateReportSection("description", "garageDoorMaterial", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_DOOR_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Garage Opens To</div>
+                        <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Site Conditions</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Fencing Present</div>
+                        <select className="inp" value={reportData.description.fencingPresent} onChange={(e)=>updateReportSection("description", "fencingPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Fence Type</div>
+                        <select className="inp" value={reportData.description.fenceType} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)}>
+                          <option value="">Select</option>
+                          {FENCE_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Terrain</div>
+                        <select className="inp" value={reportData.description.terrain} onChange={(e)=>updateReportSection("description", "terrain", e.target.value)}>
+                          <option value="">Select</option>
+                          {TERRAIN_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Trees & Vegetation</div>
+                        <select className="inp" value={reportData.description.vegetation} onChange={(e)=>updateReportSection("description", "vegetation", e.target.value)}>
+                          <option value="">Select</option>
+                          {VEGETATION_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Fence Locations</div>
+                      <div className="chipList">
+                        {FENCE_LOCATIONS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.fenceLocations.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "fenceLocations", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Roof Information</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Roof Geometry</div>
+                        <select className="inp" value={reportData.description.roofGeometry} onChange={(e)=>updateReportSection("description", "roofGeometry", e.target.value)}>
+                          <option value="">Select</option>
+                          {ROOF_GEOMETRIES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Covering</div>
+                        <input className="inp" value={reportData.description.roofCovering} onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Length</div>
+                        <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Exposure</div>
+                        <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Ridge Shingle Width</div>
+                        <input className="inp" value={reportData.description.ridgeWidth} onChange={(e)=>updateReportSection("description", "ridgeWidth", e.target.value)} placeholder="e.g., 12 inch" />
+                      </div>
+                      <div>
+                        <div className="lbl">Ridge Shingle Exposure</div>
+                        <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inch" />
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Slopes</div>
+                        <input className="inp" value={reportData.description.roofSlopes} onChange={(e)=>updateReportSection("description", "roofSlopes", e.target.value)} placeholder="e.g., 6:12, 8:12" />
+                      </div>
+                      <div>
+                        <div className="lbl">Gutters Present</div>
+                        <select className="inp" value={reportData.description.guttersPresent} onChange={(e)=>updateReportSection("description", "guttersPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Downspouts Present</div>
+                        <select className="inp" value={reportData.description.downspoutsPresent} onChange={(e)=>updateReportSection("description", "downspoutsPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Roof Appurtenances</div>
+                      <div className="chipList">
+                        {ROOF_APPURTENANCES.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.roofAppurtenances.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "roofAppurtenances", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">EagleView Obtained</div>
+                        <select className="inp" value={reportData.description.eagleView} onChange={(e)=>updateReportSection("description", "eagleView", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Area</div>
+                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 42 squares" />
+                      </div>
+                      <div>
+                        <div className="lbl">Attachment Letter</div>
+                        <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
+                      </div>
+                    </div>
+                    <div className="sectionHint">
+                      Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "background" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Reported Background</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Reported Date of Loss</div>
+                        <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Information Source</div>
+                        <input className="inp" value={reportData.background.source} onChange={(e)=>updateReportSection("background", "source", e.target.value)} placeholder="Insured, contractor, claim file..." />
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Reported Concerns</div>
+                      <div className="chipList">
+                        {BACKGROUND_CONCERNS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.background.concerns.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("background", "concerns", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Background Notes</div>
+                      <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
+                    </div>
+                  </div>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Access & Limitations</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Roof Access Obtained</div>
+                        <select className="inp" value={reportData.background.accessObtained} onChange={(e)=>updateReportSection("background", "accessObtained", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Partial">Partial</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Areas Not Inspected</div>
+                        <input className="inp" value={reportData.background.limitations.join(", ")} onChange={(e)=>updateReportSection("background", "limitations", e.target.value.split(",").map(v => v.trim()).filter(Boolean))} placeholder="e.g., rear slope (wet), garage roof (locked)" />
+                      </div>
+                    </div>
+                    <div className="sectionHint">Separate areas with commas. Reasons can be included inline.</div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "inspection" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Overview</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Inspection Performed</div>
+                        <select className="inp" value={reportData.inspection.performed} onChange={(e)=>updateReportSection("inspection", "performed", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">Not Performed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Test Square Summary (from diagram)</div>
+                        <table className="dashTable" style={{marginTop:6}}>
+                          <thead>
+                            <tr>
+                              <th>Dir</th>
+                              <th>Hits</th>
+                              <th>Max Hail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {WIND_DIRS.map(dir => (
+                              <tr key={`report-ts-${dir}`}>
+                                <td style={{fontWeight:1200}}>{dir}</td>
+                                <td>{dashboard[dir].tsHits}</td>
+                                <td>{dashboard[dir].tsMaxHail ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="sectionHint">Use this summary as a reference while logging observations.</div>
+                  </div>
+
+                  {INSPECTION_COMPONENTS.map(component => {
+                    const data = reportData.inspection.components[component.key];
+                    return (
+                      <div className="reportCard" key={component.key}>
+                        <div className="reportSectionTitle">{component.label}</div>
+                        <div style={{marginBottom:10}}>
+                          <div className="lbl">Observed Conditions</div>
+                          <div className="chipList">
+                            {OBSERVED_CONDITIONS.map(option => (
+                              <div
+                                key={option}
+                                className={"chip " + (data.conditions.includes(option) ? "active" : "")}
+                                onClick={() => toggleInspectionList(component.key, "conditions", option)}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">No Notable Conditions Observed</div>
+                            <select className="inp" value={data.none ? "Yes" : "No"} onChange={(e)=>updateInspection(component.key, "none", e.target.value === "Yes")}>
+                              <option value="No">No</option>
+                              <option value="Yes">Yes</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Maximum Observed Size</div>
+                            <select className="inp" value={data.maxSize} onChange={(e)=>updateInspection(component.key, "maxSize", e.target.value)}>
+                              <option value="">Select</option>
+                              {SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Directions Observed</div>
+                            <div className="chipList">
+                              {WIND_DIRS.map(dir => (
+                                <div
+                                  key={dir}
+                                  className={"chip " + (data.directions.includes(dir) ? "active" : "")}
+                                  onClick={() => toggleInspectionList(component.key, "directions", dir)}
+                                >
+                                  {dir}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Notes</div>
+                          <textarea className="inp" value={data.notes} onChange={(e)=>updateInspection(component.key, "notes", e.target.value)} placeholder="Observed conditions, factual only..." />
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Associated Photos (file names)</div>
+                          <input
+                            className="inp"
+                            value={data.photos.join(", ")}
+                            onChange={(e)=>updateInspection(component.key, "photos", e.target.value.split(",").map(v => v.trim()).filter(Boolean))}
+                            placeholder="e.g., IMG_1021, IMG_1022"
+                          />
+                          <div className="sectionHint">Use file names to track photos; images can be attached later.</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+          )}
+
+          {viewMode === "diagram" && isMobile && (
             <>
               <div
                 className={"panelOverlay" + (mobilePanelOpen ? " show" : "")}
