@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-    <title>TitanRoof (Roof Diagram v3.0)</title>
+    <title>TitanRoof Beta</title>
 
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -54,10 +54,18 @@
         top: 0;
         left: 0;
         width: 100%;
-        height: 8px;
+        height: 18px;
         background: #DC2626;
         z-index: 200;
         box-shadow: 0 2px 6px rgba(220,38,38,0.35);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:10px;
+        font-weight:1100;
+        letter-spacing:0.8px;
+        text-transform:uppercase;
+        color:#fff;
       }
 
       .app{
@@ -65,6 +73,7 @@
         grid-template-columns: 1fr minmax(320px, 420px);
         height:100vh;
         min-height: 100vh;
+        animation: viewEnter 0.22s ease;
       }
 
       /* ========= CANVAS ZONE ========= */
@@ -379,31 +388,29 @@
         cursor:pointer;
         white-space:nowrap;
       }
-      .viewSwitch{
+      .viewTabs{
         display:flex;
-        align-items:center;
-        gap:6px;
-        padding:4px;
-        border-radius:999px;
-        border:1px solid rgba(255,255,255,0.28);
-        background: rgba(255,255,255,0.14);
+        align-items:flex-end;
+        gap:12px;
+        padding:0 4px;
+        border-bottom:1px solid rgba(255,255,255,0.35);
       }
-      .viewSwitch button{
+      .viewTabs button{
         border:none;
         background:transparent;
         color:#fff;
         font-size:12px;
         font-weight:1200;
-        padding:6px 12px;
-        border-radius:999px;
+        padding:6px 2px 8px;
         cursor:pointer;
-        opacity:0.85;
+        opacity:0.75;
+        border-bottom:2px solid transparent;
+        transition: opacity 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       }
-      .viewSwitch button.active{
-        background:#fff;
-        color:#0B2A3A;
+      .viewTabs button.active{
         opacity:1;
-        box-shadow: 0 6px 12px rgba(2,6,23,0.15);
+        border-color:#fff;
+        transform: translateY(1px);
       }
 
       .hdrEditPanel{
@@ -728,7 +735,11 @@
         display:flex;
         flex-direction:column;
         height:100vh;
-        background: var(--bg);
+        background: linear-gradient(180deg, rgba(14,165,233,0.10), rgba(139,92,246,0.12) 55%, rgba(245,247,251,1) 100%);
+        animation: viewEnter 0.22s ease;
+      }
+      .reportView .pHeader{
+        background: linear-gradient(135deg, rgba(14,165,233,0.92), rgba(59,130,246,0.9), rgba(168,85,247,0.85));
       }
       .reportTabs{
         display:flex;
@@ -927,10 +938,97 @@
         line-height:1.35;
       }
 
+      .printTitlePage{
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        min-height: 100vh;
+        gap:16px;
+      }
+      .printTitleHero{
+        font-size:28px;
+        font-weight:1300;
+      }
+      .printMetaGrid{
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap:12px;
+        margin-top:12px;
+      }
+      .printMetaCard{
+        border:1px solid rgba(226,232,240,0.95);
+        border-radius:12px;
+        padding:12px;
+        background:#fff;
+      }
+      .printIndexList{
+        margin:0;
+        padding-left:18px;
+        display:grid;
+        gap:6px;
+        font-size:13px;
+      }
+      .printBlock{
+        white-space:pre-wrap;
+        font-size:13px;
+        line-height:1.5;
+      }
+      .printKeyValue{
+        display:grid;
+        grid-template-columns: 140px 1fr;
+        gap:8px;
+        font-size:13px;
+      }
+      .printDivider{
+        height:1px;
+        background: rgba(226,232,240,0.95);
+        margin:12px 0;
+      }
+
+      .authOverlay{
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,0.65);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index: 300;
+        backdrop-filter: blur(6px);
+      }
+      .authCard{
+        width:min(420px, 92%);
+        background:#fff;
+        border-radius:16px;
+        padding:20px;
+        border:1px solid rgba(226,232,240,0.95);
+        box-shadow: 0 24px 48px rgba(2,6,23,0.25);
+      }
+      .authTitle{
+        font-size:18px;
+        font-weight:1200;
+        color: var(--navy);
+        margin-bottom:6px;
+      }
+      .authHint{
+        font-size:12px;
+        color: var(--sub);
+        margin-bottom:12px;
+      }
+      .authError{
+        font-size:12px;
+        color:#B91C1C;
+        margin-top:8px;
+      }
+
+      @keyframes viewEnter{
+        from{ opacity:0; transform: translateY(6px); }
+        to{ opacity:1; transform: translateY(0); }
+      }
+
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel, .reportView{ display:none !important; }
+        .canvasZone, .panel, .reportView, .authOverlay{ display:none !important; }
         .printSheet{
           display:block;
           padding:24px;
@@ -1060,7 +1158,7 @@
   </head>
 
   <body>
-    <div class="topBar"></div>
+    <div class="topBar">TitanRoof Beta v3.1</div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -1124,6 +1222,7 @@
         { key: "project", label: "Project" },
         { key: "description", label: "Description" },
         { key: "background", label: "Background" },
+        { key: "writer", label: "Report Writer" },
         { key: "inspection", label: "Inspection" }
       ];
 
@@ -1262,6 +1361,9 @@
         const [selectedId, setSelectedId] = useState(null);
         const [panelView, setPanelView] = useState("items"); // items | props
         const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+        const [isAuthenticated, setIsAuthenticated] = useState(false);
+        const [passwordInput, setPasswordInput] = useState("");
+        const [passwordError, setPasswordError] = useState("");
 
         // Drag states:
         // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
@@ -1331,6 +1433,20 @@
             notes: "",
             accessObtained: "",
             limitations: []
+          },
+          writer: {
+            letterhead: "",
+            attention: "",
+            reference: "",
+            subject: "",
+            propertyAddress: "",
+            clientFile: "",
+            haagFile: "",
+            introduction: "",
+            narrative: "",
+            description: "",
+            background: "",
+            inspection: ""
           },
           inspection: {
             performed: "",
@@ -1446,6 +1562,16 @@
               parties: prev.project.parties.filter(p => p.id !== id)
             }
           }));
+        };
+        const handleAuthSubmit = (e) => {
+          e.preventDefault();
+          if(passwordInput === "yaali110"){
+            setIsAuthenticated(true);
+            setPasswordInput("");
+            setPasswordError("");
+          } else {
+            setPasswordError("Incorrect password. Please try again.");
+          }
         };
 
         useEffect(() => () => revokeFileObj(roof.diagramBg), []);
@@ -1655,6 +1781,31 @@
             window.removeEventListener("afterprint", handleAfterPrint);
           };
         }, [exportMode]);
+
+        useEffect(() => {
+          const handleContextMenu = (e) => {
+            e.preventDefault();
+          };
+          const handleKeyDown = (e) => {
+            const key = e.key?.toLowerCase();
+            const isMac = navigator.platform.toUpperCase().includes("MAC");
+            const metaKey = isMac ? e.metaKey : e.ctrlKey;
+            if(
+              key === "f12" ||
+              (metaKey && e.shiftKey && ["i", "j", "c"].includes(key)) ||
+              (metaKey && key === "u")
+            ){
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          };
+          document.addEventListener("contextmenu", handleContextMenu);
+          window.addEventListener("keydown", handleKeyDown);
+          return () => {
+            document.removeEventListener("contextmenu", handleContextMenu);
+            window.removeEventListener("keydown", handleKeyDown);
+          };
+        }, []);
 
         // Esc clears tool
         useEffect(() => {
@@ -1963,9 +2114,24 @@
               component.notes ||
               component.photos.length
             ));
+          const writerStarted = Boolean(
+            reportData.writer.letterhead ||
+            reportData.writer.attention ||
+            reportData.writer.reference ||
+            reportData.writer.subject ||
+            reportData.writer.propertyAddress ||
+            reportData.writer.clientFile ||
+            reportData.writer.haagFile ||
+            reportData.writer.introduction ||
+            reportData.writer.narrative ||
+            reportData.writer.description ||
+            reportData.writer.background ||
+            reportData.writer.inspection
+          );
           return {
             project: projectComplete,
             description: descriptionComplete,
+            writer: writerStarted,
             inspection: inspectionStarted
           };
         }, [reportData]);
@@ -2832,6 +2998,14 @@
           return `${base} ${idx + 1} • ${entry.size}"`;
         };
 
+        const valueOrDash = (value) => value?.trim() ? value : "—";
+        const joinList = (list) => (list && list.length ? list.join(", ") : "—");
+        const formatAddressLine = (project) => {
+          const parts = [project.address, project.city, project.state, project.zip].filter(Boolean);
+          return parts.length ? parts.join(", ") : "—";
+        };
+        const formatBlock = (value) => value?.trim() ? value.trim() : "Not provided.";
+
         const collectTsPhotos = (ts) => {
           const photos = [];
           if(ts.data.overviewPhoto?.url){
@@ -2940,7 +3114,7 @@
                   {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
                 </button>
               )}
-              <div className="viewSwitch" role="tablist" aria-label="View mode">
+              <div className="viewTabs" role="tablist" aria-label="View mode">
                 <button
                   type="button"
                   className={viewMode === "diagram" ? "active" : ""}
@@ -2966,8 +3140,45 @@
           </div>
         );
 
+        const exportIndexItems = [
+          "Title Page",
+          "Index",
+          "Report Writer",
+          "Project Information",
+          "Description",
+          "Background",
+          "Inspection Summary",
+          "Roof Diagram",
+          "Dashboard",
+          `Test Squares (${items.filter(i => i.type === "ts").length})`,
+          `Wind Observations (${items.filter(i => i.type === "wind").length})`,
+          `Appurtenances + Downspouts (${items.filter(i => i.type === "apt" || i.type === "ds").length})`,
+          `Observations (${items.filter(i => i.type === "obs").length})`
+        ];
+
         return (
           <>
+          {!isAuthenticated && (
+            <div className="authOverlay">
+              <form className="authCard" onSubmit={handleAuthSubmit}>
+                <div className="authTitle">TitanRoof Beta Access</div>
+                <div className="authHint">Enter the security password to continue.</div>
+                <div className="lbl">Password</div>
+                <input
+                  className="inp"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e)=>{ setPasswordInput(e.target.value); setPasswordError(""); }}
+                  placeholder="Enter password"
+                  autoFocus
+                />
+                {passwordError && <div className="authError">{passwordError}</div>}
+                <div style={{display:"flex", justifyContent:"flex-end", marginTop:14}}>
+                  <button className="btn btnPrimary" type="submit">Unlock</button>
+                </div>
+              </form>
+            </div>
+          )}
           {viewMode === "diagram" ? (
           <div className="app">
             {/* CANVAS */}
@@ -3891,6 +4102,9 @@
                   {tab.key === "inspection" && (
                     <span className={"statusDot " + (completeness.inspection ? "ready" : "")} />
                   )}
+                  {tab.key === "writer" && (
+                    <span className={"statusDot " + (completeness.writer ? "ready" : "")} />
+                  )}
                 </button>
               ))}
             </div>
@@ -4300,6 +4514,71 @@
                 </>
               )}
 
+              {reportTab === "writer" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Report Writer Header</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Letterhead / Addressee Block</div>
+                        <textarea className="inp" value={reportData.writer.letterhead} onChange={(e)=>updateReportSection("writer", "letterhead", e.target.value)} placeholder="Company name, address lines..." />
+                        <div className="sectionHint">Use line breaks to match your formal letter layout.</div>
+                      </div>
+                      <div>
+                        <div className="lbl">Attention</div>
+                        <input className="inp" value={reportData.writer.attention} onChange={(e)=>updateReportSection("writer", "attention", e.target.value)} placeholder="Attention: Name" />
+                      </div>
+                      <div>
+                        <div className="lbl">Reference Line</div>
+                        <input className="inp" value={reportData.writer.reference} onChange={(e)=>updateReportSection("writer", "reference", e.target.value)} placeholder="Re: Residence / Report type" />
+                      </div>
+                      <div>
+                        <div className="lbl">Subject Line</div>
+                        <input className="inp" value={reportData.writer.subject} onChange={(e)=>updateReportSection("writer", "subject", e.target.value)} placeholder="Roof Evaluation" />
+                      </div>
+                      <div>
+                        <div className="lbl">Property Address Block</div>
+                        <textarea className="inp" value={reportData.writer.propertyAddress} onChange={(e)=>updateReportSection("writer", "propertyAddress", e.target.value)} placeholder="Street, City, State ZIP" />
+                      </div>
+                      <div>
+                        <div className="lbl">Client File</div>
+                        <input className="inp" value={reportData.writer.clientFile} onChange={(e)=>updateReportSection("writer", "clientFile", e.target.value)} placeholder="Client File #" />
+                      </div>
+                      <div>
+                        <div className="lbl">Haag File</div>
+                        <input className="inp" value={reportData.writer.haagFile} onChange={(e)=>updateReportSection("writer", "haagFile", e.target.value)} placeholder="Haag File #" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Narrative</div>
+                    <div style={{marginBottom:12}}>
+                      <div className="lbl">Introduction Paragraph</div>
+                      <textarea className="inp" value={reportData.writer.introduction} onChange={(e)=>updateReportSection("writer", "introduction", e.target.value)} placeholder="Complying with your request..." />
+                    </div>
+                    <div style={{marginBottom:12}}>
+                      <div className="lbl">Primary Narrative</div>
+                      <textarea className="inp" value={reportData.writer.narrative} onChange={(e)=>updateReportSection("writer", "narrative", e.target.value)} placeholder="Engineering report language, limitations, etc." />
+                    </div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Description Notes</div>
+                        <textarea className="inp" value={reportData.writer.description} onChange={(e)=>updateReportSection("writer", "description", e.target.value)} placeholder="Optional descriptive paragraph..." />
+                      </div>
+                      <div>
+                        <div className="lbl">Background Notes</div>
+                        <textarea className="inp" value={reportData.writer.background} onChange={(e)=>updateReportSection("writer", "background", e.target.value)} placeholder="Optional background paragraph..." />
+                      </div>
+                      <div>
+                        <div className="lbl">Inspection Notes</div>
+                        <textarea className="inp" value={reportData.writer.inspection} onChange={(e)=>updateReportSection("writer", "inspection", e.target.value)} placeholder="Optional inspection paragraph..." />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
               {reportTab === "inspection" && (
                 <>
                   <div className="reportCard">
@@ -4433,6 +4712,209 @@
           )}
 
           <div className="printSheet">
+            <div className="printPage">
+              <div className="printTitlePage">
+                <div className="printTitleHero">TitanRoof Version 3</div>
+                <div className="printTitle">{reportData.project.projectName || residenceName}</div>
+                <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                <div className="printMetaGrid">
+                  <div className="printMetaCard">
+                    <div className="lbl">Property</div>
+                    <div className="printBlock">{valueOrDash(reportData.project.projectName || residenceName)}</div>
+                    <div className="printBlock">{formatAddressLine(reportData.project)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">Inspection</div>
+                    <div className="printBlock">Date: {valueOrDash(reportData.project.inspectionDate)}</div>
+                    <div className="printBlock">Start: {valueOrDash(reportData.project.startTime)}</div>
+                    <div className="printBlock">End: {valueOrDash(reportData.project.endTime)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">File References</div>
+                    <div className="printBlock">Report #: {valueOrDash(reportData.project.reportNumber)}</div>
+                    <div className="printBlock">Client File: {valueOrDash(reportData.writer.clientFile)}</div>
+                    <div className="printBlock">Haag File: {valueOrDash(reportData.writer.haagFile)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Index</h3>
+                <ol className="printIndexList">
+                  {exportIndexItems.map(item => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Report Writer</h3>
+                <div className="printBlock">{formatBlock(reportData.writer.letterhead)}</div>
+                <div className="printDivider" />
+                <div className="printKeyValue">
+                  <div className="lbl">Attention</div>
+                  <div>{valueOrDash(reportData.writer.attention)}</div>
+                  <div className="lbl">Reference</div>
+                  <div>{valueOrDash(reportData.writer.reference)}</div>
+                  <div className="lbl">Subject</div>
+                  <div>{valueOrDash(reportData.writer.subject)}</div>
+                  <div className="lbl">Property</div>
+                  <div className="printBlock">{formatBlock(reportData.writer.propertyAddress)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.introduction)}</div>
+                <div className="printBlock">{formatBlock(reportData.writer.narrative)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Project Information</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Report #</div>
+                  <div>{valueOrDash(reportData.project.reportNumber)}</div>
+                  <div className="lbl">Project Name</div>
+                  <div>{valueOrDash(reportData.project.projectName || residenceName)}</div>
+                  <div className="lbl">Address</div>
+                  <div>{formatAddressLine(reportData.project)}</div>
+                  <div className="lbl">Front Faces</div>
+                  <div>{frontFaces}</div>
+                  <div className="lbl">Orientation</div>
+                  <div>{valueOrDash(reportData.project.orientation)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">Parties Present: {reportData.project.parties.length ? reportData.project.parties.map(p => `${p.name || "Unnamed"} (${p.role || "Role"})`).join(", ") : "None listed."}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Description</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Occupancy</div>
+                  <div>{valueOrDash(reportData.description.occupancy)}</div>
+                  <div className="lbl">Stories</div>
+                  <div>{valueOrDash(reportData.description.stories)}</div>
+                  <div className="lbl">Framing</div>
+                  <div>{valueOrDash(reportData.description.framing)}</div>
+                  <div className="lbl">Foundation</div>
+                  <div>{valueOrDash(reportData.description.foundation)}</div>
+                  <div className="lbl">Exterior Finishes</div>
+                  <div>{joinList(reportData.description.exteriorFinishes)}</div>
+                  <div className="lbl">Trim Components</div>
+                  <div>{joinList(reportData.description.trimComponents)}</div>
+                  <div className="lbl">Window Type</div>
+                  <div>{valueOrDash(reportData.description.windowType)}</div>
+                  <div className="lbl">Screens</div>
+                  <div>{valueOrDash(reportData.description.windowScreens)}</div>
+                  <div className="lbl">Garage</div>
+                  <div>{valueOrDash(reportData.description.garagePresent)}</div>
+                  <div className="lbl">Garage Bays</div>
+                  <div>{valueOrDash(reportData.description.garageBays)}</div>
+                  <div className="lbl">Garage Doors</div>
+                  <div>{valueOrDash(reportData.description.garageDoors)}</div>
+                  <div className="lbl">Garage Material</div>
+                  <div>{valueOrDash(reportData.description.garageDoorMaterial)}</div>
+                  <div className="lbl">Garage Opens To</div>
+                  <div>{valueOrDash(reportData.description.garageElevation)}</div>
+                  <div className="lbl">Fencing</div>
+                  <div>{valueOrDash(reportData.description.fencingPresent)}</div>
+                  <div className="lbl">Fence Type</div>
+                  <div>{valueOrDash(reportData.description.fenceType)}</div>
+                  <div className="lbl">Fence Locations</div>
+                  <div>{joinList(reportData.description.fenceLocations)}</div>
+                  <div className="lbl">Terrain</div>
+                  <div>{valueOrDash(reportData.description.terrain)}</div>
+                  <div className="lbl">Vegetation</div>
+                  <div>{valueOrDash(reportData.description.vegetation)}</div>
+                  <div className="lbl">Roof Geometry</div>
+                  <div>{valueOrDash(reportData.description.roofGeometry)}</div>
+                  <div className="lbl">Roof Covering</div>
+                  <div>{valueOrDash(reportData.description.roofCovering)}</div>
+                  <div className="lbl">Shingle Length</div>
+                  <div>{valueOrDash(reportData.description.shingleLength)}</div>
+                  <div className="lbl">Shingle Exposure</div>
+                  <div>{valueOrDash(reportData.description.shingleExposure)}</div>
+                  <div className="lbl">Ridge Width</div>
+                  <div>{valueOrDash(reportData.description.ridgeWidth)}</div>
+                  <div className="lbl">Ridge Exposure</div>
+                  <div>{valueOrDash(reportData.description.ridgeExposure)}</div>
+                  <div className="lbl">Roof Slopes</div>
+                  <div>{valueOrDash(reportData.description.roofSlopes)}</div>
+                  <div className="lbl">Gutters</div>
+                  <div>{valueOrDash(reportData.description.guttersPresent)}</div>
+                  <div className="lbl">Downspouts</div>
+                  <div>{valueOrDash(reportData.description.downspoutsPresent)}</div>
+                  <div className="lbl">Roof Appurtenances</div>
+                  <div>{joinList(reportData.description.roofAppurtenances)}</div>
+                  <div className="lbl">EagleView</div>
+                  <div>{valueOrDash(reportData.description.eagleView)}</div>
+                  <div className="lbl">Roof Area</div>
+                  <div>{valueOrDash(reportData.description.roofArea)}</div>
+                  <div className="lbl">Attachment Letter</div>
+                  <div>{valueOrDash(reportData.description.attachmentLetter)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.description)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Background</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Date of Loss</div>
+                  <div>{valueOrDash(reportData.background.dateOfLoss)}</div>
+                  <div className="lbl">Source</div>
+                  <div>{valueOrDash(reportData.background.source)}</div>
+                  <div className="lbl">Concerns</div>
+                  <div>{joinList(reportData.background.concerns)}</div>
+                  <div className="lbl">Access Obtained</div>
+                  <div>{valueOrDash(reportData.background.accessObtained)}</div>
+                  <div className="lbl">Limitations</div>
+                  <div>{joinList(reportData.background.limitations)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.background.notes)}</div>
+                <div className="printBlock">{formatBlock(reportData.writer.background)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Inspection Summary</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Inspection Performed</div>
+                  <div>{valueOrDash(reportData.inspection.performed)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printGrid">
+                  {INSPECTION_COMPONENTS.map(component => {
+                    const data = reportData.inspection.components[component.key];
+                    const detailParts = [];
+                    if(data.none) detailParts.push("No notable conditions.");
+                    if(data.conditions.length) detailParts.push(`Conditions: ${data.conditions.join(", ")}`);
+                    if(data.maxSize) detailParts.push(`Max size: ${data.maxSize}"`);
+                    if(data.directions.length) detailParts.push(`Directions: ${data.directions.join(", ")}`);
+                    if(data.notes) detailParts.push(`Notes: ${data.notes}`);
+                    if(data.photos.length) detailParts.push(`Photos: ${data.photos.join(", ")}`);
+                    return (
+                      <div className="printCard" key={`inspection-${component.key}`}>
+                        <div style={{fontWeight:1200}}>{component.label}</div>
+                        <div className="tiny">{detailParts.length ? detailParts.join(" ") : "No details recorded."}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.inspection)}</div>
+              </div>
+            </div>
+
             <div className="printPage">
               <div className="printHeader">
                 <div>
