@@ -1,1 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>TitanRoof (Roof Diagram v2.6)</title>
 
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+      :root{
+        --navy:#0B2A3A;
+        --navy2:#0E3348;
+
+        --bg:#F5F7FB;
+        --panel:#FFFFFF;
+        --border:#E5EAF1;
+        --text:#0F172A;
+        --sub:#64748B;
+
+        --c-ts:#DC2626;   /* red */
+        --c-apt:#111827;  /* gray/black */
+        --c-ds:#2563EB;   /* blue */
+        --c-wind:#16A34A; /* green */
+        --c-obs:#9333EA;  /* purple */
+
+        --teal:#0BA7A5;
+
+        --shadow: 0 14px 28px rgba(2,6,23,0.10);
+        --shadowSoft: 0 10px 20px rgba(2,6,23,0.07);
+        --ring: 0 0 0 3px rgba(11,167,165,0.18);
+
+        --glass: rgba(255,255,255,0.72);
+        --glass2: rgba(255,255,255,0.86);
+        --glassBorder: rgba(226,232,240,0.70);
+      }
+
+      *{ box-sizing:border-box; }
+      html, body{
+        margin:0;
+        height:100%;
+        overflow:hidden;
+        background:var(--bg);
+        color:var(--text);
+        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+        /* iOS momentum scrolling inside panels */
+        -webkit-text-size-adjust: 100%;
+      }
+
+      .app{
+        display:grid;
+        grid-template-columns: 1fr minmax(320px, 420px);
+        height:100vh;
+        min-height: 100vh;
+      }
+
+      /* ========= CANVAS ZONE ========= */
+      .canvasZone{
+        position:relative;
+        overflow:hidden;
+        user-select:none;
+        -webkit-user-select:none;
+        background:
+          radial-gradient(1200px 700px at 20% 15%, rgba(11,167,165,0.10), transparent 55%),
+          radial-gradient(900px 600px at 80% 70%, rgba(37,99,235,0.10), transparent 55%),
+          #E9EEF5;
+    ....
+
+...
+...
+                    ))}\n                  </tbody>\n                </table>\n                <div className="printGrid" style={{marginTop:10}}>\n                  {items.filter(i => i.type === "wind").map(w => (\n                    <div className="printCard" key={`wind-${w.id}`}>\n                      <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>\n                      <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>\n                      {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (\n                        <>\n                          {w.data.creasedPhoto?.url && (\n                            <PrintPhoto\n                              photo={w.data.creasedPhoto}\n                              alt="Creased wind photo"\n                              caption={photoCaption(w.data.caption || "Creased photo", w.data.creasedPhoto)}\n                              style={{marginTop:8}}\n                            />\n                          )}\n                          {w.data.tornMissingPhoto?.url && (\n                            <PrintPhoto\n                              photo={w.data.tornMissingPhoto}\n                              alt="Torn or missing wind photo"\n                              caption={photoCaption(w.data.caption || "Torn/missing photo", w.data.tornMissingPhoto)}\n                              style={{marginTop:8}}\n                            />\n                          )}\n                          {w.data.overviewPhoto?.url && (\n                            <PrintPhoto\n                              photo={w.data.overviewPhoto}\n                              alt="Wind overview"\n                              caption={photoCaption(w.data.caption || "Overview photo", w.data.overviewPhoto)}\n                              style={{marginTop:8}}\n                            />\n                          )}\n                        </>\n                      ) : (\n                        <div className="tiny" style={{marginTop:6}}>No photos attached.</div>\n                      )}\n                    </div>\n                  ))}\n                </div>\n              </div>\n\n              <div className="printSection">\n                <h3>Appurtenances + Downspouts</h3>\n                <table className="dashTable" style={{marginBottom:10}}>\n                  <thead>\n                    <tr>\n                      <th>Direction</th>\n                      <th>Appurtenance Spatter Max</th>\n                      <th>Appurtenance Dent Max</th>\n                      <th>Downspout Spatter Max</th>\n                      <th>Downspout Dent Max</th>\n                    </tr>\n                  </thead>\n                  <tbody>\n                    {CARDINAL_DIRS.map(dir => (\n                      <tr key={`hail-${dir}`}>\n                        <td style={{fontWeight:1300}}>{dir}</td>\n                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>\n                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>\n                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>\n                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "—"}</td>\n                      </tr>\n                    ))}\n                  </tbody>\n                </table>\n\n                <div className="printGrid">\n                  {items.filter(i => i.type === "apt" || i.type === "ds").map(it => (\n                    <div className="printCard" key={`hail-${it.id}`}>\n                      <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>\n                      <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>\n                      {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (\n                        (it.data.damageEntries || []).map((entry, idx) => (\n                          entry.photo?.url ? (\n                            <PrintPhoto\n                              key={`${it.id}-damage-${entry.id}`}\n                              photo={entry.photo}\n                              alt="Hail indicator"\n                              caption={photoCaption(damageEntryLabel(entry, idx), entry.photo)}\n                              style={{marginTop:8}}\n                            />\n                          ) : null\n                        ))\n                      ) : (\n                        <div className="tiny" style={{marginTop:6}}>No hail indicator photos attached.</div>\n                      )}\n                      {it.data.detailPhoto?.url && (\n                        <PrintPhoto\n                          photo={it.data.detailPhoto}\n                          alt="Detail"\n                          caption={photoCaption(it.data.caption || "Detail photo", it.data.detailPhoto)}\n                          style={{marginTop:8}}\n                        />\n                      )}\n                      {it.data.overviewPhoto?.url && (\n                        <PrintPhoto\n                          photo={it.data.overviewPhoto}\n                          alt="Overview"\n                          caption={photoCaption("Overview photo", it.data.overviewPhoto)}\n                          style={{marginTop:8}}\n                        />\n                      )}\n                    </div>\n                  ))}\n                </div>\n              </div>\n\n              <div className="printSection">\n                <h3>Observations</h3>\n                <div className="printGrid">\n                  {items.filter(i => i.type === "obs").map(obs => (\n                    <div className="printCard" key={`obs-${obs.id}`}>\n                      <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>\n                      <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>\n                      {obs.data.photo?.url ? (\n                        <PrintPhoto\n                          photo={obs.data.photo}\n                          alt="Observation"\n                          caption={photoCaption(obs.data.caption || "Observation photo", obs.data.photo)}\n                          style={{marginTop:8}}\n                        />\n                      ) : (\n                        <div className="tiny" style={{marginTop:6}}>No photo attached.</div>\n                      )}\n                    </div>\n                  ))}\n                </div>\n              </div>\n            </div>\n          </div>\n          </>\n        );\n      }\n\n      ReactDOM.createRoot(document.getElementById("root")).render(<App/>);\n    </script>\n  </body>\n</html>
