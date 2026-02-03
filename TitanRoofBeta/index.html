@@ -334,6 +334,12 @@
         gap:12px;
         min-width:0;
       }
+      .hdrTop{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:12px;
+      }
       .hdrText{
         min-width:0;
         flex:1;
@@ -379,6 +385,9 @@
         align-items:center;
         justify-content:center;
         flex: 0 0 auto;
+        color:#fff;
+        appearance:none;
+        padding:0;
       }
       .hdrEditIcon:hover{ background: rgba(255,255,255,0.18); }
       .hdrEditIcon.edit{
@@ -390,12 +399,18 @@
         border-color: rgba(255,255,255,0.18);
       }
       .hdrEditIcon.collapse:hover{ background: rgba(15,23,42,0.28); }
+      .hdrIconGroup{
+        display:flex;
+        align-items:center;
+        gap:8px;
+      }
       .hdrActions{
         display:flex;
         align-items:center;
         gap:8px;
         flex-wrap:wrap;
         justify-content:flex-start;
+        row-gap:8px;
       }
       .hdrBtn{
         padding:6px 9px;
@@ -407,6 +422,23 @@
         font-weight:1200;
         cursor:pointer;
         white-space:nowrap;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+      }
+      .saveNotice{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 10px;
+        border-radius:999px;
+        background: rgba(15,23,42,0.22);
+        border:1px solid rgba(255,255,255,0.28);
+        font-size:11px;
+        font-weight:1100;
+        color:#fff;
+        max-width:100%;
+        align-self:flex-start;
       }
       .viewTabsDock{
         display:flex;
@@ -504,6 +536,7 @@
         flex-direction:column;
         gap:12px;
         min-width:0;
+        min-height:0;
       }
 
       .propsSticky{
@@ -759,6 +792,7 @@
         box-shadow: 0 -18px 26px rgba(2,6,23,0.06);
         color: var(--text);
         border-radius: 16px 16px 0 0;
+        margin-top:auto;
       }
       .dashTitle{
         font-size:13px;
@@ -1165,6 +1199,9 @@
         width:40px;
         height:40px;
         border-radius:14px;
+        border:1px solid rgba(11,167,165,0.45);
+        background: rgba(11,167,165,0.22);
+        color: var(--teal);
         cursor:pointer;
         display:flex;
         align-items:center;
@@ -1172,7 +1209,7 @@
         user-select:none;
         -webkit-user-select:none;
       }
-      .editPill:hover{ background: rgba(241,245,249,0.9); }
+      .editPill:hover{ background: rgba(11,167,165,0.18); }
 
       /* ========= Icons ========= */
       .ico{ width:18px; height:18px; color: currentColor; }
@@ -1899,11 +1936,35 @@
           setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
         }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
 
+        const SAVE_NOTICE_MS = 12000;
+        const saveNoticeTimeoutRef = useRef(null);
+        const [saveNotice, setSaveNotice] = useState(null);
+
+        const showSaveNotice = useCallback((timeString) => {
+          if(saveNoticeTimeoutRef.current){
+            clearTimeout(saveNoticeTimeoutRef.current);
+          }
+          setSaveNotice(timeString);
+          saveNoticeTimeoutRef.current = setTimeout(() => {
+            setSaveNotice(null);
+          }, SAVE_NOTICE_MS);
+        }, []);
+
+        useEffect(() => () => {
+          if(saveNoticeTimeoutRef.current){
+            clearTimeout(saveNoticeTimeoutRef.current);
+          }
+        }, []);
+
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-          setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
-        }, [buildState]);
+          const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          setLastSavedAt({ source, time: timeString });
+          if(source === "manual"){
+            showSaveNotice(timeString);
+          }
+        }, [buildState, showSaveNotice]);
 
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
@@ -3288,14 +3349,36 @@
 
         const headerContent = (
           <div className="pHeader">
-            <div className="hdrText">
-              <div className="hdrLine1">{residenceName}</div>
-              {!hdrCollapsed && (
-                <>
-                  <div className="hdrLine2">{roofSummary}</div>
-                  <div className="hdrLine3">Front faces: {frontFaces}</div>
-                </>
-              )}
+            <div className="hdrTop">
+              <div className="hdrText">
+                <div className="hdrLine1">{residenceName}</div>
+                {!hdrCollapsed && (
+                  <>
+                    <div className="hdrLine2">{roofSummary}</div>
+                    <div className="hdrLine3">Front faces: {frontFaces}</div>
+                  </>
+                )}
+              </div>
+              <div className="hdrIconGroup">
+                <button
+                  className="hdrEditIcon edit"
+                  type="button"
+                  onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }}
+                  title="Edit header info"
+                  aria-label="Edit header info"
+                >
+                  <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
+                </button>
+                <button
+                  className="hdrEditIcon collapse"
+                  type="button"
+                  onClick={()=>setHdrCollapsed(v=>!v)}
+                  title={hdrCollapsed ? "Expand header" : "Collapse header"}
+                  aria-label={hdrCollapsed ? "Expand header" : "Collapse header"}
+                >
+                  <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
+                </button>
+              </div>
             </div>
             <div className="hdrActions">
               {isMobile && viewMode === "diagram" && (
@@ -3305,18 +3388,10 @@
               <button className="hdrBtn" onClick={() => trpInputRef.current?.click()}>Open .TRP</button>
               <button className="hdrBtn" onClick={exportTrp}>Save .TRP</button>
               <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
-              {viewMode === "diagram" && (
-                <button className="hdrBtn" onClick={() => setDashCollapsed(v => !v)}>
-                  {dashCollapsed ? "Show Dashboard" : "Hide Dashboard"}
-                </button>
-              )}
-              <div className="hdrEditIcon edit" onClick={() => { setHdrEditOpen(v=>!v); setHdrCollapsed(false); }} title="Edit header info">
-                <Icon name={hdrEditOpen ? "chevUp" : "pencil"} />
-              </div>
-              <div className="hdrEditIcon collapse" onClick={()=>setHdrCollapsed(v=>!v)} title={hdrCollapsed ? "Expand header" : "Collapse header"}>
-                <Icon name={hdrCollapsed ? "chevDown" : "chevUp"} />
-              </div>
             </div>
+            {saveNotice && (
+              <div className="saveNotice" role="status">Saved {saveNotice}</div>
+            )}
           </div>
         );
 
@@ -3449,14 +3524,14 @@
               {/* NAV */}
               <div className="navTools">
                 <div className="navCard">
-                  <div className="navRow">
-                    <div className="tbTitle">Zoom</div>
-                    <div className="zBtns">
-                      <button className="zBtn" onClick={zoomOut}>−</button>
-                      <button className="zBtn" onClick={zoomIn}>+</button>
-                    </div>
-                    <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                <div className="navRow">
+                  <div className="zBtns">
+                    <button className="zBtn" onClick={zoomOut}>−</button>
+                    <button className="zBtn" onClick={zoomIn}>+</button>
+                    <button className="zBtn" onClick={zoomFit}>Fit</button>
                   </div>
+                  <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                </div>
                 </div>
               </div>
 
@@ -4198,80 +4273,86 @@
                     )}
                   </div>
                 )}
-              </div>
-
-              {/* DASHBOARDS */}
-              <div className="dashDock">
-                <div className="dashTitle">
-                  <span>Dashboard</span>
-                  <div style={{display:"flex", gap:8}}>
-                    <button className="btn" style={{padding:"10px 10px"}} onClick={()=>setDashCollapsed(v=>!v)}>
-                      <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
-                    </button>
+                {/* DASHBOARDS */}
+                <div className="dashDock">
+                  <div className="dashTitle">
+                    <span>Dashboard</span>
+                    <div style={{display:"flex", gap:8}}>
+                      <button
+                        className="btn"
+                        style={{padding:"10px 10px"}}
+                        type="button"
+                        onClick={()=>setDashCollapsed(v=>!v)}
+                        title={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                        aria-label={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                      >
+                        <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
+                      </button>
+                    </div>
                   </div>
+
+                  {!dashCollapsed && (
+                    <>
+                      {/* MAIN: hail + wind (above) */}
+                      <div className="dashScroll" style={{marginBottom:12}}>
+                        <table className="dashTable">
+                          <thead>
+                            <tr>
+                              <th>Direction</th>
+                              <th>Test Square Hits</th>
+                              <th>Max Hail Size</th>
+                              <th>Wind (Creased)</th>
+                              <th>Wind (Torn/Missing)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {WIND_DIRS.map(dir => {
+                              const d = dashboard[dir];
+                              return (
+                                <tr key={dir}>
+                                  <td style={{fontWeight:1300}}>{dir}</td>
+                                  <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
+                                  <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
+                                  <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
+                                  <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* SECONDARY: hail indicators from appurtenances + downspouts */}
+                      <div className="dashScroll">
+                        <table className="dashTable">
+                          <thead>
+                            <tr>
+                              <th>Direction</th>
+                      <th>Appurtenances (Max)</th>
+                              <th>Downspouts (Max)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {CARDINAL_DIRS.map(dir => {
+                              const d = dashboard[dir];
+                              return (
+                                <tr key={dir}>
+                                  <td style={{fontWeight:1300}}>{dir}</td>
+                                  <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
+                                  <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="tiny" style={{marginTop:10}}>
+                        Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
+                      </div>
+                    </>
+                  )}
                 </div>
-
-                {!dashCollapsed && (
-                  <>
-                    {/* MAIN: hail + wind (above) */}
-                    <div className="dashScroll" style={{marginBottom:12}}>
-                      <table className="dashTable">
-                        <thead>
-                          <tr>
-                            <th>Direction</th>
-                            <th>Test Square Hits</th>
-                            <th>Max Hail Size</th>
-                            <th>Wind (Creased)</th>
-                            <th>Wind (Torn/Missing)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {WIND_DIRS.map(dir => {
-                            const d = dashboard[dir];
-                            return (
-                              <tr key={dir}>
-                                <td style={{fontWeight:1300}}>{dir}</td>
-                                <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
-                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
-                                <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
-                                <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* SECONDARY: hail indicators from appurtenances + downspouts */}
-                    <div className="dashScroll">
-                      <table className="dashTable">
-                        <thead>
-                          <tr>
-                            <th>Direction</th>
-                    <th>Appurtenances (Max)</th>
-                            <th>Downspouts (Max)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {CARDINAL_DIRS.map(dir => {
-                            const d = dashboard[dir];
-                            return (
-                              <tr key={dir}>
-                                <td style={{fontWeight:1300}}>{dir}</td>
-                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
-                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="tiny" style={{marginTop:10}}>
-                      Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           </div>
