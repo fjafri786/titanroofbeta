@@ -3659,7 +3659,6 @@
                 <Icon name="export" /> Export
               </button>
             </div>
-          </div>
         );
 
         const headerEditForm = (
@@ -4538,7 +4537,9 @@
                   </div>
                 )}
               </div>
-              <div className={"dashDock" + (dashCollapsed ? " collapsed" : "")}>
+            </div>
+          </div>
+          <div className={"dashDock" + (dashCollapsed ? " collapsed" : "")}>
                 <div className="dashTitle">
                   {!dashCollapsed && <span>Dashboard</span>}
                   <div style={{display:"flex", gap:8}}>
