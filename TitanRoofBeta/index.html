@@ -157,6 +157,12 @@
         touch-action:none;
         cursor: grab;
       }
+      .toolbar.vertical{
+        flex-direction:column;
+        align-items:stretch;
+        gap:8px;
+        padding:8px 6px;
+      }
       .toolbar.locked{
         cursor: default;
       }
@@ -182,11 +188,37 @@
         gap:8px;
         flex-wrap:nowrap;
       }
+      .toolbar.vertical .tbTools{
+        flex-direction:column;
+        align-items:stretch;
+        gap:6px;
+      }
       .tbDivider{
         width:1px;
         height:32px;
         background: rgba(148,163,184,0.4);
         border-radius: 999px;
+      }
+      .toolbar.vertical .tbDivider{
+        width:100%;
+        height:1px;
+      }
+      .tbZoom{
+        display:flex;
+        align-items:center;
+        gap:6px;
+      }
+      .toolbar.vertical .tbZoom{
+        flex-direction:column;
+        align-items:stretch;
+      }
+      .tbZoomRow{
+        display:flex;
+        align-items:center;
+        gap:6px;
+      }
+      .toolbar.vertical .tbZoomRow{
+        flex-direction:column;
       }
 
       .toolBtn{
@@ -440,6 +472,23 @@
         max-width:100%;
         align-self:flex-start;
       }
+      .saveToast{
+        position: fixed;
+        top: calc(var(--topbar-height) + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 180;
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 12px;
+        border-radius:999px;
+        background: rgba(15,23,42,0.85);
+        color:#fff;
+        font-size:11px;
+        font-weight:1100;
+        box-shadow: 0 12px 22px rgba(2,6,23,0.2);
+      }
       .viewTabsDock{
         display:flex;
         justify-content:flex-end;
@@ -473,10 +522,6 @@
         box-shadow: 0 10px 16px rgba(2,6,23,0.12);
       }
       .modeToggle{
-        position: fixed;
-        top: calc(var(--topbar-height) + 10px);
-        right: 16px;
-        z-index: 120;
         display:flex;
         align-items:center;
         gap:6px;
@@ -502,18 +547,24 @@
         color:#fff;
         box-shadow: 0 10px 16px rgba(2,6,23,0.12);
       }
-      .sidebarToggle{
+      .sidebarDock{
         position: fixed;
-        top: calc(var(--topbar-height) + 58px);
+        top: calc(var(--topbar-height) + 10px);
         right: 16px;
-        z-index: 110;
+        z-index: 120;
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        gap:8px;
+      }
+      .sidebarToggle{
         display:flex;
         align-items:center;
         justify-content:center;
         width:38px;
         height:38px;
         border-radius:14px;
-        background: rgba(255,255,255,0.92);
+        background: rgba(255,255,255,0.95);
         border:1px solid rgba(226,232,240,0.9);
         box-shadow: var(--shadowSoft);
         cursor:pointer;
@@ -525,6 +576,49 @@
         padding: 12px 16px;
         border-bottom: 1px solid rgba(226,232,240,0.95);
         background: linear-gradient(180deg, rgba(244,247,251,0.98), rgba(236,240,246,0.98));
+      }
+      .modalBackdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,0.45);
+        backdrop-filter: blur(3px);
+        z-index: 170;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding: 16px;
+      }
+      .modalCard{
+        width: min(760px, 96vw);
+        max-height: 86vh;
+        background: #fff;
+        border-radius: 18px;
+        border: 1px solid rgba(226,232,240,0.95);
+        box-shadow: 0 20px 40px rgba(2,6,23,0.2);
+        overflow: auto;
+      }
+      .modalHeader{
+        padding: 14px 18px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        border-bottom: 1px solid rgba(226,232,240,0.95);
+        background: linear-gradient(135deg, rgba(14,165,233,0.12), rgba(37,99,235,0.12));
+      }
+      .modalTitle{
+        font-size:14px;
+        font-weight:1200;
+        color: var(--navy);
+      }
+      .modalBody{
+        padding: 16px 18px 6px;
+      }
+      .modalActions{
+        padding: 12px 18px 16px;
+        display:flex;
+        gap:10px;
+        justify-content:flex-end;
       }
 
       .pScroll{
@@ -794,6 +888,9 @@
         border-radius: 16px 16px 0 0;
         margin-top:auto;
       }
+      .dashDock.collapsed{
+        padding:10px;
+      }
       .dashTitle{
         font-size:13px;
         font-weight:1300;
@@ -804,8 +901,11 @@
         gap:10px;
         margin-bottom:10px;
       }
+      .dashDock.collapsed .dashTitle{
+        margin-bottom:0;
+      }
       .dashScroll{
-        max-height: 220px;
+        max-height: clamp(160px, 30vh, 240px);
         overflow:auto;
         overflow-x:auto;
         -webkit-overflow-scrolling: touch;
@@ -1166,7 +1266,7 @@
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel, .reportView, .authOverlay, .modeToggle, .sidebarToggle, .topBar{ display:none !important; }
+        .canvasZone, .panel, .reportView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar{ display:none !important; }
         .printSheet{
           display:block;
           padding:24px;
@@ -1236,13 +1336,6 @@
         .toolBtn{
           scroll-snap-align: center;
         }
-        .navTools{
-          right:12px;
-          bottom:84px;
-        }
-        .navCard{
-          width: 200px;
-        }
         .panel{
           position: fixed;
           top: var(--topbar-height);
@@ -1287,14 +1380,18 @@
         .hdrText{
           width: 100%;
         }
-        .modeToggle{
+        .sidebarDock{
           left: 50%;
           right: auto;
           transform: translateX(-50%);
+          align-items:center;
         }
-        .sidebarToggle{
-          top: calc(var(--topbar-height) + 54px);
-          right: 12px;
+        .dashTable{
+          font-size:10px;
+        }
+        .dashTable th,
+        .dashTable td{
+          white-space: normal;
         }
         .mobileDock{
           position: fixed;
@@ -1309,9 +1406,6 @@
         .mobileDock .btn{
           flex: 1 1 0;
         }
-        .dashTable{
-          min-width: 420px;
-        }
         .dashDock{
           margin: 0 4px 12px;
           border-radius: 18px;
@@ -1321,7 +1415,7 @@
   </head>
 
   <body>
-    <div class="topBar">TitanRoof Beta v3.2</div>
+    <div class="topBar">TitanRoof Beta v3.2.1 • Red Bar</div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -1531,6 +1625,7 @@
         const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
         const [toolbarDragging, setToolbarDragging] = useState(false);
         const [toolbarLocked, setToolbarLocked] = useState(false);
+        const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
         const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
         const trpInputRef = useRef(null);
@@ -2072,6 +2167,20 @@
           window.addEventListener("resize", onResize);
           return () => window.removeEventListener("resize", onResize);
         }, []);
+        const [viewportBounds, setViewportBounds] = useState({ w: 0, h: 0 });
+        const prevViewportBounds = useRef(null);
+        useEffect(() => {
+          const el = viewportRef.current;
+          if(!el) return;
+          const observer = new ResizeObserver(entries => {
+            const rect = entries[0]?.contentRect;
+            if(rect){
+              setViewportBounds({ w: rect.width, h: rect.height });
+            }
+          });
+          observer.observe(el);
+          return () => observer.disconnect();
+        }, []);
 
         const isMobile = viewportSize.w <= 820;
         const previousToolbarLock = useRef(toolbarLocked);
@@ -2114,9 +2223,35 @@
           };
         }, []);
 
+        const getToolbarOrientation = useCallback((pos) => {
+          const zoneRect = canvasRef.current?.getBoundingClientRect();
+          const toolbarRect = toolbarRef.current?.getBoundingClientRect();
+          if(!zoneRect || !toolbarRect) return "horizontal";
+          const threshold = 24;
+          const leftEdge = zoneRect.left + threshold;
+          const rightEdge = zoneRect.right - toolbarRect.width - threshold;
+          if(pos.x <= leftEdge || pos.x >= rightEdge){
+            return "vertical";
+          }
+          return "horizontal";
+        }, []);
+
         useEffect(() => {
           setToolbarPos(prev => clampToolbarPos(prev));
         }, [viewportSize.w, viewportSize.h, tool, clampToolbarPos]);
+
+        useEffect(() => {
+          if(isMobile){
+            setToolbarOrientation("horizontal");
+            return;
+          }
+          setToolbarOrientation(getToolbarOrientation(toolbarPos));
+        }, [toolbarPos, isMobile, getToolbarOrientation]);
+
+        useEffect(() => {
+          if(isMobile) return;
+          setToolbarPos(prev => clampToolbarPos(prev));
+        }, [sidebarCollapsed, toolbarOrientation, isMobile, clampToolbarPos]);
 
         useEffect(() => {
           if(!toolbarLocked) return;
@@ -2158,6 +2293,19 @@
 
         // === VIEW (multi-touch pinch + pan) ===
         const [view, setView] = useState({ scale: 1.0, tx: 0, ty: 0 });
+
+        useEffect(() => {
+          if(!viewportBounds.w || !viewportBounds.h) return;
+          const prev = prevViewportBounds.current;
+          if(prev){
+            const dw = viewportBounds.w - prev.w;
+            const dh = viewportBounds.h - prev.h;
+            if(dw || dh){
+              setView(prevView => ({ ...prevView, tx: prevView.tx - dw / 2, ty: prevView.ty - dh / 2 }));
+            }
+          }
+          prevViewportBounds.current = viewportBounds;
+        }, [viewportBounds.w, viewportBounds.h]);
 
         const setScaleAnchored = (nextScale, anchorClient) => {
           const v = viewportRef.current?.getBoundingClientRect();
@@ -2898,7 +3046,13 @@
           }
 
           // pinch update
-          if(pointersRef.current.size === 2 && pinchRef.current){
+          if(pointersRef.current.size === 2){
+            if(!pinchRef.current){
+              startPinchIfTwo();
+            }
+            if(drag){
+              setDrag(null);
+            }
             e.preventDefault();
             updatePinch();
             return;
@@ -3389,9 +3543,116 @@
               <button className="hdrBtn" onClick={exportTrp}>Save .TRP</button>
               <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
             </div>
-            {saveNotice && (
-              <div className="saveNotice" role="status">Saved {saveNotice}</div>
+          </div>
+        );
+
+        const headerEditForm = (
+          <>
+            <div className="rowTop" style={{marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div className="lbl">Residence / Property</div>
+                <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
+              </div>
+              <div style={{flex:1}}>
+                <div className="lbl">Front Faces</div>
+                <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
+                  <option value="North">North</option>
+                  <option value="South">South</option>
+                  <option value="East">East</option>
+                  <option value="West">West</option>
+                  <option value="Northeast">Northeast</option>
+                  <option value="Northwest">Northwest</option>
+                  <option value="Southeast">Southeast</option>
+                  <option value="Southwest">Southwest</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="rowTop" style={{marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div className="lbl">Roof Covering</div>
+                <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
+                  <option value="SHINGLE">Shingle</option>
+                  <option value="METAL">Metal</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div style={{flex:1}}>
+                <div className="lbl">Diagram Image</div>
+                <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+              </div>
+            </div>
+
+            {roof.covering==="SHINGLE" && (
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Shingle Type</div>
+                  <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
+                    {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}>
+                  <div className="lbl">Length</div>
+                  <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
+                    {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
             )}
+
+            {roof.covering==="SHINGLE" && (
+              <div style={{marginBottom:10}}>
+                <div className="lbl">Exposure</div>
+                <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
+                  {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+
+            {roof.covering==="METAL" && (
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Metal Type</div>
+                  <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
+                    {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}>
+                  <div className="lbl">Panel Width</div>
+                  <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
+                    {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {roof.covering==="OTHER" && (
+              <div style={{marginBottom:10}}>
+                <div className="lbl">Describe</div>
+                <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
+              </div>
+            )}
+          </>
+        );
+
+        const headerEditModal = hdrEditOpen && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) setHdrEditOpen(false); }}
+          >
+            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Project properties</div>
+                <button className="btn" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
+              </div>
+              <div className="modalBody">
+                {headerEditForm}
+              </div>
+              <div className="modalActions">
+                <button className="btn btnPrimary" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
+                <button className="btn btnDanger" type="button" onClick={clearDiagram}>Clear Diagram + Items</button>
+              </div>
+            </div>
           </div>
         );
 
@@ -3448,40 +3709,46 @@
             </div>
           )}
           {isAuthenticated && (
-            <div className="modeToggle" role="tablist" aria-label="View mode">
-              <button
-                type="button"
-                className={viewMode === "diagram" ? "active" : ""}
-                onClick={() => setViewMode("diagram")}
-              >
-                Diagram
-              </button>
-              <button
-                type="button"
-                className={viewMode === "report" ? "active" : ""}
-                onClick={() => setViewMode("report")}
-              >
-                Report
-              </button>
+            <div className="sidebarDock">
+              <div className="modeToggle" role="tablist" aria-label="View mode">
+                <button
+                  type="button"
+                  className={viewMode === "diagram" ? "active" : ""}
+                  onClick={() => setViewMode("diagram")}
+                >
+                  Diagram
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === "report" ? "active" : ""}
+                  onClick={() => setViewMode("report")}
+                >
+                  Report
+                </button>
+              </div>
+              {viewMode === "diagram" && !isMobile && (
+                <button
+                  className="sidebarToggle"
+                  type="button"
+                  onClick={() => setSidebarCollapsed(v => !v)}
+                  title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                  aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                >
+                  <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
+                </button>
+              )}
             </div>
           )}
-          {isAuthenticated && viewMode === "diagram" && !isMobile && (
-            <button
-              className="sidebarToggle"
-              type="button"
-              onClick={() => setSidebarCollapsed(v => !v)}
-              title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-              aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-            >
-              <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
-            </button>
+          {headerEditModal}
+          {saveNotice && (
+            <div className="saveToast" role="status">Saved {saveNotice}</div>
           )}
           {viewMode === "diagram" ? (
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
               <div
-                className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "")}
+                className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "")}
                 style={isMobile
                   ? { left: "50%", top: "calc(var(--topbar-height) + 6px)", transform: "translateX(-50%)" }
                   : { left: toolbarPos.x, top: toolbarPos.y }}
@@ -3512,6 +3779,15 @@
                   </div>
                 </div>
                 <div className="tbDivider" />
+                <div className="tbZoom">
+                  <div className="tbZoomRow">
+                    <button className="zBtn" onClick={zoomOut}>−</button>
+                    <button className="zBtn" onClick={zoomIn}>+</button>
+                    <button className="zBtn" onClick={zoomFit}>Fit</button>
+                  </div>
+                  <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                </div>
+                <div className="tbDivider" />
                 <LockIcon
                   locked={toolbarLocked}
                   onToggle={() => {
@@ -3519,20 +3795,6 @@
                     setToolbarLocked(prev => !prev);
                   }}
                 />
-              </div>
-
-              {/* NAV */}
-              <div className="navTools">
-                <div className="navCard">
-                <div className="navRow">
-                  <div className="zBtns">
-                    <button className="zBtn" onClick={zoomOut}>−</button>
-                    <button className="zBtn" onClick={zoomIn}>+</button>
-                    <button className="zBtn" onClick={zoomFit}>Fit</button>
-                  </div>
-                  <div className="zReadout">{Math.round(view.scale*100)}%</div>
-                </div>
-                </div>
               </div>
 
               {/* VIEWPORT */}
@@ -3647,106 +3909,6 @@
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
               {headerContent}
-
-              {hdrEditOpen && (
-                <div className="hdrEditPanel">
-                  <div className="rowTop" style={{marginBottom:10}}>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Residence / Property</div>
-                      <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
-                    </div>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Front Faces</div>
-                      <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
-                        <option value="North">North</option>
-                        <option value="South">South</option>
-                        <option value="East">East</option>
-                        <option value="West">West</option>
-                        <option value="Northeast">Northeast</option>
-                        <option value="Northwest">Northwest</option>
-                        <option value="Southeast">Southeast</option>
-                        <option value="Southwest">Southwest</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="rowTop" style={{marginBottom:10}}>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Roof Covering</div>
-                      <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
-                        <option value="SHINGLE">Shingle</option>
-                        <option value="METAL">Metal</option>
-                        <option value="OTHER">Other</option>
-                      </select>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Diagram Image</div>
-                      <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
-                    </div>
-                  </div>
-
-                  {roof.covering==="SHINGLE" && (
-                    <div className="rowTop" style={{marginBottom:10}}>
-                      <div style={{flex:1}}>
-                        <div className="lbl">Shingle Type</div>
-                        <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
-                          {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                        </select>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div className="lbl">Length</div>
-                        <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
-                          {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {roof.covering==="SHINGLE" && (
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl">Exposure</div>
-                      <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
-                        {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  )}
-
-                  {roof.covering==="METAL" && (
-                    <div className="rowTop" style={{marginBottom:10}}>
-                      <div style={{flex:1}}>
-                        <div className="lbl">Metal Type</div>
-                        <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
-                          {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                        </select>
-                      </div>
-                      <div style={{flex:1}}>
-                        <div className="lbl">Panel Width</div>
-                        <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
-                          {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {roof.covering==="OTHER" && (
-                    <div style={{marginBottom:10}}>
-                      <div className="lbl">Describe</div>
-                      <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
-                    </div>
-                  )}
-
-                  {lastSavedAt && (
-                    <div className="tiny" style={{marginBottom:8}}>
-                      Last saved ({lastSavedAt.source}): {lastSavedAt.time}
-                    </div>
-                  )}
-
-                  <div className="row" style={{marginTop:10}}>
-                    <button className="btn btnPrimary" onClick={()=>setHdrEditOpen(false)}>Done</button>
-                    <button className="btn btnDanger" onClick={clearDiagram}>Clear Diagram + Items</button>
-                  </div>
-                </div>
-              )}
 
               <div className="pScroll">
                 {/* ITEMS LIST */}
@@ -4273,115 +4435,91 @@
                     )}
                   </div>
                 )}
-                {/* DASHBOARDS */}
-                <div className="dashDock">
-                  <div className="dashTitle">
-                    <span>Dashboard</span>
-                    <div style={{display:"flex", gap:8}}>
-                      <button
-                        className="btn"
-                        style={{padding:"10px 10px"}}
-                        type="button"
-                        onClick={()=>setDashCollapsed(v=>!v)}
-                        title={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
-                        aria-label={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
-                      >
-                        <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
-                      </button>
-                    </div>
+              </div>
+              <div className={"dashDock" + (dashCollapsed ? " collapsed" : "")}>
+                <div className="dashTitle">
+                  {!dashCollapsed && <span>Dashboard</span>}
+                  <div style={{display:"flex", gap:8}}>
+                    <button
+                      className="btn"
+                      style={{padding:"10px 10px"}}
+                      type="button"
+                      onClick={()=>setDashCollapsed(v=>!v)}
+                      title={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                      aria-label={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                    >
+                      <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
+                    </button>
                   </div>
-
-                  {!dashCollapsed && (
-                    <>
-                      {/* MAIN: hail + wind (above) */}
-                      <div className="dashScroll" style={{marginBottom:12}}>
-                        <table className="dashTable">
-                          <thead>
-                            <tr>
-                              <th>Direction</th>
-                              <th>Test Square Hits</th>
-                              <th>Max Hail Size</th>
-                              <th>Wind (Creased)</th>
-                              <th>Wind (Torn/Missing)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {WIND_DIRS.map(dir => {
-                              const d = dashboard[dir];
-                              return (
-                                <tr key={dir}>
-                                  <td style={{fontWeight:1300}}>{dir}</td>
-                                  <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
-                                  <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
-                                  <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
-                                  <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* SECONDARY: hail indicators from appurtenances + downspouts */}
-                      <div className="dashScroll">
-                        <table className="dashTable">
-                          <thead>
-                            <tr>
-                              <th>Direction</th>
-                      <th>Appurtenances (Max)</th>
-                              <th>Downspouts (Max)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {CARDINAL_DIRS.map(dir => {
-                              const d = dashboard[dir];
-                              return (
-                                <tr key={dir}>
-                                  <td style={{fontWeight:1300}}>{dir}</td>
-                                  <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
-                                  <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="tiny" style={{marginTop:10}}>
-                        Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
-                      </div>
-                    </>
-                  )}
                 </div>
+
+                {!dashCollapsed && (
+                  <>
+                    {/* MAIN: hail + wind (above) */}
+                    <div className="dashScroll" style={{marginBottom:12}}>
+                      <table className="dashTable">
+                        <thead>
+                          <tr>
+                            <th>Direction</th>
+                            <th>Test Square Hits</th>
+                            <th>Max Hail Size</th>
+                            <th>Wind (Creased)</th>
+                            <th>Wind (Torn/Missing)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {WIND_DIRS.map(dir => {
+                            const d = dashboard[dir];
+                            return (
+                              <tr key={dir}>
+                                <td style={{fontWeight:1300}}>{dir}</td>
+                                <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
+                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
+                                <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
+                                <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* SECONDARY: hail indicators from appurtenances + downspouts */}
+                    <div className="dashScroll">
+                      <table className="dashTable">
+                        <thead>
+                          <tr>
+                            <th>Direction</th>
+                            <th>Appurtenances (Max)</th>
+                            <th>Downspouts (Max)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {CARDINAL_DIRS.map(dir => {
+                            const d = dashboard[dir];
+                            return (
+                              <tr key={dir}>
+                                <td style={{fontWeight:1300}}>{dir}</td>
+                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
+                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="tiny" style={{marginTop:10}}>
+                      Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
           ) : (
           <div className="reportView">
             {headerContent}
-            {hdrEditOpen && (
-              <div className="hdrEditPanel">
-                <div className="rowTop" style={{marginBottom:10}}>
-                  <div style={{flex:1}}>
-                    <div className="lbl">Residence / Property</div>
-                    <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
-                  </div>
-                  <div style={{flex:1}}>
-                    <div className="lbl">Front Faces</div>
-                    <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
-                      <option value="North">North</option>
-                      <option value="South">South</option>
-                      <option value="East">East</option>
-                      <option value="West">West</option>
-                      <option value="Northeast">Northeast</option>
-                      <option value="Northwest">Northwest</option>
-                      <option value="Southeast">Southeast</option>
-                      <option value="Southwest">Southwest</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
             <div className="reportTabs">
               {REPORT_TABS.map(tab => (
                 <button
@@ -5018,7 +5156,7 @@
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">TitanRoof Version 3.2</div>
+                <div className="printTitleHero">TitanRoof Version 3.2.1</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
