@@ -81,7 +81,7 @@
         animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .app.sidebarCollapsed{
-        grid-template-columns: 1fr 0px;
+        grid-template-columns: 1fr 56px;
       }
 
       /* ========= CANVAS ZONE ========= */
@@ -348,11 +348,13 @@
         backdrop-filter: blur(10px);
       }
       .panel.collapsed{
-        width:0;
-        min-width:0;
-        border-left:none;
-        opacity:0;
-        pointer-events:none;
+        width:56px;
+        min-width:56px;
+        border-left:1px solid var(--panelEdge);
+        opacity:1;
+        pointer-events:auto;
+        overflow:hidden;
+        align-items:center;
       }
 
       /* Header with 3 lines + single edit icon */
@@ -365,6 +367,11 @@
         align-items:stretch;
         gap:12px;
         min-width:0;
+      }
+      .hdrModeRow{
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
       }
       .hdrTop{
         display:flex;
@@ -444,6 +451,29 @@
         justify-content:flex-start;
         row-gap:8px;
       }
+      .hdrPill{
+        display:inline-flex;
+        align-items:center;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,0.32);
+        background: rgba(255,255,255,0.16);
+        overflow:hidden;
+      }
+      .hdrPillBtn{
+        border:none;
+        background:transparent;
+        color:#fff;
+        font-size:11px;
+        font-weight:1200;
+        padding:6px 10px;
+        cursor:pointer;
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+      }
+      .hdrPillBtn + .hdrPillBtn{
+        border-left:1px solid rgba(255,255,255,0.22);
+      }
       .hdrBtn{
         padding:6px 9px;
         border-radius:12px;
@@ -457,6 +487,10 @@
         display:inline-flex;
         align-items:center;
         justify-content:center;
+        gap:6px;
+      }
+      .hdrBtn.iconOnly{
+        padding:6px 8px;
       }
       .saveNotice{
         display:inline-flex;
@@ -529,8 +563,7 @@
         border-radius:999px;
         background: rgba(255,255,255,0.9);
         border:1px solid rgba(226,232,240,0.9);
-        box-shadow: var(--shadowSoft);
-        backdrop-filter: blur(10px);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
       }
       .modeToggle button{
         border:none;
@@ -547,30 +580,39 @@
         color:#fff;
         box-shadow: 0 10px 16px rgba(2,6,23,0.12);
       }
-      .sidebarDock{
-        position: fixed;
-        top: calc(var(--topbar-height) + 10px);
-        right: 16px;
-        z-index: 120;
+      .panelRail{
+        width:100%;
         display:flex;
-        flex-direction:column;
-        align-items:flex-end;
-        gap:8px;
+        justify-content:flex-end;
+        padding:8px 10px 0;
       }
-      .sidebarToggle{
+      .panelToggleBtn{
         display:flex;
         align-items:center;
         justify-content:center;
         width:38px;
         height:38px;
         border-radius:14px;
-        background: rgba(255,255,255,0.95);
-        border:1px solid rgba(226,232,240,0.9);
+        background: rgba(15,23,42,0.1);
+        border:1px solid rgba(255,255,255,0.35);
         box-shadow: var(--shadowSoft);
         cursor:pointer;
-        color: var(--navy);
+        color: #fff;
       }
-      .sidebarToggle:hover{ background:#F8FAFC; }
+      .panelToggleBtn:hover{ background: rgba(15,23,42,0.18); }
+      .panel.collapsed .panelRail{
+        justify-content:center;
+        padding:10px 0;
+      }
+      .panelBody{
+        display:flex;
+        flex-direction:column;
+        min-height:0;
+        flex:1;
+      }
+      .panel.collapsed .panelBody{
+        display:none;
+      }
 
       .hdrEditPanel{
         padding: 12px 16px;
@@ -1415,7 +1457,7 @@
   </head>
 
   <body>
-    <div class="topBar">TitanRoof Beta v3.2.1 • Red Bar</div>
+    <div class="topBar">TitanRoof Beta v3.2.2</div>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -1611,6 +1653,43 @@
         }
         if(name === "check"){
           return (<svg {...common}><path d="M20 6L9 17l-5-5"/></svg>);
+        }
+        if(name === "save"){
+          return (
+            <svg {...common}>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <path d="M17 21v-8H7v8"/>
+              <path d="M7 3v5h8"/>
+            </svg>
+          );
+        }
+        if(name === "saveAs"){
+          return (
+            <svg {...common}>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <path d="M12 12v6"/>
+              <path d="M9 15l3 3 3-3"/>
+              <path d="M7 3v5h8"/>
+            </svg>
+          );
+        }
+        if(name === "open"){
+          return (
+            <svg {...common}>
+              <path d="M3 7h6l2 2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+              <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2"/>
+            </svg>
+          );
+        }
+        if(name === "export"){
+          return (
+            <svg {...common}>
+              <path d="M12 3v12"/>
+              <path d="M8 7l4-4 4 4"/>
+              <path d="M5 21h14a2 2 0 0 0 2-2v-4"/>
+              <path d="M3 15v4a2 2 0 0 0 2 2"/>
+            </svg>
+          );
         }
         return null;
       };
@@ -2223,14 +2302,21 @@
           };
         }, []);
 
-        const getToolbarOrientation = useCallback((pos) => {
+        const getToolbarOrientation = useCallback((pos, current) => {
           const zoneRect = canvasRef.current?.getBoundingClientRect();
           const toolbarRect = toolbarRef.current?.getBoundingClientRect();
-          if(!zoneRect || !toolbarRect) return "horizontal";
+          if(!zoneRect || !toolbarRect) return current || "horizontal";
           const threshold = 24;
+          const hysteresis = 18;
           const leftEdge = zoneRect.left + threshold;
           const rightEdge = zoneRect.right - toolbarRect.width - threshold;
-          if(pos.x <= leftEdge || pos.x >= rightEdge){
+          if(current === "vertical"){
+            if(pos.x > leftEdge + hysteresis && pos.x < rightEdge - hysteresis){
+              return "horizontal";
+            }
+            return "vertical";
+          }
+          if(pos.x <= leftEdge - hysteresis || pos.x >= rightEdge + hysteresis){
             return "vertical";
           }
           return "horizontal";
@@ -2245,7 +2331,7 @@
             setToolbarOrientation("horizontal");
             return;
           }
-          setToolbarOrientation(getToolbarOrientation(toolbarPos));
+          setToolbarOrientation(prev => getToolbarOrientation(toolbarPos, prev));
         }, [toolbarPos, isMobile, getToolbarOrientation]);
 
         useEffect(() => {
@@ -3503,6 +3589,24 @@
 
         const headerContent = (
           <div className="pHeader">
+            <div className="hdrModeRow">
+              <div className="modeToggle" role="tablist" aria-label="View mode">
+                <button
+                  type="button"
+                  className={viewMode === "diagram" ? "active" : ""}
+                  onClick={() => setViewMode("diagram")}
+                >
+                  Diagram
+                </button>
+                <button
+                  type="button"
+                  className={viewMode === "report" ? "active" : ""}
+                  onClick={() => setViewMode("report")}
+                >
+                  Report
+                </button>
+              </div>
+            </div>
             <div className="hdrTop">
               <div className="hdrText">
                 <div className="hdrLine1">{residenceName}</div>
@@ -3536,12 +3640,24 @@
             </div>
             <div className="hdrActions">
               {isMobile && viewMode === "diagram" && (
-                <button className="hdrBtn" onClick={() => setMobilePanelOpen(false)}>Close</button>
+                <button className="hdrBtn" onClick={() => setMobilePanelOpen(false)}>
+                  <Icon name="chevRight" /> Close
+                </button>
               )}
-              <button className="hdrBtn" onClick={() => saveState("manual")}>Save</button>
-              <button className="hdrBtn" onClick={() => trpInputRef.current?.click()}>Open .TRP</button>
-              <button className="hdrBtn" onClick={exportTrp}>Save .TRP</button>
-              <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>Export</button>
+              <div className="hdrPill" role="group" aria-label="Save options">
+                <button className="hdrPillBtn" onClick={() => saveState("manual")}>
+                  <Icon name="save" /> Save
+                </button>
+                <button className="hdrPillBtn" onClick={exportTrp}>
+                  <Icon name="saveAs" /> Save As
+                </button>
+              </div>
+              <button className="hdrBtn" onClick={() => trpInputRef.current?.click()}>
+                <Icon name="open" /> Open
+              </button>
+              <button className="hdrBtn" onClick={() => { saveState("manual"); setExportMode(true); }}>
+                <Icon name="export" /> Export
+              </button>
             </div>
           </div>
         );
@@ -3709,35 +3825,7 @@
             </div>
           )}
           {isAuthenticated && (
-            <div className="sidebarDock">
-              <div className="modeToggle" role="tablist" aria-label="View mode">
-                <button
-                  type="button"
-                  className={viewMode === "diagram" ? "active" : ""}
-                  onClick={() => setViewMode("diagram")}
-                >
-                  Diagram
-                </button>
-                <button
-                  type="button"
-                  className={viewMode === "report" ? "active" : ""}
-                  onClick={() => setViewMode("report")}
-                >
-                  Report
-                </button>
-              </div>
-              {viewMode === "diagram" && !isMobile && (
-                <button
-                  className="sidebarToggle"
-                  type="button"
-                  onClick={() => setSidebarCollapsed(v => !v)}
-                  title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                  aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                >
-                  <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
-                </button>
-              )}
-            </div>
+            <div style={{display:"none"}} aria-hidden="true" />
           )}
           {headerEditModal}
           {saveNotice && (
@@ -3908,9 +3996,23 @@
 
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
-              {headerContent}
+              <div className="panelRail">
+                {!isMobile && (
+                  <button
+                    className="panelToggleBtn"
+                    type="button"
+                    onClick={() => setSidebarCollapsed(v => !v)}
+                    title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                    aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                  >
+                    <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
+                  </button>
+                )}
+              </div>
+              <div className="panelBody">
+                {headerContent}
 
-              <div className="pScroll">
+                <div className="pScroll">
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card">
@@ -5156,7 +5258,7 @@
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">TitanRoof Version 3.2.1</div>
+                <div className="printTitleHero">Titan Roof Version 3.2.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
