@@ -34,6 +34,49 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   return (
     <div className="propertiesBar">
       <div className="propertiesLeft">
+        {!isMobile && (
+          <button
+            className="hdrBtn iconOnly collapseArrow"
+            type="button"
+            onClick={onToggleCollapsed}
+            title={hdrCollapsed ? "Expand header" : "Collapse header"}
+            aria-label={hdrCollapsed ? "Expand header" : "Collapse header"}
+          >
+            {hdrCollapsed ? "›" : "‹"}
+          </button>
+        )}
+        <div className="propertiesActions">
+          <div className="hdrPill" role="group" aria-label="Save options">
+            <button className="hdrPillBtn" type="button" onClick={onSave}>
+              Save
+            </button>
+            <button className="hdrPillBtn" type="button" onClick={onSaveAs}>
+              Save As
+            </button>
+          </div>
+          <button className="hdrBtn" type="button" onClick={onOpen}>
+            Open
+          </button>
+          <button className="hdrBtn" type="button" onClick={onExport}>
+            Export
+          </button>
+        </div>
+        <div className="propertiesInfo">
+          <div className="propertiesTitleRow">
+            <div className="propertiesTitle">{residenceName}</div>
+            <button className="hdrBtn editInline" type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </div>
+          {!hdrCollapsed && (
+            <>
+              <div className="propertiesSub">{roofSummary}</div>
+              <div className="propertiesSub">Front faces: {frontFaces}</div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="propertiesRight">
         <div className="modeToggle" role="tablist" aria-label="View mode">
           <button
             type="button"
@@ -50,39 +93,6 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             Report
           </button>
         </div>
-        <div className="propertiesInfo">
-          <div className="propertiesTitle">{residenceName}</div>
-          {!hdrCollapsed && (
-            <>
-              <div className="propertiesSub">{roofSummary}</div>
-              <div className="propertiesSub">Front faces: {frontFaces}</div>
-            </>
-          )}
-        </div>
-      </div>
-      <div className="propertiesActions">
-        <button className="hdrBtn" type="button" onClick={onEdit}>
-          Edit
-        </button>
-        {!isMobile && (
-          <button className="hdrBtn iconOnly" type="button" onClick={onToggleCollapsed}>
-            {hdrCollapsed ? "Expand" : "Collapse"}
-          </button>
-        )}
-        <div className="hdrPill" role="group" aria-label="Save options">
-          <button className="hdrPillBtn" onClick={onSave}>
-            Save
-          </button>
-          <button className="hdrPillBtn" onClick={onSaveAs}>
-            Save As
-          </button>
-        </div>
-        <button className="hdrBtn" onClick={onOpen}>
-          Open
-        </button>
-        <button className="hdrBtn" onClick={onExport}>
-          Export
-        </button>
       </div>
     </div>
   );

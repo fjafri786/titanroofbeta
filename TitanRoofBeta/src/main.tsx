@@ -689,12 +689,13 @@ import "./styles.css";
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
-          const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+          const blob = new Blob([JSON.stringify(payload)], { type: "application/trp+json" });
           const name = (residenceName || "titanroof-project").trim().replace(/\s+/g, "-");
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
           link.download = `${name || "titanroof-project"}.trp`;
+          link.type = "application/trp+json";
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -2061,6 +2062,15 @@ import "./styles.css";
           const classes = ["fileMeta", className].filter(Boolean).join(" ");
           return <div className={classes}>File: {photo.name}</div>;
         };
+        const renderPhotoPreview = (photo, className = "") => {
+          if(!photo?.url) return null;
+          const classes = ["photoPreview", className].filter(Boolean).join(" ");
+          return (
+            <div className={classes}>
+              <img src={photo.url} alt={photo.name || "Observation preview"} />
+            </div>
+          );
+        };
 
         const PrintPhoto = ({ photo, alt, caption, style }) => {
           const [isPortrait, setIsPortrait] = useState(false);
@@ -2280,7 +2290,7 @@ import "./styles.css";
             <input
               ref={trpInputRef}
               type="file"
-              accept=".trp,application/json"
+              accept=".trp,application/trp+json,application/json"
               style={{ display: "none" }}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -3007,6 +3017,7 @@ import "./styles.css";
                               <div className="lbl">Observation Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setObsPhoto(e.target.files[0])}/>
                               {renderFileName(activeItem.data.photo)}
+                              {renderPhotoPreview(activeItem.data.photo, "indent")}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -3023,7 +3034,7 @@ import "./styles.css";
                 )}
               </div>
             </div>
-          <div className={"dashDock" + (dashCollapsed ? " collapsed" : "")}>
+          <div className={"dashDock" + (dashCollapsed ? " collapsed" : "") + (!isMobile && sidebarCollapsed ? " hidden" : "")}>
                 <div className="dashTitle">
                   {!dashCollapsed && <span>Dashboard</span>}
                   <div style={{display:"flex", gap:8}}>
