@@ -34,6 +34,7 @@
       html, body{
         margin:0;
         height:100%;
+        min-height:100dvh;
         overflow:hidden;
         background:var(--bg);
         color:var(--text);
@@ -80,16 +81,17 @@
       .propertiesLeft{
         display:flex;
         align-items:center;
-        gap:16px;
+        gap:12px;
         min-width:0;
         flex:1;
-        flex-wrap:wrap;
+        flex-wrap:nowrap;
       }
       .propertiesRight{
         display:flex;
         align-items:center;
         justify-content:flex-end;
         min-width:0;
+        gap:12px;
       }
       .propertiesInfo{
         min-width:0;
@@ -101,7 +103,7 @@
         min-width:0;
       }
       .propertiesTitle{
-        font-size:20px;
+        font-size:18px;
         font-weight:1200;
         letter-spacing:0.2px;
         white-space:nowrap;
@@ -109,7 +111,7 @@
         text-overflow:ellipsis;
       }
       .propertiesSub{
-        font-size:12px;
+        font-size:11px;
         font-weight:1000;
         opacity:0.92;
         line-height:1.3;
@@ -122,7 +124,7 @@
         align-items:center;
         gap:8px;
         flex-wrap:wrap;
-        justify-content:flex-start;
+        justify-content:flex-end;
       }
 
       .app{
@@ -130,7 +132,9 @@
         grid-template-columns: 1fr minmax(320px, 420px);
         padding-top: calc(var(--topbar-height) + var(--propsbar-height));
         height: calc(100vh - var(--topbar-height) - var(--propsbar-height));
+        height: calc(100dvh - var(--topbar-height) - var(--propsbar-height));
         min-height: calc(100vh - var(--topbar-height) - var(--propsbar-height));
+        min-height: calc(100dvh - var(--topbar-height) - var(--propsbar-height));
         animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .app.sidebarCollapsed{
@@ -553,6 +557,7 @@
       .hdrBtn.editInline{
         padding:6px 10px;
         border-radius:999px;
+        font-size:14px;
       }
       .hdrBtn.collapseArrow{
         font-size:18px;
@@ -1165,6 +1170,7 @@
         flex-direction:column;
         padding-top: calc(var(--topbar-height) + var(--propsbar-height));
         height: calc(100vh - var(--topbar-height) - var(--propsbar-height));
+        height: calc(100dvh - var(--topbar-height) - var(--propsbar-height));
         background: linear-gradient(180deg, rgba(14,165,233,0.12), rgba(139,92,246,0.14) 55%, rgba(245,247,251,1) 100%);
         animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
@@ -1235,6 +1241,173 @@
         display:grid;
         gap:12px;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      /* ========= PHOTOS VIEW ========= */
+      .photosView{
+        display:flex;
+        flex-direction:column;
+        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
+        height: calc(100vh - var(--topbar-height) - var(--propsbar-height));
+        height: calc(100dvh - var(--topbar-height) - var(--propsbar-height));
+        background: linear-gradient(180deg, rgba(14,165,233,0.08), rgba(59,130,246,0.08) 55%, rgba(245,247,251,1) 100%);
+        animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .photosContent{
+        flex:1;
+        overflow:auto;
+        padding:16px;
+        display:flex;
+        flex-direction:column;
+        gap:18px;
+      }
+      .photosHeader{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+      }
+      .photosTitle{
+        font-size:18px;
+        font-weight:1200;
+        color: var(--navy);
+      }
+      .photosSub{
+        font-size:12px;
+        font-weight:1100;
+        color: var(--sub);
+      }
+      .photoSection{
+        background:#fff;
+        border:1px solid var(--border);
+        border-radius:16px;
+        padding:12px;
+        box-shadow: var(--shadowSoft);
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+      .photoSectionHeader{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+      }
+      .photoSectionTitle{
+        font-size:11px;
+        font-weight:1200;
+        text-transform:uppercase;
+        letter-spacing:0.5px;
+        color: #1F2937;
+      }
+      .photoSectionMeta{
+        font-size:11px;
+        font-weight:1100;
+        color: var(--sub);
+      }
+      .photoGroup{
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+      .photoGroupTitle{
+        font-size:12px;
+        font-weight:1200;
+        color: var(--navy2);
+      }
+      .photoGrid{
+        display:grid;
+        gap:12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .photoCard{
+        border:1px solid rgba(226,232,240,0.95);
+        border-radius:14px;
+        overflow:hidden;
+        background:#F8FAFC;
+        display:flex;
+        flex-direction:column;
+      }
+      .photoThumb{
+        background:#E2E8F0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        height:160px;
+        overflow:hidden;
+      }
+      .photoThumb img{
+        width:100%;
+        height:100%;
+        object-fit:cover;
+      }
+      .photoMeta{
+        padding:10px;
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+      }
+      .photoCaption{
+        font-size:12px;
+        font-weight:1200;
+        color:#0F172A;
+      }
+      .photoNote{
+        font-size:11px;
+        font-weight:1100;
+        color: var(--sub);
+      }
+      .photoEmpty{
+        font-size:12px;
+        font-weight:1100;
+        color: var(--sub);
+        padding:6px 0;
+      }
+      .exteriorGrid{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+      .exteriorCard{
+        display:grid;
+        grid-template-columns: minmax(200px, 240px) 1fr;
+        gap:12px;
+        padding:10px;
+        border-radius:14px;
+        border:1px solid rgba(226,232,240,0.95);
+        background:#F8FAFC;
+      }
+      .exteriorPreview{
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+      .exteriorPreview img{
+        width:100%;
+        height:160px;
+        border-radius:12px;
+        object-fit:cover;
+        background:#E2E8F0;
+      }
+      .photoPlaceholder{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        height:160px;
+        border-radius:12px;
+        background:#E2E8F0;
+        color: var(--sub);
+        font-size:12px;
+        font-weight:1100;
+      }
+      .exteriorFields{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+      .exteriorActions{
+        display:flex;
+        justify-content:flex-end;
       }
       .inlineTag{
         display:inline-flex;
@@ -1483,7 +1656,7 @@
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel, .reportView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar{ display:none !important; }
+        .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar{ display:none !important; }
         .printSheet{
           display:block;
           padding:24px;
