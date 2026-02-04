@@ -362,6 +362,10 @@ import "./styles.css";
 
         // Dash collapse
         const [dashCollapsed, setDashCollapsed] = useState(false);
+        const [dashSections, setDashSections] = useState({
+          summary: true,
+          indicators: true
+        });
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
@@ -2509,7 +2513,7 @@ import "./styles.css";
                 <div className="pScroll">
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
-                  <div className="card">
+                  <div className="card itemsPanel">
                     <div className="lbl">Inspection Items</div>
 
                     {["ts","apt","ds","obs","wind"].map(type => {
@@ -3038,6 +3042,21 @@ import "./styles.css";
                 <div className="dashTitle">
                   {!dashCollapsed && <span>Dashboard</span>}
                   <div style={{display:"flex", gap:8}}>
+                    {!dashCollapsed && (
+                      <button
+                        className="btn"
+                        style={{padding:"8px 10px"}}
+                        type="button"
+                        onClick={() => setDashSections(prev => ({
+                          summary: !prev.summary,
+                          indicators: !prev.indicators
+                        }))}
+                        title="Toggle all dashboard sections"
+                        aria-label="Toggle all dashboard sections"
+                      >
+                        {dashSections.summary || dashSections.indicators ? "Collapse" : "Expand"}
+                      </button>
+                    )}
                     <button
                       className="btn"
                       style={{padding:"10px 10px"}}
@@ -3053,58 +3072,92 @@ import "./styles.css";
 
                 {!dashCollapsed && (
                   <>
-                    {/* MAIN: hail + wind (above) */}
-                    <div className="dashScroll" style={{marginBottom:12}}>
-                      <table className="dashTable">
-                        <thead>
-                          <tr>
-                            <th>Direction</th>
-                            <th>Test Square Hits</th>
-                            <th>Max Hail Size</th>
-                            <th>Wind (Creased)</th>
-                            <th>Wind (Torn/Missing)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {WIND_DIRS.map(dir => {
-                            const d = dashboard[dir];
-                            return (
-                              <tr key={dir}>
-                                <td style={{fontWeight:1300}}>{dir}</td>
-                                <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
-                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
-                                <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
-                                <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
+                    <div className="dashSection">
+                      <button
+                        type="button"
+                        className="dashSectionHeader"
+                        onClick={() => setDashSections(prev => ({ ...prev, summary: !prev.summary }))}
+                        aria-expanded={dashSections.summary}
+                      >
+                        <div className="dashSectionTitle">
+                          <span>Hail + Wind Summary</span>
+                          <span className="dashPill">{WIND_DIRS.length} dirs</span>
+                        </div>
+                        <span className="dashSectionIcon">
+                          <Icon name={dashSections.summary ? "chevUp" : "chevDown"} />
+                        </span>
+                      </button>
+                      {dashSections.summary && (
+                        <div className="dashScroll">
+                          <table className="dashTable">
+                            <thead>
+                              <tr>
+                                <th>Direction</th>
+                                <th>Test Square Hits</th>
+                                <th>Max Hail Size</th>
+                                <th>Wind (Creased)</th>
+                                <th>Wind (Torn/Missing)</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                            </thead>
+                            <tbody>
+                              {WIND_DIRS.map(dir => {
+                                const d = dashboard[dir];
+                                return (
+                                  <tr key={dir}>
+                                    <td style={{fontWeight:1300}}>{dir}</td>
+                                    <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
+                                    <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
+                                    <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
+                                    <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
 
-                    {/* SECONDARY: hail indicators from appurtenances + downspouts */}
-                    <div className="dashScroll">
-                      <table className="dashTable">
-                        <thead>
-                          <tr>
-                            <th>Direction</th>
-                            <th>Appurtenances (Max)</th>
-                            <th>Downspouts (Max)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {CARDINAL_DIRS.map(dir => {
-                            const d = dashboard[dir];
-                            return (
-                              <tr key={dir}>
-                                <td style={{fontWeight:1300}}>{dir}</td>
-                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
-                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                    <div className="dashSection">
+                      <button
+                        type="button"
+                        className="dashSectionHeader"
+                        onClick={() => setDashSections(prev => ({ ...prev, indicators: !prev.indicators }))}
+                        aria-expanded={dashSections.indicators}
+                      >
+                        <div className="dashSectionTitle">
+                          <span>Indicators by Direction</span>
+                          <span className="dashPill">{CARDINAL_DIRS.length} dirs</span>
+                        </div>
+                        <span className="dashSectionIcon">
+                          <Icon name={dashSections.indicators ? "chevUp" : "chevDown"} />
+                        </span>
+                      </button>
+                      {dashSections.indicators && (
+                        <div className="dashScroll">
+                          <table className="dashTable">
+                            <thead>
+                              <tr>
+                                <th>Direction</th>
+                                <th>Appurtenances (Max)</th>
+                                <th>Downspouts (Max)</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                            </thead>
+                            <tbody>
+                              {CARDINAL_DIRS.map(dir => {
+                                const d = dashboard[dir];
+                                return (
+                                  <tr key={dir}>
+                                    <td style={{fontWeight:1300}}>{dir}</td>
+                                    <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
+                                    <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
 
                     <div className="tiny" style={{marginTop:10}}>
