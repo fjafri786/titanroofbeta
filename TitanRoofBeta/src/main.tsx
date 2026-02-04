@@ -235,7 +235,7 @@ import "./styles.css";
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v4.0.state";
+      const STORAGE_KEY = "titanroof.v4.1.state";
 
       function App(){
         const viewportRef = useRef(null);
@@ -268,7 +268,6 @@ import "./styles.css";
 
         // Header data (Smith Residence / roof line / front faces)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
-        const [hdrCollapsed, setHdrCollapsed] = useState(true);
         const [residenceName, setResidenceName] = useState("Enter Name");
         const [frontFaces, setFrontFaces] = useState("North"); // display "Front faces: North"
         const [viewMode, setViewMode] = useState("diagram");
@@ -347,6 +346,7 @@ import "./styles.css";
             components: buildInspectionDefaults()
           }
         });
+        const [exteriorPhotos, setExteriorPhotos] = useState([]);
 
         // Roof properties
         const [roof, setRoof] = useState({
@@ -510,6 +510,10 @@ import "./styles.css";
           ...entry,
           photo: serializeFile(entry.photo)
         }));
+        const serializeExteriorPhotos = (entries) => (entries || []).map(entry => ({
+          ...entry,
+          photo: serializeFile(entry.photo)
+        }));
         const serializeItem = (it) => {
           const data = { ...it.data };
           if(it.type === "ts"){
@@ -532,6 +536,10 @@ import "./styles.css";
           }
           return { ...it, data };
         };
+        const reviveExteriorPhotos = (entries) => (entries || []).map(entry => ({
+          ...entry,
+          photo: reviveFileObj(entry.photo)
+        }));
         const reviveItem = (it) => {
           const nextType = it.type === "app" ? "apt" : it.type;
           const nextName = nextType === "apt" && (it.name || "").startsWith("APP-")
@@ -610,8 +618,9 @@ import "./styles.css";
           roof: { ...roof, diagramBg: serializeFile(roof.diagramBg) },
           items: items.map(serializeItem),
           counts: counts.current,
-          reportData
-        }), [residenceName, frontFaces, roof, items, reportData]);
+          reportData,
+          exteriorPhotos: serializeExteriorPhotos(exteriorPhotos)
+        }), [residenceName, frontFaces, roof, items, reportData, exteriorPhotos]);
 
         const applySnapshot = useCallback((parsed, source = "import") => {
           if(!parsed?.roof) return;
@@ -635,6 +644,11 @@ import "./styles.css";
                 }
               }
             }));
+          }
+          if(parsed.exteriorPhotos){
+            setExteriorPhotos(reviveExteriorPhotos(parsed.exteriorPhotos));
+          } else {
+            setExteriorPhotos([]);
           }
           const revivedItems = (parsed.items || []).map(reviveItem);
           setItems(revivedItems);
@@ -688,8 +702,8 @@ import "./styles.css";
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.0 Beta",
-            version: "4.0",
+            app: "TitanRoof 4.1 Beta",
+            version: "4.1",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -2097,6 +2111,158 @@ import "./styles.css";
           );
         };
 
+        const exteriorOrientations = [
+          "North",
+          "South",
+          "East",
+          "West",
+          "Northeast",
+          "Northwest",
+          "Southeast",
+          "Southwest"
+        ];
+
+        const addExteriorPhoto = () => {
+          setExteriorPhotos(prev => ([
+            ...prev,
+            { id: uid(), orientation: "North", notes: "", photo: null }
+          ]));
+        };
+
+        const updateExteriorPhoto = (id, patch) => {
+          setExteriorPhotos(prev => prev.map(entry => (
+            entry.id === id ? { ...entry, ...patch } : entry
+          )));
+        };
+
+        const handleExteriorPhotoUpload = async (id, file) => {
+          if(!file) return;
+          const photoObj = await fileToObj(file);
+          setExteriorPhotos(prev => prev.map(entry => {
+            if(entry.id !== id) return entry;
+            revokeFileObj(entry.photo);
+            return { ...entry, photo: photoObj };
+          }));
+        };
+
+        const removeExteriorPhoto = (id) => {
+          setExteriorPhotos(prev => {
+            const target = prev.find(entry => entry.id === id);
+            if(target?.photo) revokeFileObj(target.photo);
+            return prev.filter(entry => entry.id !== id);
+          });
+        };
+
+        const roofPhotoSections = useMemo(() => {
+          const sections = [
+            { key: "ts", title: "Test Squares", entries: [] },
+            { key: "apt", title: "Appurtenances", entries: [] },
+            { key: "ds", title: "Downspouts", entries: [] },
+            { key: "wind", title: "Wind Observations", entries: [] },
+            { key: "obs", title: "Observations", entries: [] }
+          ];
+
+          const pushEntry = (key, entry) => {
+            const section = sections.find(s => s.key === key);
+            if(section) section.entries.push(entry);
+          };
+
+          items.forEach(it => {
+            const note = it.data?.caption?.trim();
+            if(it.type === "ts"){
+              if(it.data.overviewPhoto?.url){
+                pushEntry("ts", {
+                  id: `${it.id}-overview`,
+                  url: it.data.overviewPhoto.url,
+                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  note
+                });
+              }
+              (it.data.bruises || []).forEach((b, idx) => {
+                if(!b.photo?.url) return;
+                pushEntry("ts", {
+                  id: `${it.id}-bruise-${idx}`,
+                  url: b.photo.url,
+                  caption: photoCaption(`${it.name} bruise ${idx + 1} • ${b.size}"`, b.photo),
+                  note
+                });
+              });
+              (it.data.conditions || []).forEach((c, idx) => {
+                if(!c.photo?.url) return;
+                pushEntry("ts", {
+                  id: `${it.id}-condition-${idx}`,
+                  url: c.photo.url,
+                  caption: photoCaption(`${it.name} condition ${idx + 1} • ${c.code}`, c.photo),
+                  note
+                });
+              });
+            }
+            if(it.type === "apt" || it.type === "ds"){
+              if(it.data.overviewPhoto?.url){
+                pushEntry(it.type, {
+                  id: `${it.id}-overview`,
+                  url: it.data.overviewPhoto.url,
+                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  note
+                });
+              }
+              if(it.data.detailPhoto?.url){
+                pushEntry(it.type, {
+                  id: `${it.id}-detail`,
+                  url: it.data.detailPhoto.url,
+                  caption: photoCaption(`${it.name} detail`, it.data.detailPhoto),
+                  note
+                });
+              }
+              (it.data.damageEntries || []).forEach((entry, idx) => {
+                if(!entry.photo?.url) return;
+                pushEntry(it.type, {
+                  id: `${it.id}-damage-${idx}`,
+                  url: entry.photo.url,
+                  caption: photoCaption(`${it.name} ${damageEntryLabel(entry, idx)}`, entry.photo),
+                  note
+                });
+              });
+            }
+            if(it.type === "wind"){
+              if(it.data.overviewPhoto?.url){
+                pushEntry("wind", {
+                  id: `${it.id}-overview`,
+                  url: it.data.overviewPhoto.url,
+                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  note
+                });
+              }
+              if(it.data.creasedPhoto?.url){
+                pushEntry("wind", {
+                  id: `${it.id}-creased`,
+                  url: it.data.creasedPhoto.url,
+                  caption: photoCaption(`${it.name} creased`, it.data.creasedPhoto),
+                  note
+                });
+              }
+              if(it.data.tornMissingPhoto?.url){
+                pushEntry("wind", {
+                  id: `${it.id}-torn`,
+                  url: it.data.tornMissingPhoto.url,
+                  caption: photoCaption(`${it.name} torn/missing`, it.data.tornMissingPhoto),
+                  note
+                });
+              }
+            }
+            if(it.type === "obs" && it.data.photo?.url){
+              pushEntry("obs", {
+                id: `${it.id}-photo`,
+                url: it.data.photo.url,
+                caption: photoCaption(`${it.name} ${it.data.code}`, it.data.photo),
+                note
+              });
+            }
+          });
+
+          return sections;
+        }, [items]);
+
         // === Compact lock icon (orange locked / gray unlocked) ===
         const LockIcon = ({locked, onToggle}) => (
           <div
@@ -2148,10 +2314,7 @@ import "./styles.css";
             onViewModeChange={setViewMode}
             residenceName={residenceName}
             roofSummary={roofSummary}
-            frontFaces={frontFaces}
-            hdrCollapsed={hdrCollapsed}
-            onToggleCollapsed={() => setHdrCollapsed(v => !v)}
-            onEdit={() => { setHdrEditOpen(v => !v); setHdrCollapsed(false); }}
+            onEdit={() => { setHdrEditOpen(v => !v); }}
             onSave={() => saveState("manual")}
             onSaveAs={exportTrp}
             onOpen={() => trpInputRef.current?.click()}
@@ -2286,9 +2449,113 @@ import "./styles.css";
           `Observations (${items.filter(i => i.type === "obs").length})`
         ];
 
+        const roofPhotoCount = roofPhotoSections.reduce((sum, section) => sum + section.entries.length, 0);
+        const photosView = (
+          <div className="photosView">
+            <div className="photosContent">
+              <div className="photosHeader">
+                <div>
+                  <div className="photosTitle">Photographs</div>
+                  <div className="photosSub">All uploaded roof and exterior photos in one place.</div>
+                </div>
+              </div>
+
+              <div className="photoSection">
+                <div className="photoSectionHeader">
+                  <div className="photoSectionTitle">Roof Photos</div>
+                  <div className="photoSectionMeta">{roofPhotoCount || "None"}</div>
+                </div>
+                {roofPhotoCount === 0 ? (
+                  <div className="photoEmpty">None</div>
+                ) : (
+                  roofPhotoSections.map(section => (
+                    <div className="photoGroup" key={section.key}>
+                      <div className="photoGroupTitle">{section.title}</div>
+                      {section.entries.length ? (
+                        <div className="photoGrid">
+                          {section.entries.map(entry => (
+                            <div className="photoCard" key={entry.id}>
+                              <div className="photoThumb">
+                                <img src={entry.url} alt={entry.caption} />
+                              </div>
+                              <div className="photoMeta">
+                                <div className="photoCaption">{entry.caption}</div>
+                                {entry.note && <div className="photoNote">Note: {entry.note}</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="photoEmpty">None</div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="photoSection">
+                <div className="photoSectionHeader">
+                  <div className="photoSectionTitle">Exterior Photos</div>
+                  <button className="btn" type="button" onClick={addExteriorPhoto}>Add exterior photo</button>
+                </div>
+                {!exteriorPhotos.length ? (
+                  <div className="photoEmpty">None</div>
+                ) : (
+                  <div className="exteriorGrid">
+                    {exteriorPhotos.map(entry => (
+                      <div className="exteriorCard" key={entry.id}>
+                        <div className="exteriorPreview">
+                          {entry.photo?.url ? (
+                            <img src={entry.photo.url} alt={entry.photo.name || "Exterior photo"} />
+                          ) : (
+                            <div className="photoPlaceholder">No photo selected</div>
+                          )}
+                          <input
+                            className="inp"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleExteriorPhotoUpload(entry.id, e.target.files?.[0])}
+                          />
+                        </div>
+                        <div className="exteriorFields">
+                          <div>
+                            <div className="lbl">Elevation</div>
+                            <select
+                              className="inp"
+                              value={entry.orientation}
+                              onChange={(e) => updateExteriorPhoto(entry.id, { orientation: e.target.value })}
+                            >
+                              {exteriorOrientations.map(dir => (
+                                <option key={dir} value={dir}>{dir}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Notes</div>
+                            <textarea
+                              className="inp"
+                              rows={3}
+                              value={entry.notes}
+                              onChange={(e) => updateExteriorPhoto(entry.id, { notes: e.target.value })}
+                              placeholder="Add exterior photo notes..."
+                            />
+                          </div>
+                          <div className="exteriorActions">
+                            <button className="btn btnDanger" type="button" onClick={() => removeExteriorPhoto(entry.id)}>Remove</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.0" />
+          <TopBar label="TitanRoof Beta v4.1" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -2306,7 +2573,7 @@ import "./styles.css";
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.0 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.1 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3168,7 +3435,7 @@ import "./styles.css";
               </div>
             </div>
           </div>
-          ) : (
+          ) : viewMode === "report" ? (
           <div className="reportView">
             <div className="reportTabs">
               {REPORT_TABS.map(tab => (
@@ -3773,6 +4040,8 @@ import "./styles.css";
               )}
             </div>
           </div>
+          ) : (
+            photosView
           )}
 
           {viewMode === "diagram" && isMobile && (
@@ -3806,7 +4075,7 @@ import "./styles.css";
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.0</div>
+                <div className="printTitleHero">Titan Roof Version 4.1</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
