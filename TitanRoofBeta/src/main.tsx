@@ -1,0 +1,4216 @@
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import ReactDOM from "react-dom/client";
+import PropertiesBar from "./components/PropertiesBar";
+import TopBar from "./components/TopBar";
+import "./styles.css";
+
+      const SIZES = ["1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.25", "1.5", "1.75", "2", "2.5", "3+"];
+      const CARDINAL_DIRS = ["N", "S", "E", "W"];
+      const WIND_DIRS = ["N", "S", "E", "W", "Ridge", "Hip", "Valley"];
+      const DAMAGE_MODES = [
+        { key: "spatter", label: "Spatter" },
+        { key: "dent", label: "Dent" },
+        { key: "both", label: "Spatter + Dent" }
+      ];
+
+      const APT_TYPES = [
+        { code: "PS", label: "Plumbing Stack" },
+        { code: "EF", label: "Exhaust Fan" },
+        { code: "RV", label: "Ridge Vent" },
+        { code: "SV", label: "Static Vent" },
+        { code: "TV", label: "Turtle Vent" },
+        { code: "CH", label: "Chimney" },
+        { code: "SK", label: "Skylight" }
+      ];
+
+      const OBS_CODES = [
+        { code: "DDM", label: "Deferred Maintenance" },
+        { code: "DMB", label: "Material Breakdown" },
+        { code: "DAR", label: "Aged Repairs" },
+        { code: "DMR", label: "Mismatched Repairs" },
+        { code: "DIF", label: "Improper Flashing" },
+        { code: "DII", label: "Improper Installation" },
+        { code: "ShP", label: "Premium Shingles" }
+      ];
+
+      const SHINGLE_KIND = [
+        { code: "LAM", label: "Laminate Shingles" },
+        { code: "3TB", label: "3-Tab Shingles" },
+      ];
+      const SHINGLE_LENGTHS = ["36 inch width", "Other / Unknown"];
+      const SHINGLE_EXPOSURES = ["5 inch exposure", "5-5/8 inch exposure", "6 inch exposure", "Other / Unknown"];
+
+      const METAL_KIND = [
+        { code: "SS", label: "Standing Seam" },
+        { code: "RP", label: "R-Panel" },
+        { code: "COR", label: "Corrugated" },
+        { code: "OTH", label: "Other" },
+      ];
+      const METAL_PANEL_WIDTHS = ["12 inch", "16 inch", "24 inch", "Other / Unknown"];
+
+      const DS_MATERIALS = ["Aluminum", "Steel", "Other / Unknown"];
+      const DS_STYLES = ["Box", "Round", "Other / Unknown"];
+      const DS_TERMINATIONS = ["Into Ground", "Splash Block", "Elbow (Daylight)", "None / Missing", "Other / Unknown"];
+
+      const TS_CONDITIONS = [
+        { code:"HB", label:"Heat Blister" },
+        { code:"MG", label:"Area of Missing Granules" },
+        { code:"MP", label:"Mechanical Puncture/Tear" }
+      ];
+
+      const REPORT_TABS = [
+        { key: "project", label: "Project" },
+        { key: "description", label: "Description" },
+        { key: "background", label: "Background" },
+        { key: "writer", label: "Report Writer" },
+        { key: "inspection", label: "Inspection" }
+      ];
+
+      const PARTY_ROLES = ["Homeowner", "Insured", "Contractor", "Public Adjuster", "Engineer", "Other"];
+      const OCCUPANCY_TYPES = ["Single-family", "Multi-family", "Commercial", "Industrial", "Other"];
+      const FRAMING_TYPES = ["Wood", "Steel", "Masonry", "Other"];
+      const FOUNDATION_TYPES = ["Slab", "Pier & Beam", "Basement", "Other"];
+      const EXTERIOR_FINISHES = ["Brick", "Vinyl Siding", "Stucco", "Fiber Cement", "Stone", "Wood", "Other"];
+      const TRIM_COMPONENTS = ["Fascia", "Soffit", "Window Trim", "Door Trim", "Corner Trim", "Other"];
+      const WINDOW_TYPES = ["Single-hung", "Double-hung", "Fixed", "Sliding", "Casement", "Other"];
+      const GARAGE_DOOR_MATERIALS = ["Steel", "Wood", "Aluminum", "Composite", "Other"];
+      const GARAGE_ELEVATIONS = ["Front", "Rear", "Left", "Right", "Other"];
+      const FENCE_TYPES = ["Wood", "Chain Link", "Vinyl", "Metal", "Masonry", "Other"];
+      const FENCE_LOCATIONS = ["Front", "Rear", "Left", "Right", "Perimeter", "Interior"];
+      const TERRAIN_TYPES = ["Flat", "Sloped", "Mixed"];
+      const VEGETATION_TYPES = ["Front Yard", "Rear Yard", "Perimeter", "Minimal", "Dense", "Other"];
+      const ROOF_GEOMETRIES = ["Gable", "Hip", "Gable/Hip Combination", "Flat", "Other"];
+      const ROOF_APPURTENANCES = ["Vent Stacks", "Roof Vents", "Ridge Vents", "Chimney", "Skylights", "Solar", "Other"];
+      const BACKGROUND_CONCERNS = ["Hail", "Wind", "Water Intrusion", "Interior Staining", "Other"];
+      const OBSERVED_CONDITIONS = ["Spatter Marks", "Dents", "Creases", "Tears", "Displaced Elements", "Other"];
+
+      const INSPECTION_COMPONENTS = [
+        { key: "roofCovering", label: "Roof covering" },
+        { key: "ridge", label: "Ridge" },
+        { key: "guttersDownspouts", label: "Gutters & Downspouts" },
+        { key: "appurtenances", label: "Roof Appurtenances" },
+        { key: "windowsScreens", label: "Windows & Screens" },
+        { key: "garageDoors", label: "Garage Doors" },
+        { key: "fence", label: "Fence" },
+        { key: "otherExterior", label: "Other Exterior Components" }
+      ];
+
+      const uid = () => Math.random().toString(36).substr(2, 9);
+      const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+      const buildInspectionDefaults = () => INSPECTION_COMPONENTS.reduce((acc, comp) => ({
+        ...acc,
+        [comp.key]: {
+          conditions: [],
+          none: false,
+          maxSize: "",
+          directions: [],
+          notes: "",
+          photos: []
+        }
+      }), {});
+
+      function parseSize(s){
+        if(!s) return 0;
+        if(s.includes("+")) return 4;
+        const [n,d] = s.split("/");
+        return d ? (parseInt(n,10)/parseInt(d,10)) : parseFloat(s);
+      }
+
+      function pointInPoly(pt, poly){
+        let inside = false;
+        for(let i=0, j=poly.length-1; i<poly.length; j=i++){
+          const xi = poly[i].x, yi = poly[i].y;
+          const xj = poly[j].x, yj = poly[j].y;
+          const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+            (pt.x < (xj - xi) * (pt.y - yi) / ((yj - yi) || 1e-9) + xi);
+          if(intersect) inside = !inside;
+        }
+        return inside;
+      }
+
+      function bboxFromPoints(pts){
+        const xs = pts.map(p => p.x);
+        const ys = pts.map(p => p.y);
+        return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+      }
+
+      function readFileAsDataUrl(file){
+        if(!file) return Promise.resolve(null);
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        });
+      }
+      async function fileToObj(file){
+        if(!file) return null;
+        const dataUrl = await readFileAsDataUrl(file);
+        return { name: file.name, url: dataUrl, dataUrl };
+      }
+      function reviveFileObj(obj){
+        if(!obj) return null;
+        const dataUrl = obj.dataUrl || obj.url;
+        if(!dataUrl) return null;
+        return { name: obj.name || "image", url: dataUrl, dataUrl };
+      }
+      function revokeFileObj(obj){
+        if(obj?.url && obj.url.startsWith("blob:")) URL.revokeObjectURL(obj.url);
+      }
+
+      const Icon = ({name, className=""}) => {
+        const common = { className: `ico ${className}`, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round" };
+        if(name === "lock"){
+          return (<svg {...common}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>);
+        }
+        if(name === "unlock"){
+          return (<svg {...common}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7-2"/></svg>);
+        }
+        if(name === "chevDown"){
+          return (<svg {...common}><path d="M6 9l6 6 6-6"/></svg>);
+        }
+        if(name === "chevUp"){
+          return (<svg {...common}><path d="M6 15l6-6 6 6"/></svg>);
+        }
+        if(name === "chevLeft"){
+          return (<svg {...common}><path d="M15 18l-6-6 6-6"/></svg>);
+        }
+        if(name === "chevRight"){
+          return (<svg {...common}><path d="M9 18l6-6-6-6"/></svg>);
+        }
+        if(name === "panel"){
+          return (
+            <svg {...common}>
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <path d="M9 4v16"/>
+            </svg>
+          );
+        }
+        if(name === "back"){
+          return (<svg {...common}><path d="M15 18l-6-6 6-6"/><path d="M9 12h10"/></svg>);
+        }
+        if(name === "pencil"){
+          return (<svg {...common}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>);
+        }
+        if(name === "check"){
+          return (<svg {...common}><path d="M20 6L9 17l-5-5"/></svg>);
+        }
+        if(name === "save"){
+          return (
+            <svg {...common}>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <path d="M17 21v-8H7v8"/>
+              <path d="M7 3v5h8"/>
+            </svg>
+          );
+        }
+        if(name === "saveAs"){
+          return (
+            <svg {...common}>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <path d="M12 12v6"/>
+              <path d="M9 15l3 3 3-3"/>
+              <path d="M7 3v5h8"/>
+            </svg>
+          );
+        }
+        if(name === "open"){
+          return (
+            <svg {...common}>
+              <path d="M3 7h6l2 2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+              <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2"/>
+            </svg>
+          );
+        }
+        if(name === "export"){
+          return (
+            <svg {...common}>
+              <path d="M12 3v12"/>
+              <path d="M8 7l4-4 4 4"/>
+              <path d="M5 21h14a2 2 0 0 0 2-2v-4"/>
+              <path d="M3 15v4a2 2 0 0 0 2 2"/>
+            </svg>
+          );
+        }
+        return null;
+      };
+
+      const STORAGE_KEY = "titanroof.v4.0.state";
+
+      function App(){
+        const viewportRef = useRef(null);
+        const stageRef = useRef(null);
+        const canvasRef = useRef(null);
+        const [tool, setTool] = useState(null);
+        const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
+        const [toolbarDragging, setToolbarDragging] = useState(false);
+        const [toolbarLocked, setToolbarLocked] = useState(false);
+        const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
+        const toolbarDragRef = useRef(null);
+        const toolbarRef = useRef(null);
+        const trpInputRef = useRef(null);
+
+        const [items, setItems] = useState([]);
+        const [selectedId, setSelectedId] = useState(null);
+        const [panelView, setPanelView] = useState("items"); // items | props
+        const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+        const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+        const [isAuthenticated, setIsAuthenticated] = useState(false);
+        const [passwordInput, setPasswordInput] = useState("");
+        const [passwordError, setPasswordError] = useState("");
+
+        // Drag states:
+        // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
+        const [drag, setDrag] = useState(null);
+
+        // counters
+        const counts = useRef({ ts:1, apt:1, wind:1, obs:1, ds:1 });
+
+        // Header data (Smith Residence / roof line / front faces)
+        const [hdrEditOpen, setHdrEditOpen] = useState(false);
+        const [hdrCollapsed, setHdrCollapsed] = useState(true);
+        const [residenceName, setResidenceName] = useState("Enter Name");
+        const [frontFaces, setFrontFaces] = useState("North"); // display "Front faces: North"
+        const [viewMode, setViewMode] = useState("diagram");
+        const [reportTab, setReportTab] = useState("project");
+        const [reportData, setReportData] = useState({
+          project: {
+            reportNumber: "",
+            projectName: "",
+            address: "",
+            city: "",
+            state: "Texas",
+            zip: "",
+            inspectionDate: "",
+            startTime: "",
+            endTime: "",
+            orientation: "",
+            parties: []
+          },
+          description: {
+            occupancy: "",
+            stories: "",
+            framing: "",
+            foundation: "",
+            exteriorFinishes: [],
+            trimComponents: [],
+            windowType: "",
+            windowScreens: "",
+            garagePresent: "",
+            garageBays: "",
+            garageDoors: "",
+            garageDoorMaterial: "",
+            garageElevation: "",
+            fencingPresent: "",
+            fenceType: "",
+            fenceLocations: [],
+            terrain: "",
+            vegetation: "",
+            roofGeometry: "",
+            roofCovering: "",
+            shingleLength: "",
+            shingleExposure: "",
+            ridgeWidth: "",
+            ridgeExposure: "",
+            roofSlopes: "",
+            guttersPresent: "",
+            downspoutsPresent: "",
+            roofAppurtenances: [],
+            eagleView: "",
+            roofArea: "",
+            attachmentLetter: ""
+          },
+          background: {
+            dateOfLoss: "",
+            source: "",
+            concerns: [],
+            notes: "",
+            accessObtained: "",
+            limitations: []
+          },
+          writer: {
+            letterhead: "",
+            attention: "",
+            reference: "",
+            subject: "",
+            propertyAddress: "",
+            clientFile: "",
+            haagFile: "",
+            introduction: "",
+            narrative: "",
+            description: "",
+            background: "",
+            inspection: ""
+          },
+          inspection: {
+            performed: "",
+            components: buildInspectionDefaults()
+          }
+        });
+
+        // Roof properties
+        const [roof, setRoof] = useState({
+          covering: "SHINGLE",
+          shingleKind: "LAM",
+          shingleLength: "36 inch width",
+          shingleExposure: "5 inch exposure",
+          metalKind: "SS",
+          metalPanelWidth: "24 inch",
+          otherDesc: "",
+          diagramBg: null
+        });
+
+        // Dash collapse
+        const [dashCollapsed, setDashCollapsed] = useState(false);
+        const [lastSavedAt, setLastSavedAt] = useState(null);
+        const [exportMode, setExportMode] = useState(false);
+        const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
+
+        const activeItem = items.find(i => i.id === selectedId);
+        const updateReportSection = (section, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            [section]: {
+              ...prev[section],
+              [field]: value
+            }
+          }));
+        };
+        const toggleReportList = (section, field, value) => {
+          setReportData(prev => {
+            const current = prev[section][field] || [];
+            const nextList = current.includes(value)
+              ? current.filter(v => v !== value)
+              : [...current, value];
+            return {
+              ...prev,
+              [section]: {
+                ...prev[section],
+                [field]: nextList
+              }
+            };
+          });
+        };
+        const updateInspection = (componentKey, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            inspection: {
+              ...prev.inspection,
+              components: {
+                ...prev.inspection.components,
+                [componentKey]: {
+                  ...prev.inspection.components[componentKey],
+                  [field]: value
+                }
+              }
+            }
+          }));
+        };
+        const toggleInspectionList = (componentKey, field, value) => {
+          setReportData(prev => {
+            const current = prev.inspection.components[componentKey][field] || [];
+            const nextList = current.includes(value)
+              ? current.filter(v => v !== value)
+              : [...current, value];
+            return {
+              ...prev,
+              inspection: {
+                ...prev.inspection,
+                components: {
+                  ...prev.inspection.components,
+                  [componentKey]: {
+                    ...prev.inspection.components[componentKey],
+                    [field]: nextList
+                  }
+                }
+              }
+            };
+          });
+        };
+        const addParty = () => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: [
+                ...prev.project.parties,
+                { id: uid(), name: "", role: "", company: "", contact: "" }
+              ]
+            }
+          }));
+        };
+        const updateParty = (id, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: prev.project.parties.map(p => (p.id === id ? { ...p, [field]: value } : p))
+            }
+          }));
+        };
+        const removeParty = (id) => {
+          setReportData(prev => ({
+            ...prev,
+            project: {
+              ...prev.project,
+              parties: prev.project.parties.filter(p => p.id !== id)
+            }
+          }));
+        };
+        const handleAuthSubmit = (e) => {
+          e.preventDefault();
+          if(passwordInput === "yaali110"){
+            setIsAuthenticated(true);
+            setPasswordInput("");
+            setPasswordError("");
+          } else {
+            setPasswordError("Incorrect password. Please try again.");
+          }
+        };
+
+        useEffect(() => () => revokeFileObj(roof.diagramBg), []);
+
+        useEffect(() => {
+          setReportData(prev => {
+            if(prev.project.projectName) return prev;
+            return {
+              ...prev,
+              project: {
+                ...prev.project,
+                projectName: residenceName
+              }
+            };
+          });
+        }, [residenceName]);
+
+        useEffect(() => {
+          setReportData(prev => {
+            const nextDesc = { ...prev.description };
+            if(!nextDesc.roofCovering){
+              nextDesc.roofCovering = roof.covering === "SHINGLE" ? "Shingle" : (roof.covering === "METAL" ? "Metal" : "Other");
+            }
+            if(roof.covering === "SHINGLE"){
+              if(!nextDesc.shingleLength){
+                nextDesc.shingleLength = roof.shingleLength;
+              }
+              if(!nextDesc.shingleExposure){
+                nextDesc.shingleExposure = roof.shingleExposure;
+              }
+            }
+            return { ...prev, description: nextDesc };
+          });
+        }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
+
+        const serializeFile = (obj) => obj ? { name: obj.name, dataUrl: obj.dataUrl || obj.url } : null;
+        const serializeDamageEntries = (entries) => (entries || []).map(entry => ({
+          ...entry,
+          photo: serializeFile(entry.photo)
+        }));
+        const serializeItem = (it) => {
+          const data = { ...it.data };
+          if(it.type === "ts"){
+            data.overviewPhoto = serializeFile(it.data.overviewPhoto);
+            data.bruises = (it.data.bruises || []).map(b => ({ ...b, photo: serializeFile(b.photo) }));
+            data.conditions = (it.data.conditions || []).map(c => ({ ...c, photo: serializeFile(c.photo) }));
+          }
+          if(it.type === "apt" || it.type === "ds"){
+            data.detailPhoto = serializeFile(it.data.detailPhoto);
+            data.overviewPhoto = serializeFile(it.data.overviewPhoto);
+            data.damageEntries = serializeDamageEntries(it.data.damageEntries);
+          }
+          if(it.type === "wind"){
+            data.overviewPhoto = serializeFile(it.data.overviewPhoto);
+            data.creasedPhoto = serializeFile(it.data.creasedPhoto);
+            data.tornMissingPhoto = serializeFile(it.data.tornMissingPhoto);
+          }
+          if(it.type === "obs"){
+            data.photo = serializeFile(it.data.photo);
+          }
+          return { ...it, data };
+        };
+        const reviveItem = (it) => {
+          const nextType = it.type === "app" ? "apt" : it.type;
+          const nextName = nextType === "apt" && (it.name || "").startsWith("APP-")
+            ? it.name.replace(/^APP-/, "APT-")
+            : it.name;
+          const data = { ...it.data };
+          if(nextType === "ts"){
+            data.overviewPhoto = reviveFileObj(it.data.overviewPhoto);
+            data.bruises = (it.data.bruises || []).map(b => ({ ...b, photo: reviveFileObj(b.photo) }));
+            data.conditions = (it.data.conditions || []).map(c => ({ ...c, photo: reviveFileObj(c.photo) }));
+          }
+          if(nextType === "apt" || nextType === "ds"){
+            data.detailPhoto = reviveFileObj(it.data.detailPhoto);
+            data.overviewPhoto = reviveFileObj(it.data.overviewPhoto);
+            data.damageEntries = (it.data.damageEntries || []).map(entry => ({
+              id: entry.id || uid(),
+              mode: entry.mode || "spatter",
+              size: entry.size || "1/4",
+              photo: reviveFileObj(entry.photo)
+            }));
+            if(!data.damageEntries?.length){
+              const legacyEntries = [];
+              if(it.data.spatter?.on){
+                legacyEntries.push({
+                  id: uid(),
+                  mode: "spatter",
+                  size: it.data.spatter.size || "1/4",
+                  photo: reviveFileObj(it.data.spatter?.photo)
+                });
+              }
+              if(it.data.dent?.on){
+                legacyEntries.push({
+                  id: uid(),
+                  mode: "dent",
+                  size: it.data.dent.size || "1/4",
+                  photo: reviveFileObj(it.data.dent?.photo)
+                });
+              }
+              data.damageEntries = legacyEntries;
+            }
+            if(nextType === "ds" && data.index == null){
+              const parsedIndex = parseInt((nextName || "").split("-")[1], 10);
+              data.index = Number.isFinite(parsedIndex) ? parsedIndex : 1;
+            }
+            delete data.spatter;
+            delete data.dent;
+            delete data.damageMode;
+          }
+          if(nextType === "wind"){
+            data.overviewPhoto = reviveFileObj(it.data.overviewPhoto || it.data.photo);
+            data.creasedPhoto = reviveFileObj(it.data.creasedPhoto);
+            data.tornMissingPhoto = reviveFileObj(it.data.tornMissingPhoto);
+            if(data.creasedCount == null && data.tornMissingCount == null){
+              if(it.data.cond === "torn_missing"){
+                data.creasedCount = 0;
+                data.tornMissingCount = it.data.count || 1;
+              } else {
+                data.creasedCount = it.data.count || 1;
+                data.tornMissingCount = 0;
+              }
+            }
+            data.caption = data.caption ?? it.data.caption ?? "";
+            delete data.cond;
+            delete data.count;
+            delete data.photo;
+          }
+          if(nextType === "obs"){
+            data.photo = reviveFileObj(it.data.photo);
+          }
+          return { ...it, type: nextType, name: nextName, data };
+        };
+
+        const buildState = useCallback(() => ({
+          residenceName,
+          frontFaces,
+          roof: { ...roof, diagramBg: serializeFile(roof.diagramBg) },
+          items: items.map(serializeItem),
+          counts: counts.current,
+          reportData
+        }), [residenceName, frontFaces, roof, items, reportData]);
+
+        const applySnapshot = useCallback((parsed, source = "import") => {
+          if(!parsed?.roof) return;
+          setResidenceName(parsed.residenceName || "Enter Name");
+          setFrontFaces(parsed.frontFaces || "North");
+          setRoof(prev => ({
+            ...prev,
+            ...parsed.roof,
+            diagramBg: reviveFileObj(parsed.roof.diagramBg)
+          }));
+          if(parsed.reportData){
+            setReportData(prev => ({
+              ...prev,
+              ...parsed.reportData,
+              inspection: {
+                ...prev.inspection,
+                ...parsed.reportData.inspection,
+                components: {
+                  ...buildInspectionDefaults(),
+                  ...(parsed.reportData.inspection?.components || {})
+                }
+              }
+            }));
+          }
+          const revivedItems = (parsed.items || []).map(reviveItem);
+          setItems(revivedItems);
+          if(parsed.counts){
+            counts.current = {
+              ts: parsed.counts.ts ?? 1,
+              apt: parsed.counts.apt ?? parsed.counts.app ?? 1,
+              wind: parsed.counts.wind ?? 1,
+              obs: parsed.counts.obs ?? 1,
+              ds: parsed.counts.ds ?? 1
+            };
+          } else {
+            counts.current = revivedItems.reduce((acc, it) => {
+              acc[it.type] = Math.max(acc[it.type] || 1, parseInt((it.name || "").split("-")[1], 10) + 1 || 1);
+              return acc;
+            }, { ts:1, apt:1, wind:1, obs:1, ds:1 });
+          }
+          setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
+        }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
+
+        const SAVE_NOTICE_MS = 12000;
+        const saveNoticeTimeoutRef = useRef(null);
+        const [saveNotice, setSaveNotice] = useState(null);
+
+        const showSaveNotice = useCallback((timeString) => {
+          if(saveNoticeTimeoutRef.current){
+            clearTimeout(saveNoticeTimeoutRef.current);
+          }
+          setSaveNotice(timeString);
+          saveNoticeTimeoutRef.current = setTimeout(() => {
+            setSaveNotice(null);
+          }, SAVE_NOTICE_MS);
+        }, []);
+
+        useEffect(() => () => {
+          if(saveNoticeTimeoutRef.current){
+            clearTimeout(saveNoticeTimeoutRef.current);
+          }
+        }, []);
+
+        const saveState = useCallback((source = "manual") => {
+          const snapshot = buildState();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+          const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+          setLastSavedAt({ source, time: timeString });
+          if(source === "manual"){
+            showSaveNotice(timeString);
+          }
+        }, [buildState, showSaveNotice]);
+
+        const exportTrp = useCallback(() => {
+          const snapshot = buildState();
+          const payload = {
+            app: "TitanRoof 4.0 Beta",
+            version: "4.0",
+            exportedAt: new Date().toISOString(),
+            data: snapshot
+          };
+          const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+          const name = (residenceName || "titanroof-project").trim().replace(/\s+/g, "-");
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${name || "titanroof-project"}.trp`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, [buildState, residenceName]);
+
+        const importTrp = useCallback((file) => {
+          if(!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            try{
+              const raw = JSON.parse(reader.result);
+              const snapshot = raw?.data || raw;
+              applySnapshot(snapshot, "import");
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+            }catch(err){
+              console.warn("Failed to import TRP file", err);
+            }
+          };
+          reader.readAsText(file);
+        }, [applySnapshot]);
+
+        useEffect(() => {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if(!raw) return;
+          try{
+            const parsed = JSON.parse(raw);
+            applySnapshot(parsed, "restore");
+          }catch(err){
+            console.warn("Failed to restore saved state", err);
+          }
+        }, [applySnapshot]);
+
+        useEffect(() => {
+          const id = setInterval(() => saveState("auto"), 5 * 60 * 1000);
+          return () => clearInterval(id);
+        }, [saveState]);
+
+        useEffect(() => {
+          if(!exportMode) return;
+          const handleAfterPrint = () => setExportMode(false);
+          const timer = setTimeout(() => window.print(), 120);
+          window.addEventListener("afterprint", handleAfterPrint);
+          return () => {
+            clearTimeout(timer);
+            window.removeEventListener("afterprint", handleAfterPrint);
+          };
+        }, [exportMode]);
+
+        useEffect(() => {
+          const handleContextMenu = (e) => {
+            e.preventDefault();
+          };
+          const handleKeyDown = (e) => {
+            const key = e.key?.toLowerCase();
+            const isMac = navigator.platform.toUpperCase().includes("MAC");
+            const metaKey = isMac ? e.metaKey : e.ctrlKey;
+            if(
+              key === "f12" ||
+              (metaKey && e.shiftKey && ["i", "j", "c"].includes(key)) ||
+              (metaKey && key === "u")
+            ){
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          };
+          document.addEventListener("contextmenu", handleContextMenu);
+          window.addEventListener("keydown", handleKeyDown);
+          return () => {
+            document.removeEventListener("contextmenu", handleContextMenu);
+            window.removeEventListener("keydown", handleKeyDown);
+          };
+        }, []);
+
+        // Esc clears tool
+        useEffect(() => {
+          const onKey = (e) => {
+            if(e.key === "Escape"){
+              setTool(null);
+              setDrag(null);
+            }
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, []);
+
+        const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+        useEffect(() => {
+          const onResize = () => setViewportSize({ w: window.innerWidth, h: window.innerHeight });
+          window.addEventListener("resize", onResize);
+          return () => window.removeEventListener("resize", onResize);
+        }, []);
+        const [viewportBounds, setViewportBounds] = useState({ w: 0, h: 0 });
+        const prevViewportBounds = useRef(null);
+        useEffect(() => {
+          const el = viewportRef.current;
+          if(!el) return;
+          const observer = new ResizeObserver(entries => {
+            const rect = entries[0]?.contentRect;
+            if(rect){
+              setViewportBounds({ w: rect.width, h: rect.height });
+            }
+          });
+          observer.observe(el);
+          return () => observer.disconnect();
+        }, []);
+
+        const isMobile = viewportSize.w <= 820;
+        const previousToolbarLock = useRef(toolbarLocked);
+        const previousToolbarPos = useRef(toolbarPos);
+
+        useEffect(() => {
+          previousToolbarLock.current = toolbarLocked;
+        }, [toolbarLocked]);
+
+        useEffect(() => {
+          if(!isMobile){
+            previousToolbarPos.current = toolbarPos;
+          }
+        }, [toolbarPos, isMobile]);
+
+        useEffect(() => {
+          if(isMobile){
+            previousToolbarLock.current = toolbarLocked;
+            setToolbarLocked(true);
+            setToolbarPos({ x: window.innerWidth / 2, y: 10 });
+          } else {
+            setToolbarLocked(previousToolbarLock.current);
+            setToolbarPos(previousToolbarPos.current || { x: 20, y: 80 });
+            setMobilePanelOpen(false);
+          }
+        }, [isMobile]);
+
+        const clampToolbarPos = useCallback((pos) => {
+          const zoneRect = canvasRef.current?.getBoundingClientRect();
+          const toolbarRect = toolbarRef.current?.getBoundingClientRect();
+          if(!zoneRect || !toolbarRect) return pos;
+          const padding = 10;
+          const minX = zoneRect.left + padding;
+          const minY = zoneRect.top + padding;
+          const maxX = zoneRect.right - toolbarRect.width - padding;
+          const maxY = zoneRect.bottom - toolbarRect.height - padding;
+          return {
+            x: clamp(pos.x, minX, Math.max(minX, maxX)),
+            y: clamp(pos.y, minY, Math.max(minY, maxY))
+          };
+        }, []);
+
+        const getToolbarOrientation = useCallback((pos, current) => {
+          const zoneRect = canvasRef.current?.getBoundingClientRect();
+          const toolbarRect = toolbarRef.current?.getBoundingClientRect();
+          if(!zoneRect || !toolbarRect) return current || "horizontal";
+          const threshold = 10;
+          const hysteresis = 12;
+          const leftEdge = zoneRect.left + threshold;
+          const rightEdge = zoneRect.right - toolbarRect.width - threshold;
+          if(current === "vertical"){
+            if(pos.x > leftEdge + hysteresis && pos.x < rightEdge - hysteresis){
+              return "horizontal";
+            }
+            return "vertical";
+          }
+          if(pos.x <= leftEdge - hysteresis || pos.x >= rightEdge + hysteresis){
+            return "vertical";
+          }
+          return "horizontal";
+        }, []);
+
+        useEffect(() => {
+          setToolbarPos(prev => clampToolbarPos(prev));
+        }, [viewportSize.w, viewportSize.h, tool, clampToolbarPos]);
+
+        useEffect(() => {
+          if(isMobile){
+            setToolbarOrientation("horizontal");
+            return;
+          }
+          setToolbarOrientation(prev => getToolbarOrientation(toolbarPos, prev));
+        }, [toolbarPos, isMobile, getToolbarOrientation]);
+
+        useEffect(() => {
+          if(isMobile) return;
+          setToolbarPos(prev => clampToolbarPos(prev));
+        }, [sidebarCollapsed, toolbarOrientation, isMobile, clampToolbarPos]);
+
+        useEffect(() => {
+          if(!toolbarLocked) return;
+          toolbarDragRef.current = null;
+          setToolbarDragging(false);
+        }, [toolbarLocked]);
+
+        const handleToolbarPointerDown = (e) => {
+          if(isMobile) return;
+          if(e.button !== 0) return;
+          if(toolbarLocked) return;
+          if(e.target.closest("button") || e.target.closest(".lockIcon")) return;
+          e.preventDefault();
+          toolbarDragRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            originX: toolbarPos.x,
+            originY: toolbarPos.y
+          };
+          setToolbarDragging(true);
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+        };
+
+        const handleToolbarPointerMove = (e) => {
+          if(!toolbarDragRef.current) return;
+          const { startX, startY, originX, originY } = toolbarDragRef.current;
+          setToolbarPos(clampToolbarPos({
+            x: originX + (e.clientX - startX),
+            y: originY + (e.clientY - startY)
+          }));
+        };
+
+        const handleToolbarPointerUp = (e) => {
+          if(!toolbarDragRef.current) return;
+          toolbarDragRef.current = null;
+          setToolbarDragging(false);
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+        };
+
+        // === VIEW (multi-touch pinch + pan) ===
+        const [view, setView] = useState({ scale: 1.0, tx: 0, ty: 0 });
+
+        useEffect(() => {
+          if(!viewportBounds.w || !viewportBounds.h) return;
+          const prev = prevViewportBounds.current;
+          if(prev){
+            const dw = viewportBounds.w - prev.w;
+            const dh = viewportBounds.h - prev.h;
+            if(dw || dh){
+              setView(prevView => ({ ...prevView, tx: prevView.tx - dw / 2, ty: prevView.ty - dh / 2 }));
+            }
+          }
+          prevViewportBounds.current = viewportBounds;
+        }, [viewportBounds.w, viewportBounds.h]);
+
+        const setScaleAnchored = (nextScale, anchorClient) => {
+          const v = viewportRef.current?.getBoundingClientRect();
+          if(!v) return;
+          const scale = clamp(nextScale, 0.35, 3.0);
+
+          if(!anchorClient){
+            setView(prev => ({ ...prev, scale }));
+            return;
+          }
+
+          setView(prev => {
+            const ax = anchorClient.x - v.left;
+            const ay = anchorClient.y - v.top;
+            const s0 = prev.scale;
+            const s1 = scale;
+
+            const tx0 = prev.tx;
+            const ty0 = prev.ty;
+
+            const dx = ax - v.width/2 - tx0;
+            const dy = ay - v.height/2 - ty0;
+
+            const tx1 = tx0 + dx * (1 - s1/s0);
+            const ty1 = ty0 + dy * (1 - s1/s0);
+
+            return { scale: s1, tx: tx1, ty: ty1 };
+          });
+        };
+
+        const zoomIn = () => setScaleAnchored(view.scale * 1.15);
+        const zoomOut = () => setScaleAnchored(view.scale / 1.15);
+        const zoomReset = () => setView({ scale: 1.0, tx: 0, ty: 0 });
+
+        const zoomFit = () => {
+          const v = viewportRef.current?.getBoundingClientRect();
+          if(!v) return;
+          const pad = 80;
+          const sx = (v.width - pad) / 1024;
+          const sy = (v.height - pad) / 720;
+          const s = clamp(Math.min(sx, sy), 0.35, 3.0);
+          setView({ scale: s, tx: 0, ty: 0 });
+        };
+
+        // Fit when BG first set
+        const bgWasSetRef = useRef(false);
+        useEffect(() => {
+          if(roof.diagramBg?.url && !bgWasSetRef.current){
+            bgWasSetRef.current = true;
+            setTimeout(() => zoomFit(), 0);
+          }
+          if(!roof.diagramBg?.url) bgWasSetRef.current = false;
+        }, [roof.diagramBg?.url]);
+
+        const onWheel = (e) => {
+          e.preventDefault();
+          const isZoom = e.ctrlKey || e.metaKey;
+          if(isZoom){
+            const delta = -e.deltaY;
+            const factor = delta > 0 ? 1.08 : 1/1.08;
+            setScaleAnchored(view.scale * factor, { x: e.clientX, y: e.clientY });
+          } else {
+            setView(prev => ({ ...prev, tx: prev.tx - e.deltaX, ty: prev.ty - e.deltaY }));
+          }
+        };
+
+        // pointer tracking for pinch
+        const pointersRef = useRef(new Map()); // pointerId -> {x,y}
+        const pinchRef = useRef(null); // {startDist, startScale, startTx, startTy, centerX, centerY}
+
+        const startPinchIfTwo = () => {
+          const pts = [...pointersRef.current.values()];
+          if(pts.length !== 2) return;
+          const [a,b] = pts;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx,dy);
+          const center = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+          pinchRef.current = {
+            startDist: dist || 1,
+            startScale: view.scale,
+            startTx: view.tx,
+            startTy: view.ty,
+            centerX: center.x,
+            centerY: center.y,
+            lastCenterX: center.x,
+            lastCenterY: center.y
+          };
+        };
+
+        const updatePinch = () => {
+          const pts = [...pointersRef.current.values()];
+          if(pts.length !== 2 || !pinchRef.current) return;
+          const [a,b] = pts;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx,dy) || 1;
+
+          const center = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
+          const ratio = dist / pinchRef.current.startDist;
+
+          // scale anchored at pinch center
+          const targetScale = clamp(pinchRef.current.startScale * ratio, 0.35, 3.0);
+
+          // also allow two-finger pan using center movement
+          const dcx = center.x - pinchRef.current.lastCenterX;
+          const dcy = center.y - pinchRef.current.lastCenterY;
+
+          setView(prev => {
+            // first compute anchored scaling based on stored start (stable)
+            const v = viewportRef.current?.getBoundingClientRect();
+            if(!v) return prev;
+
+            const ax = pinchRef.current.centerX - v.left;
+            const ay = pinchRef.current.centerY - v.top;
+
+            const s0 = pinchRef.current.startScale;
+            const s1 = targetScale;
+
+            const tx0 = pinchRef.current.startTx;
+            const ty0 = pinchRef.current.startTy;
+
+            const dx0 = ax - v.width/2 - tx0;
+            const dy0 = ay - v.height/2 - ty0;
+
+            const tx1 = tx0 + dx0 * (1 - s1/s0);
+            const ty1 = ty0 + dy0 * (1 - s1/s0);
+
+            return {
+              scale: s1,
+              tx: tx1 + dcx,
+              ty: ty1 + dcy
+            };
+          });
+
+          pinchRef.current.lastCenterX = center.x;
+          pinchRef.current.lastCenterY = center.y;
+        };
+
+        // === DASHBOARD STATS ===
+        const dashboard = useMemo(() => {
+          const stats = {};
+          WIND_DIRS.forEach(d => {
+            stats[d] = {
+              tsHits: 0,
+              tsMaxHail: 0,
+              wind: { creased:0, torn_missing:0 },
+              aptMax: 0,
+              dsMax: 0
+            };
+          });
+
+          items.forEach(item => {
+            if(item.type === "ts"){
+              const d = item.data.dir;
+              if(!stats[d]) return;
+              stats[d].tsHits += (item.data.bruises || []).length;
+              (item.data.bruises||[]).forEach(b => {
+                const sz = parseSize(b.size);
+                if(sz > stats[d].tsMaxHail) stats[d].tsMaxHail = sz;
+              });
+            }
+
+            if(item.type === "wind"){
+              const d = item.data.dir;
+              if(!stats[d]) return;
+              stats[d].wind.creased += (item.data.creasedCount || 0);
+              stats[d].wind.torn_missing += (item.data.tornMissingCount || 0);
+            }
+
+            // APT/DS hail size dashboard (secondary)
+            if(item.type === "apt"){
+              const d = item.data.dir;
+              if(!stats[d]) return;
+              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry.size));
+              const mx = sizes.length ? Math.max(...sizes) : 0;
+              if(mx > stats[d].aptMax) stats[d].aptMax = mx;
+            }
+
+            if(item.type === "ds"){
+              const d = item.data.dir;
+              if(!stats[d]) return;
+              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry.size));
+              const mx = sizes.length ? Math.max(...sizes) : 0;
+              if(mx > stats[d].dsMax) stats[d].dsMax = mx;
+            }
+          });
+
+          return stats;
+        }, [items]);
+
+        const completeness = useMemo(() => {
+          const projectComplete = Boolean(
+            reportData.project.projectName &&
+            reportData.project.address &&
+            reportData.project.inspectionDate
+          );
+          const descriptionComplete = Boolean(
+            reportData.description.occupancy &&
+            reportData.description.roofGeometry
+          );
+          const inspectionStarted = reportData.inspection.performed === "no"
+            || reportData.inspection.performed === "yes"
+            || Object.values(reportData.inspection.components).some(component => (
+              component.none ||
+              component.conditions.length ||
+              component.maxSize ||
+              component.directions.length ||
+              component.notes ||
+              component.photos.length
+            ));
+          const writerStarted = Boolean(
+            reportData.writer.letterhead ||
+            reportData.writer.attention ||
+            reportData.writer.reference ||
+            reportData.writer.subject ||
+            reportData.writer.propertyAddress ||
+            reportData.writer.clientFile ||
+            reportData.writer.haagFile ||
+            reportData.writer.introduction ||
+            reportData.writer.narrative ||
+            reportData.writer.description ||
+            reportData.writer.background ||
+            reportData.writer.inspection
+          );
+          return {
+            project: projectComplete,
+            description: descriptionComplete,
+            writer: writerStarted,
+            inspection: inspectionStarted
+          };
+        }, [reportData]);
+
+        // === FACTORY / UPDATERS ===
+        const createItem = (type, pos) => {
+          const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5 };
+          if(pos?.points && pos.points.length){
+            const bb = bboxFromPoints(pos.points);
+            base.x = (bb.minX + bb.maxX) / 2;
+            base.y = (bb.minY + bb.maxY) / 2;
+          }
+
+          if(type === "ts"){
+            const n = counts.current.ts++;
+            base.name = `TS-${n}`;
+            base.data = {
+              dir: "N",
+              locked: false,
+              points: pos.points,
+              bruises: [],
+              caption: "",
+              overviewPhoto: null,
+              conditions: [] // general TS conditions (not dashboard)
+            };
+          }
+
+          if(type === "apt"){
+            const n = counts.current.apt++;
+            base.name = `APT-${n}`;
+            base.data = {
+              type: "EF",
+              dir: "N",
+              locked: false,
+              caption: "",
+              detailPhoto: null,
+              overviewPhoto: null,
+              damageEntries: []
+            };
+          }
+
+          if(type === "ds"){
+            const n = counts.current.ds++;
+            base.name = `DS-${n}`;
+            base.data = {
+              index: n,               // used for diagram label (show number)
+              dir: "N",
+              locked: false,
+              material: "Aluminum",
+              style: "Box",
+              termination: "Into Ground",
+              caption: "",
+              detailPhoto: null,
+              overviewPhoto: null,
+              damageEntries: []
+            };
+          }
+
+          if(type === "wind"){
+            base.name = `WIND-${counts.current.wind++}`;
+            base.data = {
+              dir: "N",
+              locked: false,
+              creasedCount: 1,
+              tornMissingCount: 0,
+              caption: "",
+              overviewPhoto: null,
+              creasedPhoto: null,
+              tornMissingPhoto: null
+            };
+          }
+
+          if(type === "obs"){
+            base.name = `OBS-${counts.current.obs++}`;
+            base.data = { code:"DDM", locked:false, caption:"", photo:null, points: pos?.points || null };
+          }
+
+          return base;
+        };
+
+        const addItem = (type, pos) => {
+          const it = createItem(type, pos);
+          setItems(prev => [...prev, it]);
+          setSelectedId(it.id);
+          setPanelView("props");
+          if(isMobile) setMobilePanelOpen(true);
+        };
+
+        const updateItemData = (k, v) => {
+          setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, [k]: v } } : i));
+        };
+
+        const updateItemName = (name) => {
+          setItems(prev => prev.map(i => i.id === selectedId ? { ...i, name } : i));
+        };
+
+        const updateItemPos = (id, x, y) => {
+          setItems(prev => prev.map(i => i.id === id ? { ...i, x, y } : i));
+        };
+
+        const updateTsPoints = (id, points) => {
+          setItems(prev => prev.map(i => i.id === id ? { ...i, data: { ...i.data, points } } : i));
+        };
+
+        const updateObsPoints = (id, points) => {
+          setItems(prev => prev.map(i => i.id === id ? { ...i, data: { ...i.data, points } } : i));
+        };
+
+        // === Files ===
+        const setDiagramBg = async (file) => {
+          const diagramBg = await fileToObj(file);
+          setRoof(prev => {
+            revokeFileObj(prev.diagramBg);
+            return { ...prev, diagramBg };
+          });
+        };
+
+        const clearDiagram = () => {
+          setRoof(prev => { revokeFileObj(prev.diagramBg); return { ...prev, diagramBg:null }; });
+          // clear all items
+          items.forEach(it => {
+            if(it.type === "ts"){
+              revokeFileObj(it.data.overviewPhoto);
+              (it.data.bruises||[]).forEach(b => revokeFileObj(b.photo));
+              (it.data.conditions||[]).forEach(c => revokeFileObj(c.photo));
+            }
+            if(it.type === "apt"){
+              revokeFileObj(it.data.detailPhoto);
+              revokeFileObj(it.data.overviewPhoto);
+              (it.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(it.type === "ds"){
+              revokeFileObj(it.data.detailPhoto);
+              revokeFileObj(it.data.overviewPhoto);
+              (it.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(it.type === "wind"){
+              revokeFileObj(it.data.overviewPhoto);
+              revokeFileObj(it.data.creasedPhoto);
+              revokeFileObj(it.data.tornMissingPhoto);
+            }
+            if(it.type === "obs"){
+              revokeFileObj(it.data.photo);
+            }
+          });
+          setItems([]);
+          setSelectedId(null);
+          setPanelView("items");
+          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1 };
+          localStorage.removeItem(STORAGE_KEY);
+          setLastSavedAt(null);
+          setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false });
+        };
+
+        const setTsOverviewPhoto = async (file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            revokeFileObj(i.data.overviewPhoto);
+            return { ...i, data: { ...i.data, overviewPhoto: photoObj } };
+          }));
+        };
+
+        const setAptOrDsOverview = async (key, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            revokeFileObj(i.data[key]);
+            return { ...i, data: { ...i.data, [key]: photoObj } };
+          }));
+        };
+
+        const setWindPhoto = async (field, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            revokeFileObj(i.data[field]);
+            return { ...i, data: { ...i.data, [field]: photoObj } };
+          }));
+        };
+
+        const setObsPhoto = async (file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            revokeFileObj(i.data.photo);
+            return { ...i, data: { ...i.data, photo: photoObj } };
+          }));
+        };
+
+        // TS bruises
+        const addBruise = () => {
+          const nb = { id: uid(), size: "1/4", photo: null };
+          setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, bruises: [...(i.data.bruises||[]), nb] } } : i));
+        };
+
+        const updateBruise = (bid, k, v) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                bruises: (i.data.bruises||[]).map(b => b.id === bid ? { ...b, [k]: v } : b)
+              }
+            };
+          }));
+        };
+
+        const deleteBruise = (bid) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const b = (i.data.bruises||[]).find(x => x.id === bid);
+            if(b?.photo) revokeFileObj(b.photo);
+            return { ...i, data: { ...i.data, bruises: (i.data.bruises||[]).filter(b => b.id !== bid) } };
+          }));
+        };
+
+        const setBruisePhoto = async (bid, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const bruises = (i.data.bruises||[]).map(b => {
+              if(b.id !== bid) return b;
+              revokeFileObj(b.photo);
+              return { ...b, photo: photoObj };
+            });
+            return { ...i, data: { ...i.data, bruises } };
+          }));
+        };
+
+        // TS conditions (general)
+        const addTsCondition = () => {
+          const nc = { id: uid(), code:"HB", photo:null };
+          setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, conditions: [...(i.data.conditions||[]), nc] } } : i));
+        };
+
+        const updateTsCondition = (cid, k, v) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                conditions: (i.data.conditions||[]).map(c => c.id === cid ? { ...c, [k]: v } : c)
+              }
+            };
+          }));
+        };
+
+        const deleteTsCondition = (cid) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const c = (i.data.conditions||[]).find(x => x.id === cid);
+            if(c?.photo) revokeFileObj(c.photo);
+            return { ...i, data: { ...i.data, conditions: (i.data.conditions||[]).filter(c => c.id !== cid) } };
+          }));
+        };
+
+        const setTsConditionPhoto = async (cid, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const conditions = (i.data.conditions||[]).map(c => {
+              if(c.id !== cid) return c;
+              revokeFileObj(c.photo);
+              return { ...c, photo: photoObj };
+            });
+            return { ...i, data: { ...i.data, conditions } };
+          }));
+        };
+
+        // APT/DS spatter/dent entries
+        const addDamageEntry = (mode = "spatter") => {
+          const entry = { id: uid(), mode, size: "1/4", photo: null };
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                damageEntries: [...(i.data.damageEntries || []), entry]
+              }
+            };
+          }));
+        };
+
+        const updateDamageEntry = (entryId, patch) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                damageEntries: (i.data.damageEntries || []).map(entry =>
+                  entry.id === entryId ? { ...entry, ...patch } : entry
+                )
+              }
+            };
+          }));
+        };
+
+        const deleteDamageEntry = (entryId) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const entry = (i.data.damageEntries || []).find(e => e.id === entryId);
+            if(entry?.photo) revokeFileObj(entry.photo);
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                damageEntries: (i.data.damageEntries || []).filter(e => e.id !== entryId)
+              }
+            };
+          }));
+        };
+
+        const setDamageEntryPhoto = async (entryId, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const entries = (i.data.damageEntries || []).map(entry => {
+              if(entry.id !== entryId) return entry;
+              revokeFileObj(entry.photo);
+              return { ...entry, photo: photoObj };
+            });
+            return { ...i, data: { ...i.data, damageEntries: entries } };
+          }));
+        };
+
+        // === Delete selected ===
+        const deleteSelected = () => {
+          const target = items.find(i => i.id === selectedId);
+          if(target){
+            if(target.type === "ts"){
+              revokeFileObj(target.data.overviewPhoto);
+              (target.data.bruises||[]).forEach(b => revokeFileObj(b.photo));
+              (target.data.conditions||[]).forEach(c => revokeFileObj(c.photo));
+            }
+            if(target.type === "apt"){
+              revokeFileObj(target.data.detailPhoto);
+              revokeFileObj(target.data.overviewPhoto);
+              (target.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(target.type === "ds"){
+              revokeFileObj(target.data.detailPhoto);
+              revokeFileObj(target.data.overviewPhoto);
+              (target.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(target.type === "wind"){
+              revokeFileObj(target.data.overviewPhoto);
+              revokeFileObj(target.data.creasedPhoto);
+              revokeFileObj(target.data.tornMissingPhoto);
+            }
+            if(target.type === "obs"){
+              revokeFileObj(target.data.photo);
+            }
+          }
+          setItems(prev => prev.filter(i => i.id !== selectedId));
+          setSelectedId(null);
+          setPanelView("items");
+        };
+
+        // === COORDS ===
+        const clientToSheetNorm = (clientX, clientY) => {
+          const sheetEl = stageRef.current?.querySelector(".sheet");
+          if(!sheetEl) return null;
+          const r = sheetEl.getBoundingClientRect();
+          const x = clamp((clientX - r.left) / r.width, 0, 1);
+          const y = clamp((clientY - r.top) / r.height, 0, 1);
+          return { x, y };
+        };
+
+        // === HIT TEST ===
+        const findHit = (norm) => {
+          const sel = items.find(i => i.id === selectedId && (i.type === "ts" || (i.type === "obs" && i.data.points?.length)));
+          if(sel && !sel.data.locked){
+            const pts = sel.data.points || [];
+            const rr = 0.016;
+            for(let idx=0; idx<pts.length; idx++){
+              const h = pts[idx];
+              const dist = Math.hypot(h.x - norm.x, h.y - norm.y);
+              if(dist < rr){
+                return { kind:"poly-handle", id: sel.id, pointIndex: idx };
+              }
+            }
+          }
+
+          const rev = [...items].reverse();
+          for(const it of rev){
+            if(it.type === "ts" || (it.type === "obs" && it.data.points?.length)){
+              const poly = it.data.points || [];
+              if(poly.length >= 3 && pointInPoly(norm, poly)){
+                return { kind:"item", id: it.id };
+              }
+            } else {
+              const dist = Math.hypot((it.x - norm.x), (it.y - norm.y));
+              if(dist < 0.032) return { kind:"item", id: it.id };
+            }
+          }
+          return null;
+        };
+
+        // === Pointer handlers (touch-friendly) ===
+        const onPointerDown = (e) => {
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+          // If we have two pointers => pinch mode overrides everything (best iPad UX)
+          if(pointersRef.current.size === 2){
+            e.preventDefault();
+            setDrag(null);
+            startPinchIfTwo();
+            return;
+          }
+
+          const panIntentMouse = (e.button === 1) || (e.button === 0 && e.shiftKey);
+          const isTouch = e.pointerType === "touch" || e.pointerType === "pen";
+
+          // Touch / pencil: allow 1-finger pan when tool is off AND the tap isn't on an item
+          // Mouse: pan with Shift-drag or middle mouse (kept from v2.1)
+          if(panIntentMouse){
+            e.preventDefault();
+            setDrag({ mode:"pan", start: { x: e.clientX, y: e.clientY }, origin: { tx: view.tx, ty: view.ty } });
+            return;
+          }
+
+          if(!roof.diagramBg?.url){
+            setSelectedId(null);
+            setPanelView("items");
+            return;
+          }
+
+          const norm = clientToSheetNorm(e.clientX, e.clientY);
+          if(!norm) return;
+
+          const hit = findHit(norm);
+
+          if(hit){
+            e.preventDefault();
+            setSelectedId(hit.id);
+            setPanelView("props");
+            if(isMobile) setMobilePanelOpen(true);
+
+            const it = items.find(x => x.id === hit.id);
+            if(!it) return;
+
+            if(hit.kind === "poly-handle" && !it.data.locked){
+              if(it.type === "ts"){
+                setDrag({ mode:"ts-point", id: it.id, pointIndex: hit.pointIndex });
+                return;
+              }
+              if(it.type === "obs"){
+                setDrag({ mode:"obs-point", id: it.id, pointIndex: hit.pointIndex });
+                return;
+              }
+            }
+
+            if(it.type === "ts" && !it.data.locked){
+              setDrag({ mode:"ts-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
+              return;
+            }
+
+            if(it.type === "obs" && it.data.points?.length && !it.data.locked){
+              setDrag({ mode:"obs-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
+              return;
+            }
+
+            if(it.type !== "ts" && !it.data.locked){
+              setDrag({ mode:"marker-move", id: it.id, start: norm, origin: { x: it.x, y: it.y } });
+              return;
+            }
+
+            return;
+          }
+
+          // If no hit:
+          if(tool === "ts"){
+            e.preventDefault();
+            setDrag({ mode:"ts-draw", start: norm, cur: norm });
+            return;
+          } else if(tool === "obs"){
+            e.preventDefault();
+            setDrag({ mode:"obs-draw", start: norm, cur: norm });
+            return;
+          } else if(tool){
+            e.preventDefault();
+            addItem(tool, norm);
+            return;
+          }
+
+          // Tool off:
+          // Touch: start panning with 1 finger on empty space
+          if(isTouch){
+            e.preventDefault();
+            setDrag({ mode:"pan", start: { x: e.clientX, y: e.clientY }, origin: { tx: view.tx, ty: view.ty } });
+            return;
+          }
+
+          // Mouse click away clears selection
+          setSelectedId(null);
+          setPanelView("items");
+        };
+
+        const onPointerMove = (e) => {
+          if(pointersRef.current.has(e.pointerId)){
+            pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          }
+
+          // pinch update
+          if(pointersRef.current.size === 2){
+            if(!pinchRef.current){
+              startPinchIfTwo();
+            }
+            if(drag){
+              setDrag(null);
+            }
+            e.preventDefault();
+            updatePinch();
+            return;
+          }
+
+          if(!drag) return;
+
+          if(drag.mode === "pan"){
+            e.preventDefault();
+            const dx = e.clientX - drag.start.x;
+            const dy = e.clientY - drag.start.y;
+            setView(prev => ({ ...prev, tx: drag.origin.tx + dx, ty: drag.origin.ty + dy }));
+            return;
+          }
+
+          const norm = clientToSheetNorm(e.clientX, e.clientY);
+          if(!norm) return;
+
+          if(drag.mode === "ts-draw"){
+            e.preventDefault();
+            setDrag(prev => ({ ...prev, cur: norm }));
+            return;
+          }
+          if(drag.mode === "obs-draw"){
+            e.preventDefault();
+            setDrag(prev => ({ ...prev, cur: norm }));
+            return;
+          }
+
+          if(drag.mode === "marker-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            updateItemPos(drag.id, clamp(drag.origin.x + dx, 0, 1), clamp(drag.origin.y + dy, 0, 1));
+            return;
+          }
+
+          if(drag.mode === "ts-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            const pts = drag.origin.points.map(p => ({ x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }));
+            updateTsPoints(drag.id, pts);
+            return;
+          }
+
+          if(drag.mode === "obs-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            const pts = drag.origin.points.map(p => ({ x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }));
+            updateObsPoints(drag.id, pts);
+            return;
+          }
+
+          if(drag.mode === "ts-point"){
+            e.preventDefault();
+            const it = items.find(x => x.id === drag.id);
+            if(!it) return;
+            const pts = (it.data.points||[]).map(p => ({...p}));
+            if(pts[drag.pointIndex]){
+              pts[drag.pointIndex] = { x: clamp(norm.x, 0, 1), y: clamp(norm.y, 0, 1) };
+              updateTsPoints(drag.id, pts);
+            }
+          }
+
+          if(drag.mode === "obs-point"){
+            e.preventDefault();
+            const it = items.find(x => x.id === drag.id);
+            if(!it) return;
+            const pts = (it.data.points||[]).map(p => ({...p}));
+            if(pts[drag.pointIndex]){
+              pts[drag.pointIndex] = { x: clamp(norm.x, 0, 1), y: clamp(norm.y, 0, 1) };
+              updateObsPoints(drag.id, pts);
+            }
+          }
+        };
+
+        const onPointerUp = (e) => {
+          // remove pointer
+          pointersRef.current.delete(e.pointerId);
+
+          // end pinch if fewer than 2 pointers
+          if(pointersRef.current.size < 2){
+            pinchRef.current = null;
+          } else if(pointersRef.current.size === 2 && !pinchRef.current){
+            startPinchIfTwo();
+          }
+
+          if(drag?.mode === "ts-draw"){
+            const start = drag.start, cur = drag.cur;
+            const w = Math.abs(cur.x - start.x);
+            const h = Math.abs(cur.y - start.y);
+            if(w > 0.02 && h > 0.02){
+              const x1 = Math.min(start.x, cur.x);
+              const y1 = Math.min(start.y, cur.y);
+              const x2 = Math.max(start.x, cur.x);
+              const y2 = Math.max(start.y, cur.y);
+
+              const points = [
+                { x:x1, y:y1 },
+                { x:x2, y:y1 },
+                { x:x2, y:y2 },
+                { x:x1, y:y2 }
+              ];
+              const it = createItem("ts", { points });
+              setItems(prev => [...prev, it]);
+              setSelectedId(it.id);
+              setPanelView("props");
+            }
+          }
+
+          if(drag?.mode === "obs-draw"){
+            const start = drag.start, cur = drag.cur;
+            const w = Math.abs(cur.x - start.x);
+            const h = Math.abs(cur.y - start.y);
+            if(w > 0.02 && h > 0.02){
+              const x1 = Math.min(start.x, cur.x);
+              const y1 = Math.min(start.y, cur.y);
+              const x2 = Math.max(start.x, cur.x);
+              const y2 = Math.max(start.y, cur.y);
+
+              const points = [
+                { x:x1, y:y1 },
+                { x:x2, y:y1 },
+                { x:x2, y:y2 },
+                { x:x1, y:y2 }
+              ];
+              const it = createItem("obs", { points });
+              setItems(prev => [...prev, it]);
+              setSelectedId(it.id);
+              setPanelView("props");
+            } else if(start){
+              const it = createItem("obs", { x: start.x, y: start.y });
+              setItems(prev => [...prev, it]);
+              setSelectedId(it.id);
+              setPanelView("props");
+            }
+          }
+
+          setDrag(null);
+        };
+
+        // === Grouped list ===
+        const grouped = useMemo(() => {
+          const g = { ts:[], apt:[], ds:[], obs:[], wind:[] };
+          items.forEach(i => g[i.type] && g[i.type].push(i));
+          return g;
+        }, [items]);
+
+        // === Roof summary line ===
+        const roofSummary = useMemo(() => {
+          if(roof.covering === "SHINGLE"){
+            const kind = SHINGLE_KIND.find(x=>x.code===roof.shingleKind)?.label || "Shingles";
+            return `${kind} • ${roof.shingleLength} • ${roof.shingleExposure}`;
+          }
+          if(roof.covering === "METAL"){
+            const kind = METAL_KIND.find(x=>x.code===roof.metalKind)?.label || "Metal";
+            return `${kind} • ${roof.metalPanelWidth}`;
+          }
+          return roof.otherDesc ? `Other • ${roof.otherDesc}` : "Other";
+        }, [roof]);
+
+        // === TS SVG ===
+        const renderTS = (ts) => {
+          const pts = ts.data.points || [];
+          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const isSel = selectedId === ts.id;
+
+          const bb = bboxFromPoints(pts);
+          const topRight = { x: bb.maxX*1024, y: bb.minY*720 };
+
+          return (
+            <g key={ts.id}>
+              <polygon
+                points={ptsPx}
+                fill={isSel ? "rgba(220,38,38,0.12)" : "rgba(220,38,38,0.06)"}
+                stroke="var(--c-ts)"
+                strokeWidth={isSel ? 3 : 2}
+              />
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+              </text>
+
+              <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
+              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
+                {(ts.data.bruises||[]).length}
+              </text>
+
+              {isSel && !ts.data.locked && pts.map((p, idx) => (
+                <g key={idx}>
+                  <circle className="handle" cx={p.x*1024} cy={p.y*720} r="7" />
+                  <circle className="handleDot" cx={p.x*1024} cy={p.y*720} r="2.5" />
+                </g>
+              ))}
+            </g>
+          );
+        };
+
+        const renderTSPrint = (ts) => {
+          const pts = ts.data.points || [];
+          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const bb = bboxFromPoints(pts);
+          const topRight = { x: bb.maxX*1024, y: bb.minY*720 };
+          return (
+            <g key={`print-${ts.id}`}>
+              <polygon
+                points={ptsPx}
+                fill="rgba(220,38,38,0.06)"
+                stroke="var(--c-ts)"
+                strokeWidth={2}
+              />
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+              </text>
+              <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
+              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
+                {(ts.data.bruises||[]).length}
+              </text>
+            </g>
+          );
+        };
+
+        const renderObsArea = (obs) => {
+          const pts = obs.data.points || [];
+          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const isSel = selectedId === obs.id;
+          const bb = bboxFromPoints(pts);
+          return (
+            <g key={obs.id}>
+              <polygon
+                points={ptsPx}
+                fill={isSel ? "rgba(147,51,234,0.18)" : "rgba(147,51,234,0.12)"}
+                stroke="var(--c-obs)"
+                strokeWidth={isSel ? 3 : 2}
+              />
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+                {obs.name} • {obs.data.code}
+              </text>
+              {isSel && !obs.data.locked && pts.map((p, idx) => (
+                <g key={idx}>
+                  <circle className="handleObs" cx={p.x*1024} cy={p.y*720} r="7" />
+                  <circle className="handleObsDot" cx={p.x*1024} cy={p.y*720} r="2.5" />
+                </g>
+              ))}
+            </g>
+          );
+        };
+
+        const renderObsAreaPrint = (obs) => {
+          const pts = obs.data.points || [];
+          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const bb = bboxFromPoints(pts);
+          return (
+            <g key={`print-${obs.id}`}>
+              <polygon
+                points={ptsPx}
+                fill="rgba(147,51,234,0.12)"
+                stroke="var(--c-obs)"
+                strokeWidth={2}
+              />
+              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+                {obs.name} • {obs.data.code}
+              </text>
+            </g>
+          );
+        };
+
+        // === Marker meta (DS shows number) ===
+        const markerMeta = (i) => {
+          if(i.type === "apt"){
+            return { bg:"var(--c-apt)", label: i.data.type, radius:"14px" };
+          }
+          if(i.type === "ds"){
+            return { bg:"var(--c-ds)", label: String(i.data.index || "?"), radius:"14px" };
+          }
+          if(i.type === "wind"){
+            const count = (i.data.creasedCount || 0) + (i.data.tornMissingCount || 0);
+            return { bg:"var(--c-wind)", label: count > 1 ? `W${count}` : "W", radius:"999px" };
+          }
+          if(i.type === "obs"){
+            return { bg:"var(--c-obs)", label:(i.data.code||"OB").substring(0,2), radius:"999px" };
+          }
+          return { bg:"#111", label:"", radius:"14px" };
+        };
+
+        const toolDefs = [
+          { key:"ts", label:"Test Square", code:"TS", cls:"ts" },
+          { key:"apt", label:"Appurtenance", code:"APT", cls:"apt" },
+          { key:"ds", label:"Downspout", code:"DS", cls:"ds" },
+          { key:"wind", label:"Wind", code:"W", cls:"wind" },
+          { key:"obs", label:"Observation", code:"OBS", cls:"obs" },
+        ];
+
+        const isDamaged = (it) => {
+          if(it.type === "apt" || it.type === "ds"){
+            return (it.data.damageEntries || []).length > 0;
+          }
+          return false;
+        };
+
+        const damageSummary = (it) => {
+          if(!(it.type === "apt" || it.type === "ds")) return "";
+          const parts = (it.data.damageEntries || []).map(entry => {
+            if(entry.mode === "both"){
+              return `spatter + dent ${entry.size}"`;
+            }
+            return `${entry.mode} ${entry.size}"`;
+          });
+          return parts.join(" • ");
+        };
+
+        const hailIndicatorSummary = useMemo(() => {
+          const base = {
+            N: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
+            S: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
+            E: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } },
+            W: { apt:{ spatter:0, dent:0 }, ds:{ spatter:0, dent:0 } }
+          };
+          items.forEach(it => {
+            if(!(it.type === "apt" || it.type === "ds")) return;
+            const dir = it.data.dir;
+            if(!base[dir]) return;
+            (it.data.damageEntries || []).forEach(entry => {
+              const size = parseSize(entry.size);
+              if(entry.mode === "spatter" || entry.mode === "both"){
+                if(size > base[dir][it.type].spatter) base[dir][it.type].spatter = size;
+              }
+              if(entry.mode === "dent" || entry.mode === "both"){
+                if(size > base[dir][it.type].dent) base[dir][it.type].dent = size;
+              }
+            });
+          });
+          return base;
+        }, [items]);
+
+        const photoCaption = (label, photo) => {
+          if(photo?.name){
+            return `${label} • ${photo.name}`;
+          }
+          return label;
+        };
+
+        const damageEntryLabel = (entry, idx) => {
+          const base = entry.mode === "both"
+            ? "Spatter + Dent"
+            : entry.mode === "spatter"
+              ? "Spatter"
+              : "Dent";
+          return `${base} ${idx + 1} • ${entry.size}"`;
+        };
+
+        const valueOrDash = (value) => value?.trim() ? value : "—";
+        const joinList = (list) => (list && list.length ? list.join(", ") : "—");
+        const formatAddressLine = (project) => {
+          const parts = [project.address, project.city, project.state, project.zip].filter(Boolean);
+          return parts.length ? parts.join(", ") : "—";
+        };
+        const formatBlock = (value) => value?.trim() ? value.trim() : "Not provided.";
+
+        const collectTsPhotos = (ts) => {
+          const photos = [];
+          if(ts.data.overviewPhoto?.url){
+            photos.push({ url: ts.data.overviewPhoto.url, caption: photoCaption("Test square overview", ts.data.overviewPhoto) });
+          }
+          (ts.data.bruises || []).forEach((b, idx) => {
+            if(b.photo?.url) photos.push({ url: b.photo.url, caption: photoCaption(`Bruise ${idx + 1} • ${b.size}"`, b.photo) });
+          });
+          (ts.data.conditions || []).forEach((c, idx) => {
+            if(c.photo?.url) photos.push({ url: c.photo.url, caption: photoCaption(`Condition ${idx + 1} • ${c.code}`, c.photo) });
+          });
+          return photos;
+        };
+
+        const renderFileName = (photo, className = "") => {
+          if(!photo?.name) return null;
+          const classes = ["fileMeta", className].filter(Boolean).join(" ");
+          return <div className={classes}>File: {photo.name}</div>;
+        };
+
+        const PrintPhoto = ({ photo, alt, caption, style }) => {
+          const [isPortrait, setIsPortrait] = useState(false);
+          if(!photo?.url) return null;
+          return (
+            <div style={style}>
+              <div className="printPhoto">
+                <img
+                  src={photo.url}
+                  alt={alt}
+                  className={isPortrait ? "portrait" : ""}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setIsPortrait(img.naturalHeight > img.naturalWidth);
+                  }}
+                />
+              </div>
+              <div className="printCaption">{caption}</div>
+            </div>
+          );
+        };
+
+        // === Compact lock icon (orange locked / gray unlocked) ===
+        const LockIcon = ({locked, onToggle}) => (
+          <div
+            className={"lockIcon " + (locked ? "locked" : "unlocked")}
+            onClick={onToggle}
+            title={locked ? "Toolbar locked" : "Toolbar unlocked"}
+            aria-label={locked ? "Toolbar locked" : "Toolbar unlocked"}
+          >
+            <Icon name={locked ? "lock" : "unlock"} />
+          </div>
+        );
+
+        // === Name editing (heading + pencil; edit -> input + check) ===
+        const [nameEditing, setNameEditing] = useState(false);
+        const [nameDraft, setNameDraft] = useState("");
+
+        useEffect(() => {
+          if(activeItem){
+            setNameEditing(false);
+            setNameDraft(activeItem.name);
+          }
+        }, [selectedId]);
+
+        useEffect(() => {
+          if(activeItem){
+            setGroupOpen(prev => ({ ...prev, [activeItem.type]: true }));
+          }
+        }, [activeItem]);
+
+        const startNameEdit = () => {
+          if(!activeItem) return;
+          setNameDraft(activeItem.name);
+          setNameEditing(true);
+        };
+        const commitNameEdit = () => {
+          updateItemName(nameDraft.trim() || activeItem.name);
+          setNameEditing(false);
+        };
+
+        const selectItemFromList = (id) => {
+          setSelectedId(id);
+          setPanelView("props");
+          if(isMobile) setMobilePanelOpen(true);
+        };
+
+        const headerContent = (
+          <PropertiesBar
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            residenceName={residenceName}
+            roofSummary={roofSummary}
+            frontFaces={frontFaces}
+            hdrCollapsed={hdrCollapsed}
+            onToggleCollapsed={() => setHdrCollapsed(v => !v)}
+            onEdit={() => { setHdrEditOpen(v => !v); setHdrCollapsed(false); }}
+            onSave={() => saveState("manual")}
+            onSaveAs={exportTrp}
+            onOpen={() => trpInputRef.current?.click()}
+            onExport={() => { saveState("manual"); setExportMode(true); }}
+            isMobile={isMobile}
+          />
+        );
+
+        const headerEditForm = (
+          <>
+            <div className="rowTop" style={{marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div className="lbl">Residence / Property</div>
+                <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
+              </div>
+              <div style={{flex:1}}>
+                <div className="lbl">Front Faces</div>
+                <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
+                  <option value="North">North</option>
+                  <option value="South">South</option>
+                  <option value="East">East</option>
+                  <option value="West">West</option>
+                  <option value="Northeast">Northeast</option>
+                  <option value="Northwest">Northwest</option>
+                  <option value="Southeast">Southeast</option>
+                  <option value="Southwest">Southwest</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="rowTop" style={{marginBottom:10}}>
+              <div style={{flex:1}}>
+                <div className="lbl">Roof Covering</div>
+                <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
+                  <option value="SHINGLE">Shingle</option>
+                  <option value="METAL">Metal</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div style={{flex:1}}>
+                <div className="lbl">Diagram Image</div>
+                <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+              </div>
+            </div>
+
+            {roof.covering==="SHINGLE" && (
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Shingle Type</div>
+                  <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
+                    {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}>
+                  <div className="lbl">Length</div>
+                  <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
+                    {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {roof.covering==="SHINGLE" && (
+              <div style={{marginBottom:10}}>
+                <div className="lbl">Exposure</div>
+                <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
+                  {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+
+            {roof.covering==="METAL" && (
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Metal Type</div>
+                  <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
+                    {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}>
+                  <div className="lbl">Panel Width</div>
+                  <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
+                    {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {roof.covering==="OTHER" && (
+              <div style={{marginBottom:10}}>
+                <div className="lbl">Describe</div>
+                <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
+              </div>
+            )}
+          </>
+        );
+
+        const headerEditModal = hdrEditOpen && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) setHdrEditOpen(false); }}
+          >
+            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Project properties</div>
+                <button className="btn" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
+              </div>
+              <div className="modalBody">
+                {headerEditForm}
+              </div>
+              <div className="modalActions">
+                <button className="btn btnPrimary" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
+                <button className="btn btnDanger" type="button" onClick={clearDiagram}>Clear Diagram + Items</button>
+              </div>
+            </div>
+          </div>
+        );
+
+        const exportIndexItems = [
+          "Title Page",
+          "Index",
+          "Report Writer",
+          "Project Information",
+          "Description",
+          "Background",
+          "Inspection Summary",
+          "Roof Diagram",
+          "Dashboard",
+          `Test Squares (${items.filter(i => i.type === "ts").length})`,
+          `Wind Observations (${items.filter(i => i.type === "wind").length})`,
+          `Appurtenances + Downspouts (${items.filter(i => i.type === "apt" || i.type === "ds").length})`,
+          `Observations (${items.filter(i => i.type === "obs").length})`
+        ];
+
+        return (
+          <>
+          <TopBar label="TitanRoof Beta v4.0" />
+          {isAuthenticated && headerContent}
+          {isAuthenticated && (
+            <input
+              ref={trpInputRef}
+              type="file"
+              accept=".trp,application/json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if(file) importTrp(file);
+                e.target.value = "";
+              }}
+            />
+          )}
+          {!isAuthenticated && (
+            <div className="authOverlay">
+              <form className="authCard" onSubmit={handleAuthSubmit}>
+                <div className="authTitle">TitanRoof 4.0 Beta Access</div>
+                <div className="authHint">Enter the security password to continue.</div>
+                <div className="lbl">Password</div>
+                <input
+                  className="inp"
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e)=>{ setPasswordInput(e.target.value); setPasswordError(""); }}
+                  placeholder="Enter password"
+                  autoFocus
+                />
+                {passwordError && <div className="authError">{passwordError}</div>}
+                <div style={{display:"flex", justifyContent:"flex-end", marginTop:14}}>
+                  <button className="btn btnPrimary" type="submit">Unlock</button>
+                </div>
+              </form>
+            </div>
+          )}
+          {isAuthenticated && (
+            <div style={{display:"none"}} aria-hidden="true" />
+          )}
+          {headerEditModal}
+          {saveNotice && (
+            <div className="saveToast" role="status">Saved {saveNotice}</div>
+          )}
+          {viewMode === "diagram" ? (
+          <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
+            {/* CANVAS */}
+            <div className="canvasZone" ref={canvasRef}>
+              <div
+                className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "")}
+                style={isMobile
+                  ? { left: "50%", top: "calc(var(--topbar-height) + var(--propsbar-height) + 6px)", transform: "translateX(-50%)" }
+                  : { left: toolbarPos.x, top: toolbarPos.y }}
+                onPointerDown={handleToolbarPointerDown}
+                onPointerMove={handleToolbarPointerMove}
+                onPointerUp={handleToolbarPointerUp}
+                onPointerCancel={handleToolbarPointerUp}
+                ref={toolbarRef}
+              >
+                <div className="tbCenter">
+                  <div className="tbTitle">Tools</div>
+                  <div className="tbTools">
+                    {toolDefs.map(t => {
+                      const isActive = tool === t.key;
+                      return (
+                        <button
+                          key={t.key}
+                          className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
+                          type="button"
+                          onClick={() => setTool(prev => (prev === t.key ? null : t.key))}
+                          title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                          aria-label={t.label}
+                        >
+                          <span className="toolText">{isActive ? t.label : t.code}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="tbDivider" />
+                <div className="tbZoom">
+                  <div className="tbZoomRow">
+                    <button className="zBtn" onClick={zoomOut}>−</button>
+                    <button className="zBtn" onClick={zoomIn}>+</button>
+                    <button className="zBtn" onClick={zoomFit}>Fit</button>
+                  </div>
+                  <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                </div>
+                <div className="tbDivider" />
+                <LockIcon
+                  locked={toolbarLocked}
+                  onToggle={() => {
+                    if(isMobile) return;
+                    setToolbarLocked(prev => !prev);
+                  }}
+                />
+              </div>
+
+              {/* VIEWPORT */}
+              <div
+                className="viewport"
+                ref={viewportRef}
+                onWheel={onWheel}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+              >
+                <div
+                  className="stage"
+                  ref={stageRef}
+                  style={{
+                    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale}) translate(-512px, -360px)`,
+                  }}
+                >
+                  <div className="sheet">
+                    {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+
+                    <svg className="gridSvg" width="100%" height="100%">
+                      <defs>
+                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
+                        </pattern>
+                      </defs>
+
+                      <rect width="100%" height="100%" fill="url(#grid)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
+                      {items.filter(i => i.type === "ts").map(renderTS)}
+                      {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsArea)}
+
+                      {drag && drag.mode === "ts-draw" && (
+                        <rect
+                          x={Math.min(drag.start.x, drag.cur.x) * 1024}
+                          y={Math.min(drag.start.y, drag.cur.y) * 720}
+                          width={Math.abs(drag.cur.x - drag.start.x) * 1024}
+                          height={Math.abs(drag.cur.y - drag.start.y) * 720}
+                          fill="rgba(220,38,38,0.10)"
+                          stroke="var(--c-ts)"
+                          strokeDasharray="6,6"
+                          strokeWidth="2"
+                        />
+                      )}
+                      {drag && drag.mode === "obs-draw" && (
+                        <rect
+                          x={Math.min(drag.start.x, drag.cur.x) * 1024}
+                          y={Math.min(drag.start.y, drag.cur.y) * 720}
+                          width={Math.abs(drag.cur.x - drag.start.x) * 1024}
+                          height={Math.abs(drag.cur.y - drag.start.y) * 720}
+                          fill="rgba(147,51,234,0.10)"
+                          stroke="var(--c-obs)"
+                          strokeDasharray="6,6"
+                          strokeWidth="2"
+                        />
+                      )}
+                    </svg>
+
+                    {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                      const isSel = selectedId === i.id;
+                      const m = markerMeta(i);
+                      return (
+                        <div
+                          key={i.id}
+                          className="marker"
+                          style={{
+                            left: i.x * 1024,
+                            top: i.y * 720,
+                            background: m.bg,
+                            borderRadius: m.radius,
+                            outline: isSel ? "2px solid var(--teal)" : "none"
+                          }}
+                        >
+                          {m.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {!roof.diagramBg?.url && (
+                <div style={{
+                  position:"absolute",
+                  left:"50%",
+                  top:"50%",
+                  transform:"translate(-50%,-50%)",
+                  width:"560px",
+                  maxWidth:"90%",
+                  background:"rgba(255,255,255,0.92)",
+                  backdropFilter:"blur(10px)",
+                  border:"1px solid rgba(226,232,240,0.95)",
+                  borderRadius:"18px",
+                  boxShadow:"0 18px 34px rgba(2,6,23,0.14)",
+                  padding:"16px"
+                }}>
+                  <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Upload a roof diagram to begin</div>
+                  <div className="tiny" style={{marginTop:6}}>
+                    Tap “Upload Image” (PNG/JPG). Then place test squares and markers.
+                  </div>
+                  <div style={{marginTop:12}}>
+                    <label className="btn btnPrimary" style={{display:"inline-block", cursor:"pointer"}}>
+                      Upload Image
+                      <input type="file" accept="image/*" style={{display:"none"}}
+                        onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SIDEBAR */}
+            <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
+              <div className="panelRail">
+                {!isMobile && (
+                  <button
+                    className="panelToggleBtn"
+                    type="button"
+                    onClick={() => setSidebarCollapsed(v => !v)}
+                    title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                    aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                  >
+                    <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
+                  </button>
+                )}
+              </div>
+              <div className="panelBody">
+                <div className="pScroll">
+                {/* ITEMS LIST */}
+                {panelView === "items" && (
+                  <div className="card">
+                    <div className="lbl">Inspection Items</div>
+
+                    {["ts","apt","ds","obs","wind"].map(type => {
+                      const group = grouped[type];
+                      if(!group.length) return null;
+                      const isOpen = !!groupOpen[type];
+
+                      let title = "Items";
+                      let color = "var(--border)";
+                      if(type==="ts"){ title="Test Squares"; color="var(--c-ts)"; }
+                      if(type==="apt"){ title="Appurtenances"; color="var(--c-apt)"; }
+                      if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; }
+                      if(type==="obs"){ title="Observations"; color="var(--c-obs)"; }
+                      if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; }
+
+                      return (
+                        <div key={type}>
+                          <div
+                            className={`groupHeader ${type}`}
+                            onClick={() => setGroupOpen(prev => ({ ...prev, [type]: !isOpen }))}
+                          >
+                            <div className="groupTitle">
+                              <span>{title}</span>
+                              <span className="groupCount">{group.length}</span>
+                            </div>
+                            <div className="groupChevron">
+                              <Icon name={isOpen ? "chevUp" : "chevDown"} />
+                            </div>
+                          </div>
+                          {isOpen && group.map(item => (
+                            <div
+                              key={item.id}
+                              className={"itemRow " + (selectedId===item.id ? "selected":"")}
+                              style={{borderLeftColor: color}}
+                              onClick={() => selectItemFromList(item.id)}
+                            >
+                              <div className="itemInfo">
+                                <b>
+                                  {item.name}
+                                  {isDamaged(item) && <span className="badgeDMG">DMG</span>}
+                                </b>
+
+                                {type==="ts" && (
+                                  <span>
+                                    {item.data.dir} • {(item.data.bruises||[]).length} hits
+                                    {item.data.conditions?.length ? ` • ${item.data.conditions.length} conditions` : ""}
+                                    {item.data.overviewPhoto ? " • photo" : ""}
+                                  </span>
+                                )}
+
+                                {type==="apt" && (
+                                  <span>
+                                    {item.data.type} • {item.data.dir}
+                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no hail"}
+                                  </span>
+                                )}
+
+                                {type==="ds" && (
+                                  <span>
+                                    {item.data.dir} • {item.data.material} • {item.data.style}
+                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no hail"}
+                                  </span>
+                                )}
+
+                                {type==="obs" && (
+                                  <span>
+                                    {item.data.code} {item.data.points?.length ? "• area" : "• pin"}
+                                  </span>
+                                )}
+                                {type==="wind" && (
+                                  <span>
+                                    {item.data.dir} • Creased: {item.data.creasedCount || 0} • Torn/Missing: {item.data.tornMissingCount || 0}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+
+                    {!items.length && <div className="muted">No items yet. Use the Toolkit to place test squares or markers.</div>}
+                  </div>
+                )}
+
+                {/* PROPERTIES */}
+                {panelView === "props" && (
+                  <div className="card">
+                    <div className="propsSticky">
+                      <div className="row">
+                        <button className="btn" style={{flex:"0 0 auto"}} onClick={()=>setPanelView("items")}>
+                          <Icon name="back" /> Back
+                        </button>
+                        <div style={{flex:1}} />
+                      </div>
+                    </div>
+
+                    {!activeItem && <div className="muted">Select an item on the diagram or from the list.</div>}
+
+                    {activeItem && (
+                      <>
+                        {/* Clean heading with pencil -> input + check */}
+                        <div className="headingRow" style={{marginBottom:10}}>
+                          {!nameEditing ? (
+                            <>
+                              <h2 className="heading">{activeItem.name}</h2>
+                              <div className="editPill" onClick={startNameEdit} title="Edit name">
+                                <Icon name="pencil" />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <input className="inp" value={nameDraft} onChange={(e)=>setNameDraft(e.target.value)} />
+                              <div className="editPill" onClick={commitNameEdit} title="Save name">
+                                <Icon name="check" />
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div style={{marginBottom:12}}>
+                          <div className="lbl">Item Lock</div>
+                          <div className="row">
+                            <button
+                              className={"btn " + (!activeItem.data.locked ? "btnPrimary" : "")}
+                              type="button"
+                              onClick={() => updateItemData("locked", false)}
+                            >
+                              Unlocked
+                            </button>
+                            <button
+                              className={"btn " + (activeItem.data.locked ? "btnPrimary" : "")}
+                              type="button"
+                              onClick={() => updateItemData("locked", true)}
+                            >
+                              Locked
+                            </button>
+                          </div>
+                          <div className="tiny" style={{marginTop:6}}>Locked items cannot be moved or resized on the diagram.</div>
+                        </div>
+
+                        {/* === TEST SQUARE === */}
+                        {activeItem.type === "ts" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Slope Direction</div>
+                              <div className="radioGrid">
+                                {CARDINAL_DIRS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Test Square Overview Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setTsOverviewPhoto(e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{marginBottom:8}}>
+                                <div style={{flex:1}}>
+                                  <div className="lbl" style={{marginBottom:2}}>Hail Bruises ({(activeItem.data.bruises||[]).length})</div>
+                                  <div className="tiny">Size + optional photo per bruise.</div>
+                                </div>
+                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={addBruise}>Add</button>
+                              </div>
+
+                              {(activeItem.data.bruises||[]).map((b, idx) => (
+                                <div key={b.id} style={{marginBottom:8}}>
+                                  <div className="row">
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <select className="inp" value={b.size} onChange={(e)=>updateBruise(b.id, "size", e.target.value)}>
+                                      {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
+                                    </select>
+                                    <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                                      Photo
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        onChange={(e)=> e.target.files?.[0] && setBruisePhoto(b.id, e.target.files[0])}/>
+                                    </label>
+                                    <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteBruise(b.id)}>Del</button>
+                                  </div>
+                                  {renderFileName(b.photo, "indent")}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* NEW: general TS conditions (not dashboard) */}
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{marginBottom:8}}>
+                                <div style={{flex:1}}>
+                                  <div className="lbl" style={{marginBottom:2}}>Add Condition</div>
+                                  <div className="tiny">General condition(s) within the test square (not dashboard).</div>
+                                </div>
+                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={addTsCondition}>Add</button>
+                              </div>
+
+                              {(activeItem.data.conditions||[]).map((c, idx) => (
+                                <div key={c.id} style={{marginBottom:8}}>
+                                  <div className="row">
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <select className="inp" value={c.code} onChange={(e)=>updateTsCondition(c.id, "code", e.target.value)}>
+                                      {TS_CONDITIONS.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}
+                                    </select>
+                                    <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                                      Photo
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        onChange={(e)=> e.target.files?.[0] && setTsConditionPhoto(c.id, e.target.files[0])}/>
+                                    </label>
+                                    <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteTsCondition(c.id)}>Del</button>
+                                  </div>
+                                  {renderFileName(c.photo, "indent")}
+                                </div>
+                              ))}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Notes relevant to sampled area..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Test Square</button>
+                          </>
+                        )}
+
+                        {/* === APT === */}
+                        {activeItem.type === "apt" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Type</div>
+                              <select className="inp" value={activeItem.data.type} onChange={(e)=>updateItemData("type", e.target.value)}>
+                                {APT_TYPES.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                              </select>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Damage Side</div>
+                              <div className="radioGrid">
+                                {CARDINAL_DIRS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="hr"></div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{marginBottom:8}}>
+                                <div style={{flex:1}}>
+                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
+                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
+                                </div>
+                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
+                                  Add
+                                </button>
+                              </div>
+
+                              {(activeItem.data.damageEntries || []).map((entry, idx) => (
+                                <div key={entry.id} style={{marginBottom:8}}>
+                                  <div className="row">
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
+                                      {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                                    </select>
+                                    <select className="inp" value={entry.size} onChange={(e)=>updateDamageEntry(entry.id, { size: e.target.value })}>
+                                      {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
+                                    </select>
+                                    <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                                      Photo
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        onChange={(e)=> e.target.files?.[0] && setDamageEntryPhoto(entry.id, e.target.files[0])}/>
+                                    </label>
+                                    <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteDamageEntry(entry.id)}>Del</button>
+                                  </div>
+                                  {renderFileName(entry.photo, "indent")}
+                                </div>
+                              ))}
+                              {!(activeItem.data.damageEntries || []).length && (
+                                <div className="tiny" style={{marginTop:4}}>No hail indicators added.</div>
+                              )}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Appurtenance Detail Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.detailPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Overview Photo (optional)</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Optional notes..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Appurtenance</button>
+                          </>
+                        )}
+
+                        {/* === DS === */}
+                        {activeItem.type === "ds" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Damage Side</div>
+                              <div className="radioGrid">
+                                {CARDINAL_DIRS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="rowTop" style={{marginBottom:10}}>
+                              <div style={{flex:1}}>
+                                <div className="lbl">Material</div>
+                                <select className="inp" value={activeItem.data.material} onChange={(e)=>updateItemData("material", e.target.value)}>
+                                  {DS_MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              </div>
+                              <div style={{flex:1}}>
+                                <div className="lbl">Style</div>
+                                <select className="inp" value={activeItem.data.style} onChange={(e)=>updateItemData("style", e.target.value)}>
+                                  {DS_STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Termination</div>
+                              <select className="inp" value={activeItem.data.termination} onChange={(e)=>updateItemData("termination", e.target.value)}>
+                                {DS_TERMINATIONS.map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </div>
+
+                            <div className="hr"></div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{marginBottom:8}}>
+                                <div style={{flex:1}}>
+                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
+                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
+                                </div>
+                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
+                                  Add
+                                </button>
+                              </div>
+
+                              {(activeItem.data.damageEntries || []).map((entry, idx) => (
+                                <div key={entry.id} style={{marginBottom:8}}>
+                                  <div className="row">
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
+                                      {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                                    </select>
+                                    <select className="inp" value={entry.size} onChange={(e)=>updateDamageEntry(entry.id, { size: e.target.value })}>
+                                      {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
+                                    </select>
+                                    <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                                      Photo
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        onChange={(e)=> e.target.files?.[0] && setDamageEntryPhoto(entry.id, e.target.files[0])}/>
+                                    </label>
+                                    <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteDamageEntry(entry.id)}>Del</button>
+                                  </div>
+                                  {renderFileName(entry.photo, "indent")}
+                                </div>
+                              ))}
+                              {!(activeItem.data.damageEntries || []).length && (
+                                <div className="tiny" style={{marginTop:4}}>No hail indicators added.</div>
+                              )}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Downspout Detail Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.detailPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Overview Photo (optional)</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Optional notes..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Downspout</button>
+                          </>
+                        )}
+
+                        {/* === WIND === */}
+                        {activeItem.type === "wind" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Slope Direction</div>
+                              <div className="radioGrid wrap">
+                                {WIND_DIRS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Creased Count</div>
+                              <div className="row">
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("creasedCount", Math.max(0, (activeItem.data.creasedCount || 0) - 1))}
+                                >
+                                  −
+                                </button>
+                                <input
+                                  className="inp"
+                                  type="number"
+                                  min="0"
+                                  value={activeItem.data.creasedCount || 0}
+                                  onChange={(e)=>updateItemData("creasedCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                />
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("creasedCount", (activeItem.data.creasedCount || 0) + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Torn/Missing Count</div>
+                              <div className="row">
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("tornMissingCount", Math.max(0, (activeItem.data.tornMissingCount || 0) - 1))}
+                                >
+                                  −
+                                </button>
+                                <input
+                                  className="inp"
+                                  type="number"
+                                  min="0"
+                                  value={activeItem.data.tornMissingCount || 0}
+                                  onChange={(e)=>updateItemData("tornMissingCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                />
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("tornMissingCount", (activeItem.data.tornMissingCount || 0) + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Creased Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("creasedPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.creasedPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Torn/Missing Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("tornMissingPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.tornMissingPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Overview Photo (optional)</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("overviewPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Describe observed condition..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Wind Item</button>
+                          </>
+                        )}
+
+                        {/* === OBS === */}
+                        {activeItem.type === "obs" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Code</div>
+                              <select className="inp" value={activeItem.data.code} onChange={(e)=>updateItemData("code", e.target.value)}>
+                                {OBS_CODES.map(c => <option key={c.code} value={c.code}>{c.code} — {c.label}</option>)}
+                              </select>
+                              <div className="tiny" style={{marginTop:6}}>Tip: drag to draw a purple observation area, then drag the corners to match the shape.</div>
+                              {activeItem.data.code === "DDM" && (
+                                <div className="tiny dashAlert" style={{marginTop:6}}>Deferred maintenance observations require a photo and caption.</div>
+                              )}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Observation Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setObsPhoto(e.target.files[0])}/>
+                              {renderFileName(activeItem.data.photo)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Short, objective note..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Observation</button>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          <div className={"dashDock" + (dashCollapsed ? " collapsed" : "")}>
+                <div className="dashTitle">
+                  {!dashCollapsed && <span>Dashboard</span>}
+                  <div style={{display:"flex", gap:8}}>
+                    <button
+                      className="btn"
+                      style={{padding:"10px 10px"}}
+                      type="button"
+                      onClick={()=>setDashCollapsed(v=>!v)}
+                      title={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                      aria-label={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
+                    >
+                      <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
+                    </button>
+                  </div>
+                </div>
+
+                {!dashCollapsed && (
+                  <>
+                    {/* MAIN: hail + wind (above) */}
+                    <div className="dashScroll" style={{marginBottom:12}}>
+                      <table className="dashTable">
+                        <thead>
+                          <tr>
+                            <th>Direction</th>
+                            <th>Test Square Hits</th>
+                            <th>Max Hail Size</th>
+                            <th>Wind (Creased)</th>
+                            <th>Wind (Torn/Missing)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {WIND_DIRS.map(dir => {
+                            const d = dashboard[dir];
+                            return (
+                              <tr key={dir}>
+                                <td style={{fontWeight:1300}}>{dir}</td>
+                                <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
+                                <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
+                                <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
+                                <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* SECONDARY: hail indicators from appurtenances + downspouts */}
+                    <div className="dashScroll">
+                      <table className="dashTable">
+                        <thead>
+                          <tr>
+                            <th>Direction</th>
+                            <th>Appurtenances (Max)</th>
+                            <th>Downspouts (Max)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {CARDINAL_DIRS.map(dir => {
+                            const d = dashboard[dir];
+                            return (
+                              <tr key={dir}>
+                                <td style={{fontWeight:1300}}>{dir}</td>
+                                <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
+                                <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="tiny" style={{marginTop:10}}>
+                      Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          ) : (
+          <div className="reportView">
+            <div className="reportTabs">
+              {REPORT_TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={"reportTabBtn " + (reportTab === tab.key ? "active" : "")}
+                  onClick={() => setReportTab(tab.key)}
+                >
+                  {tab.label}
+                  {tab.key === "project" && (
+                    <span className={"statusDot " + (completeness.project ? "ready" : "")} />
+                  )}
+                  {tab.key === "description" && (
+                    <span className={"statusDot " + (completeness.description ? "ready" : "")} />
+                  )}
+                  {tab.key === "inspection" && (
+                    <span className={"statusDot " + (completeness.inspection ? "ready" : "")} />
+                  )}
+                  {tab.key === "writer" && (
+                    <span className={"statusDot " + (completeness.writer ? "ready" : "")} />
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="reportContent">
+              {reportTab === "project" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Project Information</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Report / Claim / Job #</div>
+                        <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateReportSection("project", "reportNumber", e.target.value)} placeholder="Enter number" />
+                      </div>
+                      <div>
+                        <div className="lbl">Project Name</div>
+                        <input className="inp" value={reportData.project.projectName} onChange={(e)=>updateReportSection("project", "projectName", e.target.value)} placeholder="Morris residence" />
+                      </div>
+                      <div>
+                        <div className="lbl">Property Address</div>
+                        <input className="inp" value={reportData.project.address} onChange={(e)=>updateReportSection("project", "address", e.target.value)} placeholder="Street address" />
+                      </div>
+                      <div>
+                        <div className="lbl">City</div>
+                        <input className="inp" value={reportData.project.city} onChange={(e)=>updateReportSection("project", "city", e.target.value)} placeholder="City" />
+                      </div>
+                      <div>
+                        <div className="lbl">State</div>
+                        <input className="inp" value={reportData.project.state} onChange={(e)=>updateReportSection("project", "state", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">ZIP</div>
+                        <input className="inp" value={reportData.project.zip} onChange={(e)=>updateReportSection("project", "zip", e.target.value)} placeholder="Zip" />
+                      </div>
+                      <div>
+                        <div className="lbl">Inspection Date</div>
+                        <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Start Time</div>
+                        <input className="inp" type="time" value={reportData.project.startTime} onChange={(e)=>updateReportSection("project", "startTime", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">End Time</div>
+                        <input className="inp" type="time" value={reportData.project.endTime} onChange={(e)=>updateReportSection("project", "endTime", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Front Faces (from diagram)</div>
+                        <div className="inlineTag">{frontFaces}</div>
+                      </div>
+                      <div>
+                        <div className="lbl">General Orientation</div>
+                        <input className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)} placeholder="Faced approximately west" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Parties Present</div>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+                      <div className="tiny">List everyone present during the inspection.</div>
+                      <button className="btn btnPrimary" type="button" onClick={addParty}>Add Person</button>
+                    </div>
+                    <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                      {reportData.project.parties.map(person => (
+                        <div key={person.id} className="personRow">
+                          <div>
+                            <div className="lbl">Name</div>
+                            <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Name" />
+                          </div>
+                          <div>
+                            <div className="lbl">Role</div>
+                            <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
+                              <option value="">Select</option>
+                              {PARTY_ROLES.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Company</div>
+                            <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company (optional)" />
+                          </div>
+                          <div>
+                            <div className="lbl">Contact</div>
+                            <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone/email (optional)" />
+                          </div>
+                          <div className="personActions">
+                            <button className="btn btnDanger" type="button" onClick={() => removeParty(person.id)}>Remove</button>
+                          </div>
+                        </div>
+                      ))}
+                      {!reportData.project.parties.length && (
+                        <div className="tiny">No parties added yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "description" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Structure</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Occupancy Type</div>
+                        <select className="inp" value={reportData.description.occupancy} onChange={(e)=>updateReportSection("description", "occupancy", e.target.value)}>
+                          <option value="">Select</option>
+                          {OCCUPANCY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Number of Stories</div>
+                        <input className="inp" value={reportData.description.stories} onChange={(e)=>updateReportSection("description", "stories", e.target.value)} placeholder="e.g., 1, 2" />
+                      </div>
+                      <div>
+                        <div className="lbl">Framing Type</div>
+                        <select className="inp" value={reportData.description.framing} onChange={(e)=>updateReportSection("description", "framing", e.target.value)}>
+                          <option value="">Select</option>
+                          {FRAMING_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Foundation Type</div>
+                        <select className="inp" value={reportData.description.foundation} onChange={(e)=>updateReportSection("description", "foundation", e.target.value)}>
+                          <option value="">Select</option>
+                          {FOUNDATION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Exterior Wall Finishes</div>
+                      <div className="chipList">
+                        {EXTERIOR_FINISHES.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.exteriorFinishes.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "exteriorFinishes", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Trim Components Present</div>
+                      <div className="chipList">
+                        {TRIM_COMPONENTS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.trimComponents.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "trimComponents", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">Window Type</div>
+                        <select className="inp" value={reportData.description.windowType} onChange={(e)=>updateReportSection("description", "windowType", e.target.value)}>
+                          <option value="">Select</option>
+                          {WINDOW_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Screens Present</div>
+                        <select className="inp" value={reportData.description.windowScreens} onChange={(e)=>updateReportSection("description", "windowScreens", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Garage</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Garage Present</div>
+                        <select className="inp" value={reportData.description.garagePresent} onChange={(e)=>updateReportSection("description", "garagePresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Garage Bays</div>
+                        <input className="inp" value={reportData.description.garageBays} onChange={(e)=>updateReportSection("description", "garageBays", e.target.value)} placeholder="e.g., 2" />
+                      </div>
+                      <div>
+                        <div className="lbl">Overhead Doors</div>
+                        <input className="inp" value={reportData.description.garageDoors} onChange={(e)=>updateReportSection("description", "garageDoors", e.target.value)} placeholder="Number of doors" />
+                      </div>
+                      <div>
+                        <div className="lbl">Door Panel Material</div>
+                        <select className="inp" value={reportData.description.garageDoorMaterial} onChange={(e)=>updateReportSection("description", "garageDoorMaterial", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_DOOR_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Garage Opens To</div>
+                        <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Site Conditions</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Fencing Present</div>
+                        <select className="inp" value={reportData.description.fencingPresent} onChange={(e)=>updateReportSection("description", "fencingPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Fence Type</div>
+                        <select className="inp" value={reportData.description.fenceType} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)}>
+                          <option value="">Select</option>
+                          {FENCE_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Terrain</div>
+                        <select className="inp" value={reportData.description.terrain} onChange={(e)=>updateReportSection("description", "terrain", e.target.value)}>
+                          <option value="">Select</option>
+                          {TERRAIN_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Trees & Vegetation</div>
+                        <select className="inp" value={reportData.description.vegetation} onChange={(e)=>updateReportSection("description", "vegetation", e.target.value)}>
+                          <option value="">Select</option>
+                          {VEGETATION_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Fence Locations</div>
+                      <div className="chipList">
+                        {FENCE_LOCATIONS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.fenceLocations.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "fenceLocations", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Roof Information</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Roof Geometry</div>
+                        <select className="inp" value={reportData.description.roofGeometry} onChange={(e)=>updateReportSection("description", "roofGeometry", e.target.value)}>
+                          <option value="">Select</option>
+                          {ROOF_GEOMETRIES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Covering</div>
+                        <input className="inp" value={reportData.description.roofCovering} onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Length</div>
+                        <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Exposure</div>
+                        <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Ridge Shingle Width</div>
+                        <input className="inp" value={reportData.description.ridgeWidth} onChange={(e)=>updateReportSection("description", "ridgeWidth", e.target.value)} placeholder="e.g., 12 inch" />
+                      </div>
+                      <div>
+                        <div className="lbl">Ridge Shingle Exposure</div>
+                        <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inch" />
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Slopes</div>
+                        <input className="inp" value={reportData.description.roofSlopes} onChange={(e)=>updateReportSection("description", "roofSlopes", e.target.value)} placeholder="e.g., 6:12, 8:12" />
+                      </div>
+                      <div>
+                        <div className="lbl">Gutters Present</div>
+                        <select className="inp" value={reportData.description.guttersPresent} onChange={(e)=>updateReportSection("description", "guttersPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Downspouts Present</div>
+                        <select className="inp" value={reportData.description.downspoutsPresent} onChange={(e)=>updateReportSection("description", "downspoutsPresent", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Mixed">Mixed</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Roof Appurtenances</div>
+                      <div className="chipList">
+                        {ROOF_APPURTENANCES.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.description.roofAppurtenances.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "roofAppurtenances", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">EagleView Obtained</div>
+                        <select className="inp" value={reportData.description.eagleView} onChange={(e)=>updateReportSection("description", "eagleView", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Roof Area</div>
+                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 42 squares" />
+                      </div>
+                      <div>
+                        <div className="lbl">Attachment Letter</div>
+                        <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
+                      </div>
+                    </div>
+                    <div className="sectionHint">
+                      Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "background" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Reported Background</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Reported Date of Loss</div>
+                        <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Information Source</div>
+                        <input className="inp" value={reportData.background.source} onChange={(e)=>updateReportSection("background", "source", e.target.value)} placeholder="Insured, contractor, claim file..." />
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Reported Concerns</div>
+                      <div className="chipList">
+                        {BACKGROUND_CONCERNS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.background.concerns.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("background", "concerns", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Background Notes</div>
+                      <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
+                    </div>
+                  </div>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Access & Limitations</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Roof Access Obtained</div>
+                        <select className="inp" value={reportData.background.accessObtained} onChange={(e)=>updateReportSection("background", "accessObtained", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                          <option value="Partial">Partial</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Areas Not Inspected</div>
+                        <input className="inp" value={reportData.background.limitations.join(", ")} onChange={(e)=>updateReportSection("background", "limitations", e.target.value.split(",").map(v => v.trim()).filter(Boolean))} placeholder="e.g., rear slope (wet), garage roof (locked)" />
+                      </div>
+                    </div>
+                    <div className="sectionHint">Separate areas with commas. Reasons can be included inline.</div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "writer" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Report Writer Header</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Letterhead / Addressee Block</div>
+                        <textarea className="inp" value={reportData.writer.letterhead} onChange={(e)=>updateReportSection("writer", "letterhead", e.target.value)} placeholder="Company name, address lines..." />
+                        <div className="sectionHint">Use line breaks to match your formal letter layout.</div>
+                      </div>
+                      <div>
+                        <div className="lbl">Attention</div>
+                        <input className="inp" value={reportData.writer.attention} onChange={(e)=>updateReportSection("writer", "attention", e.target.value)} placeholder="Attention: Name" />
+                      </div>
+                      <div>
+                        <div className="lbl">Reference Line</div>
+                        <input className="inp" value={reportData.writer.reference} onChange={(e)=>updateReportSection("writer", "reference", e.target.value)} placeholder="Re: Residence / Report type" />
+                      </div>
+                      <div>
+                        <div className="lbl">Subject Line</div>
+                        <input className="inp" value={reportData.writer.subject} onChange={(e)=>updateReportSection("writer", "subject", e.target.value)} placeholder="Roof Evaluation" />
+                      </div>
+                      <div>
+                        <div className="lbl">Property Address Block</div>
+                        <textarea className="inp" value={reportData.writer.propertyAddress} onChange={(e)=>updateReportSection("writer", "propertyAddress", e.target.value)} placeholder="Street, City, State ZIP" />
+                      </div>
+                      <div>
+                        <div className="lbl">Client File</div>
+                        <input className="inp" value={reportData.writer.clientFile} onChange={(e)=>updateReportSection("writer", "clientFile", e.target.value)} placeholder="Client File #" />
+                      </div>
+                      <div>
+                        <div className="lbl">Haag File</div>
+                        <input className="inp" value={reportData.writer.haagFile} onChange={(e)=>updateReportSection("writer", "haagFile", e.target.value)} placeholder="Haag File #" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Narrative</div>
+                    <div style={{marginBottom:12}}>
+                      <div className="lbl">Introduction Paragraph</div>
+                      <textarea className="inp" value={reportData.writer.introduction} onChange={(e)=>updateReportSection("writer", "introduction", e.target.value)} placeholder="Complying with your request..." />
+                    </div>
+                    <div style={{marginBottom:12}}>
+                      <div className="lbl">Primary Narrative</div>
+                      <textarea className="inp" value={reportData.writer.narrative} onChange={(e)=>updateReportSection("writer", "narrative", e.target.value)} placeholder="Engineering report language, limitations, etc." />
+                    </div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Description Notes</div>
+                        <textarea className="inp" value={reportData.writer.description} onChange={(e)=>updateReportSection("writer", "description", e.target.value)} placeholder="Optional descriptive paragraph..." />
+                      </div>
+                      <div>
+                        <div className="lbl">Background Notes</div>
+                        <textarea className="inp" value={reportData.writer.background} onChange={(e)=>updateReportSection("writer", "background", e.target.value)} placeholder="Optional background paragraph..." />
+                      </div>
+                      <div>
+                        <div className="lbl">Inspection Notes</div>
+                        <textarea className="inp" value={reportData.writer.inspection} onChange={(e)=>updateReportSection("writer", "inspection", e.target.value)} placeholder="Optional inspection paragraph..." />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {reportTab === "inspection" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Overview</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Inspection Performed</div>
+                        <select className="inp" value={reportData.inspection.performed} onChange={(e)=>updateReportSection("inspection", "performed", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">Not Performed</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Test Square Summary (from diagram)</div>
+                        <table className="dashTable" style={{marginTop:6}}>
+                          <thead>
+                            <tr>
+                              <th>Dir</th>
+                              <th>Hits</th>
+                              <th>Max Hail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {WIND_DIRS.map(dir => (
+                              <tr key={`report-ts-${dir}`}>
+                                <td style={{fontWeight:1200}}>{dir}</td>
+                                <td>{dashboard[dir].tsHits}</td>
+                                <td>{dashboard[dir].tsMaxHail ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="sectionHint">Use this summary as a reference while logging observations.</div>
+                  </div>
+
+                  {INSPECTION_COMPONENTS.map(component => {
+                    const data = reportData.inspection.components[component.key];
+                    return (
+                      <div className="reportCard" key={component.key}>
+                        <div className="reportSectionTitle">{component.label}</div>
+                        <div style={{marginBottom:10}}>
+                          <div className="lbl">Observed Conditions</div>
+                          <div className="chipList">
+                            {OBSERVED_CONDITIONS.map(option => (
+                              <div
+                                key={option}
+                                className={"chip " + (data.conditions.includes(option) ? "active" : "")}
+                                onClick={() => toggleInspectionList(component.key, "conditions", option)}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">No Notable Conditions Observed</div>
+                            <select className="inp" value={data.none ? "Yes" : "No"} onChange={(e)=>updateInspection(component.key, "none", e.target.value === "Yes")}>
+                              <option value="No">No</option>
+                              <option value="Yes">Yes</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Maximum Observed Size</div>
+                            <select className="inp" value={data.maxSize} onChange={(e)=>updateInspection(component.key, "maxSize", e.target.value)}>
+                              <option value="">Select</option>
+                              {SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Directions Observed</div>
+                            <div className="chipList">
+                              {WIND_DIRS.map(dir => (
+                                <div
+                                  key={dir}
+                                  className={"chip " + (data.directions.includes(dir) ? "active" : "")}
+                                  onClick={() => toggleInspectionList(component.key, "directions", dir)}
+                                >
+                                  {dir}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Notes</div>
+                          <textarea className="inp" value={data.notes} onChange={(e)=>updateInspection(component.key, "notes", e.target.value)} placeholder="Observed conditions, factual only..." />
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Associated Photos (file names)</div>
+                          <input
+                            className="inp"
+                            value={data.photos.join(", ")}
+                            onChange={(e)=>updateInspection(component.key, "photos", e.target.value.split(",").map(v => v.trim()).filter(Boolean))}
+                            placeholder="e.g., IMG_1021, IMG_1022"
+                          />
+                          <div className="sectionHint">Use file names to track photos; images can be attached later.</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </div>
+          )}
+
+          {viewMode === "diagram" && isMobile && (
+            <>
+              <div
+                className={"panelOverlay" + (mobilePanelOpen ? " show" : "")}
+                onClick={() => setMobilePanelOpen(false)}
+              />
+              <div className="mobileDock">
+                <button
+                  className={"btn " + (mobilePanelOpen ? "btnPrimary" : "")}
+                  onClick={() => setMobilePanelOpen(v => !v)}
+                >
+                  {mobilePanelOpen ? "Close Sidebar" : "Open Sidebar"}
+                </button>
+                <button className="btn btnPrimary" onClick={() => { setPanelView("items"); setMobilePanelOpen(true); }}>
+                  Items ({items.length})
+                </button>
+                <button
+                  className={"btn " + (activeItem ? "btnPrimary" : "")}
+                  type="button"
+                  disabled={!activeItem}
+                  onClick={() => activeItem && (setPanelView("props"), setMobilePanelOpen(true))}
+                >
+                  Selected
+                </button>
+              </div>
+            </>
+          )}
+
+          <div className="printSheet">
+            <div className="printPage">
+              <div className="printTitlePage">
+                <div className="printTitleHero">Titan Roof Version 4.0</div>
+                <div className="printTitle">{reportData.project.projectName || residenceName}</div>
+                <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                <div className="printMetaGrid">
+                  <div className="printMetaCard">
+                    <div className="lbl">Property</div>
+                    <div className="printBlock">{valueOrDash(reportData.project.projectName || residenceName)}</div>
+                    <div className="printBlock">{formatAddressLine(reportData.project)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">Inspection</div>
+                    <div className="printBlock">Date: {valueOrDash(reportData.project.inspectionDate)}</div>
+                    <div className="printBlock">Start: {valueOrDash(reportData.project.startTime)}</div>
+                    <div className="printBlock">End: {valueOrDash(reportData.project.endTime)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">File References</div>
+                    <div className="printBlock">Report #: {valueOrDash(reportData.project.reportNumber)}</div>
+                    <div className="printBlock">Client File: {valueOrDash(reportData.writer.clientFile)}</div>
+                    <div className="printBlock">Haag File: {valueOrDash(reportData.writer.haagFile)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Index</h3>
+                <ol className="printIndexList">
+                  {exportIndexItems.map(item => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Report Writer</h3>
+                <div className="printBlock">{formatBlock(reportData.writer.letterhead)}</div>
+                <div className="printDivider" />
+                <div className="printKeyValue">
+                  <div className="lbl">Attention</div>
+                  <div>{valueOrDash(reportData.writer.attention)}</div>
+                  <div className="lbl">Reference</div>
+                  <div>{valueOrDash(reportData.writer.reference)}</div>
+                  <div className="lbl">Subject</div>
+                  <div>{valueOrDash(reportData.writer.subject)}</div>
+                  <div className="lbl">Property</div>
+                  <div className="printBlock">{formatBlock(reportData.writer.propertyAddress)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.introduction)}</div>
+                <div className="printBlock">{formatBlock(reportData.writer.narrative)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Project Information</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Report #</div>
+                  <div>{valueOrDash(reportData.project.reportNumber)}</div>
+                  <div className="lbl">Project Name</div>
+                  <div>{valueOrDash(reportData.project.projectName || residenceName)}</div>
+                  <div className="lbl">Address</div>
+                  <div>{formatAddressLine(reportData.project)}</div>
+                  <div className="lbl">Front Faces</div>
+                  <div>{frontFaces}</div>
+                  <div className="lbl">Orientation</div>
+                  <div>{valueOrDash(reportData.project.orientation)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">Parties Present: {reportData.project.parties.length ? reportData.project.parties.map(p => `${p.name || "Unnamed"} (${p.role || "Role"})`).join(", ") : "None listed."}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Description</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Occupancy</div>
+                  <div>{valueOrDash(reportData.description.occupancy)}</div>
+                  <div className="lbl">Stories</div>
+                  <div>{valueOrDash(reportData.description.stories)}</div>
+                  <div className="lbl">Framing</div>
+                  <div>{valueOrDash(reportData.description.framing)}</div>
+                  <div className="lbl">Foundation</div>
+                  <div>{valueOrDash(reportData.description.foundation)}</div>
+                  <div className="lbl">Exterior Finishes</div>
+                  <div>{joinList(reportData.description.exteriorFinishes)}</div>
+                  <div className="lbl">Trim Components</div>
+                  <div>{joinList(reportData.description.trimComponents)}</div>
+                  <div className="lbl">Window Type</div>
+                  <div>{valueOrDash(reportData.description.windowType)}</div>
+                  <div className="lbl">Screens</div>
+                  <div>{valueOrDash(reportData.description.windowScreens)}</div>
+                  <div className="lbl">Garage</div>
+                  <div>{valueOrDash(reportData.description.garagePresent)}</div>
+                  <div className="lbl">Garage Bays</div>
+                  <div>{valueOrDash(reportData.description.garageBays)}</div>
+                  <div className="lbl">Garage Doors</div>
+                  <div>{valueOrDash(reportData.description.garageDoors)}</div>
+                  <div className="lbl">Garage Material</div>
+                  <div>{valueOrDash(reportData.description.garageDoorMaterial)}</div>
+                  <div className="lbl">Garage Opens To</div>
+                  <div>{valueOrDash(reportData.description.garageElevation)}</div>
+                  <div className="lbl">Fencing</div>
+                  <div>{valueOrDash(reportData.description.fencingPresent)}</div>
+                  <div className="lbl">Fence Type</div>
+                  <div>{valueOrDash(reportData.description.fenceType)}</div>
+                  <div className="lbl">Fence Locations</div>
+                  <div>{joinList(reportData.description.fenceLocations)}</div>
+                  <div className="lbl">Terrain</div>
+                  <div>{valueOrDash(reportData.description.terrain)}</div>
+                  <div className="lbl">Vegetation</div>
+                  <div>{valueOrDash(reportData.description.vegetation)}</div>
+                  <div className="lbl">Roof Geometry</div>
+                  <div>{valueOrDash(reportData.description.roofGeometry)}</div>
+                  <div className="lbl">Roof Covering</div>
+                  <div>{valueOrDash(reportData.description.roofCovering)}</div>
+                  <div className="lbl">Shingle Length</div>
+                  <div>{valueOrDash(reportData.description.shingleLength)}</div>
+                  <div className="lbl">Shingle Exposure</div>
+                  <div>{valueOrDash(reportData.description.shingleExposure)}</div>
+                  <div className="lbl">Ridge Width</div>
+                  <div>{valueOrDash(reportData.description.ridgeWidth)}</div>
+                  <div className="lbl">Ridge Exposure</div>
+                  <div>{valueOrDash(reportData.description.ridgeExposure)}</div>
+                  <div className="lbl">Roof Slopes</div>
+                  <div>{valueOrDash(reportData.description.roofSlopes)}</div>
+                  <div className="lbl">Gutters</div>
+                  <div>{valueOrDash(reportData.description.guttersPresent)}</div>
+                  <div className="lbl">Downspouts</div>
+                  <div>{valueOrDash(reportData.description.downspoutsPresent)}</div>
+                  <div className="lbl">Roof Appurtenances</div>
+                  <div>{joinList(reportData.description.roofAppurtenances)}</div>
+                  <div className="lbl">EagleView</div>
+                  <div>{valueOrDash(reportData.description.eagleView)}</div>
+                  <div className="lbl">Roof Area</div>
+                  <div>{valueOrDash(reportData.description.roofArea)}</div>
+                  <div className="lbl">Attachment Letter</div>
+                  <div>{valueOrDash(reportData.description.attachmentLetter)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.description)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Background</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Date of Loss</div>
+                  <div>{valueOrDash(reportData.background.dateOfLoss)}</div>
+                  <div className="lbl">Source</div>
+                  <div>{valueOrDash(reportData.background.source)}</div>
+                  <div className="lbl">Concerns</div>
+                  <div>{joinList(reportData.background.concerns)}</div>
+                  <div className="lbl">Access Obtained</div>
+                  <div>{valueOrDash(reportData.background.accessObtained)}</div>
+                  <div className="lbl">Limitations</div>
+                  <div>{joinList(reportData.background.limitations)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.background.notes)}</div>
+                <div className="printBlock">{formatBlock(reportData.writer.background)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Inspection Summary</h3>
+                <div className="printKeyValue">
+                  <div className="lbl">Inspection Performed</div>
+                  <div>{valueOrDash(reportData.inspection.performed)}</div>
+                </div>
+                <div className="printDivider" />
+                <div className="printGrid">
+                  {INSPECTION_COMPONENTS.map(component => {
+                    const data = reportData.inspection.components[component.key];
+                    const detailParts = [];
+                    if(data.none) detailParts.push("No notable conditions.");
+                    if(data.conditions.length) detailParts.push(`Conditions: ${data.conditions.join(", ")}`);
+                    if(data.maxSize) detailParts.push(`Max size: ${data.maxSize}"`);
+                    if(data.directions.length) detailParts.push(`Directions: ${data.directions.join(", ")}`);
+                    if(data.notes) detailParts.push(`Notes: ${data.notes}`);
+                    if(data.photos.length) detailParts.push(`Photos: ${data.photos.join(", ")}`);
+                    return (
+                      <div className="printCard" key={`inspection-${component.key}`}>
+                        <div style={{fontWeight:1200}}>{component.label}</div>
+                        <div className="tiny">{detailParts.length ? detailParts.join(" ") : "No details recorded."}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="printDivider" />
+                <div className="printBlock">{formatBlock(reportData.writer.inspection)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printHeader">
+                <div>
+                  <div className="printTitle">{residenceName} • Roof Diagram Export</div>
+                  <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                </div>
+              </div>
+
+              <div className="printDiagramWrap">
+                <div className="printDiagramSheet">
+                  {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+                  <svg className="gridSvg" width="100%" height="100%" viewBox="0 0 1024 720" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
+                    {items.filter(i => i.type === "ts").map(renderTSPrint)}
+                    {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsAreaPrint)}
+                  </svg>
+                  {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                    const m = markerMeta(i);
+                    return (
+                      <div
+                        key={`print-marker-${i.id}`}
+                        className="marker"
+                        style={{
+                          left: `${i.x * 100}%`,
+                          top: `${i.y * 100}%`,
+                          background: m.bg,
+                          borderRadius: m.radius
+                        }}
+                      >
+                        {m.label}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="printSection" style={{marginTop:16}}>
+                <h3>Dashboard</h3>
+                <table className="dashTable" style={{marginBottom:12}}>
+                  <thead>
+                    <tr>
+                      <th>Direction</th>
+                      <th>Test Square Hits</th>
+                      <th>Max Hail Size</th>
+                      <th>Wind (Creased)</th>
+                      <th>Wind (Torn/Missing)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WIND_DIRS.map(dir => (
+                      <tr key={`print-${dir}`}>
+                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td>{dashboard[dir].tsHits}</td>
+                        <td>{dashboard[dir].tsMaxHail>0 ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
+                        <td>{dashboard[dir].wind.creased}</td>
+                        <td>{dashboard[dir].wind.torn_missing}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <table className="dashTable">
+                  <thead>
+                    <tr>
+                      <th>Direction</th>
+                      <th>Appurtenances (Max)</th>
+                      <th>Downspouts (Max)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CARDINAL_DIRS.map(dir => (
+                      <tr key={`print-hail-${dir}`}>
+                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td>{dashboard[dir].aptMax>0 ? `${dashboard[dir].aptMax}"` : "—"}</td>
+                        <td>{dashboard[dir].dsMax>0 ? `${dashboard[dir].dsMax}"` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Test Squares</h3>
+                <div className="printGrid">
+                  {items.filter(i => i.type === "ts").map(ts => {
+                    const tsPhotos = collectTsPhotos(ts);
+                    return (
+                      <div className="printCard" key={`print-ts-${ts.id}`}>
+                        <div style={{fontWeight:1200}}>{ts.name} • {ts.data.dir}</div>
+                        <div className="tiny">Hits: {(ts.data.bruises||[]).length} • Conditions: {(ts.data.conditions||[]).length}</div>
+                        {tsPhotos.map((p, idx) => (
+                          <PrintPhoto
+                            key={`${ts.id}-photo-${idx}`}
+                            photo={p}
+                            alt={p.caption}
+                            caption={p.caption}
+                            style={{marginTop:8}}
+                          />
+                        ))}
+                        {!tsPhotos.length && <div className="tiny" style={{marginTop:6}}>No photos attached.</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="printSection">
+                <h3>Wind Observations</h3>
+                <table className="dashTable">
+                  <thead>
+                    <tr>
+                      <th>Direction</th>
+                      <th>Creased</th>
+                      <th>Torn/Missing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WIND_DIRS.map(dir => (
+                      <tr key={`wind-${dir}`}>
+                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td>{dashboard[dir].wind.creased}</td>
+                        <td>{dashboard[dir].wind.torn_missing}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="printGrid" style={{marginTop:10}}>
+                  {items.filter(i => i.type === "wind").map(w => (
+                    <div className="printCard" key={`wind-${w.id}`}>
+                      <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>
+                      <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
+                      {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (
+                        <>
+                          {w.data.creasedPhoto?.url && (
+                            <PrintPhoto
+                              photo={w.data.creasedPhoto}
+                              alt="Creased wind photo"
+                              caption={photoCaption(w.data.caption || "Creased photo", w.data.creasedPhoto)}
+                              style={{marginTop:8}}
+                            />
+                          )}
+                          {w.data.tornMissingPhoto?.url && (
+                            <PrintPhoto
+                              photo={w.data.tornMissingPhoto}
+                              alt="Torn or missing wind photo"
+                              caption={photoCaption(w.data.caption || "Torn/missing photo", w.data.tornMissingPhoto)}
+                              style={{marginTop:8}}
+                            />
+                          )}
+                          {w.data.overviewPhoto?.url && (
+                            <PrintPhoto
+                              photo={w.data.overviewPhoto}
+                              alt="Wind overview"
+                              caption={photoCaption(w.data.caption || "Overview photo", w.data.overviewPhoto)}
+                              style={{marginTop:8}}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <div className="tiny" style={{marginTop:6}}>No photos attached.</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="printSection">
+                <h3>Appurtenances + Downspouts</h3>
+                <table className="dashTable" style={{marginBottom:10}}>
+                  <thead>
+                    <tr>
+                      <th>Direction</th>
+                      <th>Appurtenance Spatter Max</th>
+                      <th>Appurtenance Dent Max</th>
+                      <th>Downspout Spatter Max</th>
+                      <th>Downspout Dent Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CARDINAL_DIRS.map(dir => (
+                      <tr key={`hail-${dir}`}>
+                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
+                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
+                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
+                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="printGrid">
+                  {items.filter(i => i.type === "apt" || i.type === "ds").map(it => (
+                    <div className="printCard" key={`hail-${it.id}`}>
+                      <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>
+                      <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
+                      {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (
+                        (it.data.damageEntries || []).map((entry, idx) => (
+                          entry.photo?.url ? (
+                            <PrintPhoto
+                              key={`${it.id}-damage-${entry.id}`}
+                              photo={entry.photo}
+                              alt="Hail indicator"
+                              caption={photoCaption(damageEntryLabel(entry, idx), entry.photo)}
+                              style={{marginTop:8}}
+                            />
+                          ) : null
+                        ))
+                      ) : (
+                        <div className="tiny" style={{marginTop:6}}>No hail indicator photos attached.</div>
+                      )}
+                      {it.data.detailPhoto?.url && (
+                        <PrintPhoto
+                          photo={it.data.detailPhoto}
+                          alt="Detail"
+                          caption={photoCaption(it.data.caption || "Detail photo", it.data.detailPhoto)}
+                          style={{marginTop:8}}
+                        />
+                      )}
+                      {it.data.overviewPhoto?.url && (
+                        <PrintPhoto
+                          photo={it.data.overviewPhoto}
+                          alt="Overview"
+                          caption={photoCaption("Overview photo", it.data.overviewPhoto)}
+                          style={{marginTop:8}}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="printSection">
+                <h3>Observations</h3>
+                <div className="printGrid">
+                  {items.filter(i => i.type === "obs").map(obs => (
+                    <div className="printCard" key={`obs-${obs.id}`}>
+                      <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>
+                      <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
+                      {obs.data.photo?.url ? (
+                        <PrintPhoto
+                          photo={obs.data.photo}
+                          alt="Observation"
+                          caption={photoCaption(obs.data.caption || "Observation photo", obs.data.photo)}
+                          style={{marginTop:8}}
+                        />
+                      ) : (
+                        <div className="tiny" style={{marginTop:6}}>No photo attached.</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          </>
+        );
+      }
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
