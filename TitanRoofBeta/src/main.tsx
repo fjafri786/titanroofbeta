@@ -134,6 +134,18 @@ import "./styles.css";
         return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
       }
 
+      function distanceToSegment(pt, a, b){
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        if(dx === 0 && dy === 0){
+          return Math.hypot(pt.x - a.x, pt.y - a.y);
+        }
+        const t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / (dx * dx + dy * dy);
+        const clamped = Math.max(0, Math.min(1, t));
+        const proj = { x: a.x + clamped * dx, y: a.y + clamped * dy };
+        return Math.hypot(pt.x - proj.x, pt.y - proj.y);
+      }
+
       function readFileAsDataUrl(file){
         if(!file) return Promise.resolve(null);
         return new Promise((resolve, reject) => {
@@ -146,13 +158,13 @@ import "./styles.css";
       async function fileToObj(file){
         if(!file) return null;
         const dataUrl = await readFileAsDataUrl(file);
-        return { name: file.name, url: dataUrl, dataUrl };
+        return { name: file.name, url: dataUrl, dataUrl, type: file.type };
       }
       function reviveFileObj(obj){
         if(!obj) return null;
         const dataUrl = obj.dataUrl || obj.url;
         if(!dataUrl) return null;
-        return { name: obj.name || "image", url: dataUrl, dataUrl };
+        return { name: obj.name || "image", url: dataUrl, dataUrl, type: obj.type };
       }
       function revokeFileObj(obj){
         if(obj?.url && obj.url.startsWith("blob:")) URL.revokeObjectURL(obj.url);
@@ -232,6 +244,38 @@ import "./styles.css";
             </svg>
           );
         }
+        if(name === "dash"){
+          return (
+            <svg {...common}>
+              <rect x="3" y="3" width="7" height="7" rx="2" />
+              <rect x="14" y="3" width="7" height="7" rx="2" />
+              <rect x="3" y="14" width="7" height="7" rx="2" />
+              <path d="M14 14h7v7h-7z" />
+            </svg>
+          );
+        }
+        if(name === "dot"){
+          return (
+            <svg {...common}>
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+          );
+        }
+        if(name === "poly"){
+          return (
+            <svg {...common}>
+              <path d="M5 17l3-9 6 2 5-3-3 10H5z" />
+            </svg>
+          );
+        }
+        if(name === "arrow"){
+          return (
+            <svg {...common}>
+              <path d="M5 19L19 5" />
+              <path d="M15 5h4v4" />
+            </svg>
+          );
+        }
         return null;
       };
 
@@ -242,6 +286,7 @@ import "./styles.css";
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
         const [tool, setTool] = useState(null);
+        const [obsTool, setObsTool] = useState("dot");
         const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
         const [toolbarDragging, setToolbarDragging] = useState(false);
         const [toolbarLocked, setToolbarLocked] = useState(false);
@@ -356,21 +401,37 @@ import "./styles.css";
           shingleExposure: "5 inch exposure",
           metalKind: "SS",
           metalPanelWidth: "24 inch",
-          otherDesc: "",
-          diagramBg: null
+          otherDesc: ""
         });
 
+        const initialPage = useMemo(() => ({
+          id: uid(),
+          name: "Page 1",
+          background: null,
+          map: { enabled: false, address: "", zoom: 18 }
+        }), []);
+        const [pages, setPages] = useState([initialPage]);
+        const [activePageId, setActivePageId] = useState(initialPage.id);
+        const [dashOpen, setDashOpen] = useState(false);
+        const pagesRef = useRef(pages);
+
         // Dash collapse
-        const [dashCollapsed, setDashCollapsed] = useState(false);
-        const [dashSections, setDashSections] = useState({
-          summary: true,
-          indicators: true
-        });
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
+        const [photoSectionsOpen, setPhotoSectionsOpen] = useState({
+          ts: true,
+          apt: true,
+          ds: true,
+          wind: true,
+          obs: true,
+          exterior: true
+        });
 
+        const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
+        const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
         const activeItem = items.find(i => i.id === selectedId);
+        const activePageIndex = useMemo(() => pages.findIndex(page => page.id === activePageId), [pages, activePageId]);
         const updateReportSection = (section, field, value) => {
           setReportData(prev => ({
             ...prev,
@@ -472,7 +533,13 @@ import "./styles.css";
           }
         };
 
-        useEffect(() => () => revokeFileObj(roof.diagramBg), []);
+        useEffect(() => {
+          pagesRef.current = pages;
+        }, [pages]);
+
+        useEffect(() => () => {
+          pagesRef.current.forEach(page => revokeFileObj(page.background));
+        }, []);
 
         useEffect(() => {
           setReportData(prev => {
@@ -505,7 +572,7 @@ import "./styles.css";
           });
         }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
 
-        const serializeFile = (obj) => obj ? { name: obj.name, dataUrl: obj.dataUrl || obj.url } : null;
+        const serializeFile = (obj) => obj ? { name: obj.name, dataUrl: obj.dataUrl || obj.url, type: obj.type } : null;
         const serializeDamageEntries = (entries) => (entries || []).map(entry => ({
           ...entry,
           photo: serializeFile(entry.photo)
@@ -540,7 +607,7 @@ import "./styles.css";
           ...entry,
           photo: reviveFileObj(entry.photo)
         }));
-        const reviveItem = (it) => {
+        const reviveItem = (it, fallbackPageId) => {
           const nextType = it.type === "app" ? "apt" : it.type;
           const nextName = nextType === "apt" && (it.name || "").startsWith("APP-")
             ? it.name.replace(/^APP-/, "APT-")
@@ -608,19 +675,27 @@ import "./styles.css";
           }
           if(nextType === "obs"){
             data.photo = reviveFileObj(it.data.photo);
+            data.kind = data.kind || (data.points?.length ? "area" : "pin");
+            data.label = data.label || "";
+            data.arrowType = data.arrowType || "triangle";
           }
-          return { ...it, type: nextType, name: nextName, data };
+          return { ...it, type: nextType, name: nextName, data, pageId: it.pageId || fallbackPageId };
         };
 
         const buildState = useCallback(() => ({
           residenceName,
           frontFaces,
-          roof: { ...roof, diagramBg: serializeFile(roof.diagramBg) },
+          roof,
+          pages: pages.map(page => ({
+            ...page,
+            background: serializeFile(page.background)
+          })),
+          activePageId,
           items: items.map(serializeItem),
           counts: counts.current,
           reportData,
           exteriorPhotos: serializeExteriorPhotos(exteriorPhotos)
-        }), [residenceName, frontFaces, roof, items, reportData, exteriorPhotos]);
+        }), [residenceName, frontFaces, roof, pages, activePageId, items, reportData, exteriorPhotos]);
 
         const applySnapshot = useCallback((parsed, source = "import") => {
           if(!parsed?.roof) return;
@@ -628,9 +703,23 @@ import "./styles.css";
           setFrontFaces(parsed.frontFaces || "North");
           setRoof(prev => ({
             ...prev,
-            ...parsed.roof,
-            diagramBg: reviveFileObj(parsed.roof.diagramBg)
+            ...parsed.roof
           }));
+          const revivedPages = parsed.pages?.length
+            ? parsed.pages.map(page => ({
+              ...page,
+              background: reviveFileObj(page.background),
+              map: page.map || { enabled: false, address: "", zoom: 18 }
+            }))
+            : [{
+              id: uid(),
+              name: "Page 1",
+              background: reviveFileObj(parsed.roof?.diagramBg),
+              map: parsed.roof?.map || { enabled: false, address: "", zoom: 18 }
+            }];
+          setPages(revivedPages);
+          const fallbackPageId = parsed.activePageId || revivedPages[0]?.id;
+          setActivePageId(fallbackPageId);
           if(parsed.reportData){
             setReportData(prev => ({
               ...prev,
@@ -650,7 +739,7 @@ import "./styles.css";
           } else {
             setExteriorPhotos([]);
           }
-          const revivedItems = (parsed.items || []).map(reviveItem);
+          const revivedItems = (parsed.items || []).map(it => reviveItem(it, fallbackPageId));
           setItems(revivedItems);
           if(parsed.counts){
             counts.current = {
@@ -824,6 +913,7 @@ import "./styles.css";
         const isMobile = viewportSize.w <= 820;
         const previousToolbarLock = useRef(toolbarLocked);
         const previousToolbarPos = useRef(toolbarPos);
+        const sidebarToolbarPosRef = useRef(null);
 
         useEffect(() => {
           previousToolbarLock.current = toolbarLocked;
@@ -898,6 +988,17 @@ import "./styles.css";
           if(isMobile) return;
           setToolbarPos(prev => clampToolbarPos(prev));
         }, [sidebarCollapsed, toolbarOrientation, isMobile, clampToolbarPos]);
+
+        useEffect(() => {
+          if(isMobile) return;
+          if(!sidebarCollapsed){
+            sidebarToolbarPosRef.current = toolbarPos;
+            return;
+          }
+          if(sidebarToolbarPosRef.current){
+            setToolbarPos(clampToolbarPos(sidebarToolbarPosRef.current));
+          }
+        }, [sidebarCollapsed, isMobile, toolbarPos, clampToolbarPos]);
 
         useEffect(() => {
           if(!toolbarLocked) return;
@@ -999,12 +1100,12 @@ import "./styles.css";
         // Fit when BG first set
         const bgWasSetRef = useRef(false);
         useEffect(() => {
-          if(roof.diagramBg?.url && !bgWasSetRef.current){
+          if((activeBackground?.url || mapUrl) && !bgWasSetRef.current){
             bgWasSetRef.current = true;
             setTimeout(() => zoomFit(), 0);
           }
-          if(!roof.diagramBg?.url) bgWasSetRef.current = false;
-        }, [roof.diagramBg?.url]);
+          if(!activeBackground?.url && !mapUrl) bgWasSetRef.current = false;
+        }, [activeBackground?.url, mapUrl]);
 
         const onWheel = (e) => {
           e.preventDefault();
@@ -1104,7 +1205,7 @@ import "./styles.css";
             };
           });
 
-          items.forEach(item => {
+          pageItems.forEach(item => {
             if(item.type === "ts"){
               const d = item.data.dir;
               if(!stats[d]) return;
@@ -1141,7 +1242,7 @@ import "./styles.css";
           });
 
           return stats;
-        }, [items]);
+        }, [pageItems]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -1186,8 +1287,8 @@ import "./styles.css";
         }, [reportData]);
 
         // === FACTORY / UPDATERS ===
-        const createItem = (type, pos) => {
-          const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5 };
+        const createItem = (type, pos, options = {}) => {
+          const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5, pageId: activePageId };
           if(pos?.points && pos.points.length){
             const bb = bboxFromPoints(pos.points);
             base.x = (bb.minX + bb.maxX) / 2;
@@ -1255,14 +1356,23 @@ import "./styles.css";
 
           if(type === "obs"){
             base.name = `OBS-${counts.current.obs++}`;
-            base.data = { code:"DDM", locked:false, caption:"", photo:null, points: pos?.points || null };
+            base.data = {
+              code: "DDM",
+              locked: false,
+              caption: "",
+              photo: null,
+              points: pos?.points || null,
+              kind: options.kind || "pin",
+              label: "",
+              arrowType: "triangle"
+            };
           }
 
           return base;
         };
 
-        const addItem = (type, pos) => {
-          const it = createItem(type, pos);
+        const addItem = (type, pos, options) => {
+          const it = createItem(type, pos, options);
           setItems(prev => [...prev, it]);
           setSelectedId(it.id);
           setPanelView("props");
@@ -1292,16 +1402,68 @@ import "./styles.css";
         // === Files ===
         const setDiagramBg = async (file) => {
           const diagramBg = await fileToObj(file);
-          setRoof(prev => {
-            revokeFileObj(prev.diagramBg);
-            return { ...prev, diagramBg };
-          });
+          setPages(prev => prev.map(page => {
+            if(page.id !== activePageId) return page;
+            revokeFileObj(page.background);
+            return {
+              ...page,
+              background: diagramBg,
+              map: { ...page.map, enabled: false }
+            };
+          }));
+        };
+
+        const updateActivePage = (patch) => {
+          setPages(prev => prev.map(page => (
+            page.id === activePageId ? { ...page, ...patch } : page
+          )));
+        };
+
+        const updateActivePageMap = (patch) => {
+          setPages(prev => prev.map(page => (
+            page.id === activePageId
+              ? { ...page, map: { ...page.map, ...patch } }
+              : page
+          )));
+        };
+
+        const addPagesFromFiles = async (files) => {
+          if(!files?.length) return;
+          const fileList = Array.from(files);
+          const pageOffset = pages.length;
+          const prepared = await Promise.all(fileList.map(async (file, idx) => ({
+            id: uid(),
+            name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageOffset + idx + 1}`,
+            background: await fileToObj(file),
+            map: { enabled: false, address: "", zoom: 18 }
+          })));
+
+          const activeHasContent = activePage?.background?.url
+            || activePage?.map?.enabled
+            || items.some(item => item.pageId === activePageId);
+
+          if(prepared.length === 1 && !activeHasContent){
+            setPages(prev => prev.map(page => (
+              page.id === activePageId ? { ...page, background: prepared[0].background, name: page.name || prepared[0].name } : page
+            )));
+          } else {
+            setPages(prev => [...prev, ...prepared]);
+            setActivePageId(prepared[0].id);
+          }
         };
 
         const clearDiagram = () => {
-          setRoof(prev => { revokeFileObj(prev.diagramBg); return { ...prev, diagramBg:null }; });
+          pagesRef.current.forEach(page => revokeFileObj(page.background));
+          const resetPageId = uid();
+          setPages([{
+            id: resetPageId,
+            name: "Page 1",
+            background: null,
+            map: { enabled: false, address: "", zoom: 18 }
+          }]);
+          setActivePageId(resetPageId);
           // clear all items
-          items.forEach(it => {
+          pageItems.forEach(it => {
             if(it.type === "ts"){
               revokeFileObj(it.data.overviewPhoto);
               (it.data.bruises||[]).forEach(b => revokeFileObj(b.photo));
@@ -1556,7 +1718,9 @@ import "./styles.css";
 
         // === HIT TEST ===
         const findHit = (norm) => {
-          const sel = items.find(i => i.id === selectedId && (i.type === "ts" || (i.type === "obs" && i.data.points?.length)));
+          const sel = pageItems.find(i => i.id === selectedId && (
+            i.type === "ts" || (i.type === "obs" && i.data.kind === "area" && i.data.points?.length)
+          ));
           if(sel && !sel.data.locked){
             const pts = sel.data.points || [];
             const rr = 0.016;
@@ -1569,11 +1733,16 @@ import "./styles.css";
             }
           }
 
-          const rev = [...items].reverse();
+          const rev = [...pageItems].reverse();
           for(const it of rev){
-            if(it.type === "ts" || (it.type === "obs" && it.data.points?.length)){
+            if(it.type === "ts" || (it.type === "obs" && it.data.kind === "area" && it.data.points?.length)){
               const poly = it.data.points || [];
               if(poly.length >= 3 && pointInPoly(norm, poly)){
+                return { kind:"item", id: it.id };
+              }
+            } else if(it.type === "obs" && it.data.kind === "arrow" && it.data.points?.length === 2){
+              const [a, b] = it.data.points;
+              if(distanceToSegment(norm, a, b) < 0.02){
                 return { kind:"item", id: it.id };
               }
             } else {
@@ -1609,7 +1778,7 @@ import "./styles.css";
             return;
           }
 
-          if(!roof.diagramBg?.url){
+          if(!hasBackground){
             setSelectedId(null);
             setPanelView("items");
             return;
@@ -1634,7 +1803,7 @@ import "./styles.css";
                 setDrag({ mode:"ts-point", id: it.id, pointIndex: hit.pointIndex });
                 return;
               }
-              if(it.type === "obs"){
+              if(it.type === "obs" && it.data.kind === "area"){
                 setDrag({ mode:"obs-point", id: it.id, pointIndex: hit.pointIndex });
                 return;
               }
@@ -1645,12 +1814,17 @@ import "./styles.css";
               return;
             }
 
-            if(it.type === "obs" && it.data.points?.length && !it.data.locked){
+            if(it.type === "obs" && it.data.kind === "area" && it.data.points?.length && !it.data.locked){
               setDrag({ mode:"obs-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
               return;
             }
 
-            if(it.type !== "ts" && !it.data.locked){
+            if(it.type === "obs" && it.data.kind === "arrow" && it.data.points?.length === 2 && !it.data.locked){
+              setDrag({ mode:"obs-arrow-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
+              return;
+            }
+
+            if(it.type !== "ts" && !(it.type === "obs" && it.data.kind === "area") && !it.data.locked){
               setDrag({ mode:"marker-move", id: it.id, start: norm, origin: { x: it.x, y: it.y } });
               return;
             }
@@ -1665,6 +1839,14 @@ import "./styles.css";
             return;
           } else if(tool === "obs"){
             e.preventDefault();
+            if(obsTool === "dot"){
+              addItem("obs", norm, { kind: "pin" });
+              return;
+            }
+            if(obsTool === "arrow"){
+              setDrag({ mode:"obs-arrow", start: norm, cur: norm });
+              return;
+            }
             setDrag({ mode:"obs-draw", start: norm, cur: norm });
             return;
           } else if(tool){
@@ -1727,6 +1909,11 @@ import "./styles.css";
             setDrag(prev => ({ ...prev, cur: norm }));
             return;
           }
+          if(drag.mode === "obs-arrow"){
+            e.preventDefault();
+            setDrag(prev => ({ ...prev, cur: norm }));
+            return;
+          }
 
           if(drag.mode === "marker-move"){
             e.preventDefault();
@@ -1746,6 +1933,14 @@ import "./styles.css";
           }
 
           if(drag.mode === "obs-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            const pts = drag.origin.points.map(p => ({ x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }));
+            updateObsPoints(drag.id, pts);
+            return;
+          }
+          if(drag.mode === "obs-arrow-move"){
             e.preventDefault();
             const dx = norm.x - drag.start.x;
             const dy = norm.y - drag.start.y;
@@ -1827,15 +2022,34 @@ import "./styles.css";
                 { x:x2, y:y2 },
                 { x:x1, y:y2 }
               ];
-              const it = createItem("obs", { points });
+              const it = createItem("obs", { points }, { kind: "area" });
               setItems(prev => [...prev, it]);
               setSelectedId(it.id);
               setPanelView("props");
             } else if(start){
-              const it = createItem("obs", { x: start.x, y: start.y });
+              const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
               setItems(prev => [...prev, it]);
               setSelectedId(it.id);
               setPanelView("props");
+            }
+          }
+
+          if(drag?.mode === "obs-arrow"){
+            const start = drag.start, cur = drag.cur;
+            if(start && cur){
+              const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+              if(dist > 0.02){
+                const points = [start, cur];
+                const it = createItem("obs", { points }, { kind: "arrow" });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              } else {
+                const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              }
             }
           }
 
@@ -1845,9 +2059,9 @@ import "./styles.css";
         // === Grouped list ===
         const grouped = useMemo(() => {
           const g = { ts:[], apt:[], ds:[], obs:[], wind:[] };
-          items.forEach(i => g[i.type] && g[i.type].push(i));
+          pageItems.forEach(i => g[i.type] && g[i.type].push(i));
           return g;
-        }, [items]);
+        }, [pageItems]);
 
         // === Roof summary line ===
         const roofSummary = useMemo(() => {
@@ -1861,6 +2075,14 @@ import "./styles.css";
           }
           return roof.otherDesc ? `Other • ${roof.otherDesc}` : "Other";
         }, [roof]);
+
+        const activeBackground = activePage?.background || null;
+        const mapUrl = useMemo(() => {
+          if(!activePage?.map?.enabled || !activePage?.map?.address) return "";
+          const address = encodeURIComponent(activePage.map.address);
+          return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&output=embed`;
+        }, [activePage?.map?.address, activePage?.map?.enabled, activePage?.map?.zoom]);
+        const hasBackground = Boolean(activeBackground?.url || mapUrl);
 
         // === TS SVG ===
         const renderTS = (ts) => {
@@ -1950,6 +2172,45 @@ import "./styles.css";
           );
         };
 
+        const renderObsArrow = (obs) => {
+          const [a, b] = obs.data.points || [];
+          if(!a || !b) return null;
+          const isSel = selectedId === obs.id;
+          const ax = a.x * 1024;
+          const ay = a.y * 720;
+          const bx = b.x * 1024;
+          const by = b.y * 720;
+          const angle = Math.atan2(by - ay, bx - ax);
+          const headSize = 12;
+          const drawHead = (x, y, flip = false) => {
+            const theta = angle + (flip ? Math.PI : 0);
+            const p1 = { x, y };
+            const p2 = { x: x - headSize * Math.cos(theta - Math.PI / 6), y: y - headSize * Math.sin(theta - Math.PI / 6) };
+            const p3 = { x: x - headSize * Math.cos(theta + Math.PI / 6), y: y - headSize * Math.sin(theta + Math.PI / 6) };
+            if(obs.data.arrowType === "circle"){
+              return <circle cx={x} cy={y} r="6" fill="var(--c-obs)" />;
+            }
+            if(obs.data.arrowType === "box"){
+              return <rect x={x - 6} y={y - 6} width="12" height="12" fill="var(--c-obs)" rx="2" />;
+            }
+            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
+          };
+          const labelX = (ax + bx) / 2;
+          const labelY = (ay + by) / 2;
+          return (
+            <g key={obs.id}>
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={isSel ? 3 : 2} />
+              {drawHead(bx, by)}
+              {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
+              {obs.data.label && (
+                <text x={labelX + 8} y={labelY - 8} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                  {obs.data.label}
+                </text>
+              )}
+            </g>
+          );
+        };
+
         const renderObsAreaPrint = (obs) => {
           const pts = obs.data.points || [];
           const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
@@ -1965,6 +2226,44 @@ import "./styles.css";
               <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
+            </g>
+          );
+        };
+
+        const renderObsArrowPrint = (obs) => {
+          const [a, b] = obs.data.points || [];
+          if(!a || !b) return null;
+          const ax = a.x * 1024;
+          const ay = a.y * 720;
+          const bx = b.x * 1024;
+          const by = b.y * 720;
+          const angle = Math.atan2(by - ay, bx - ax);
+          const headSize = 12;
+          const drawHead = (x, y, flip = false) => {
+            const theta = angle + (flip ? Math.PI : 0);
+            const p1 = { x, y };
+            const p2 = { x: x - headSize * Math.cos(theta - Math.PI / 6), y: y - headSize * Math.sin(theta - Math.PI / 6) };
+            const p3 = { x: x - headSize * Math.cos(theta + Math.PI / 6), y: y - headSize * Math.sin(theta + Math.PI / 6) };
+            if(obs.data.arrowType === "circle"){
+              return <circle cx={x} cy={y} r="6" fill="var(--c-obs)" />;
+            }
+            if(obs.data.arrowType === "box"){
+              return <rect x={x - 6} y={y - 6} width="12" height="12" fill="var(--c-obs)" rx="2" />;
+            }
+            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
+          };
+          const labelX = (ax + bx) / 2;
+          const labelY = (ay + by) / 2;
+          return (
+            <g key={`print-${obs.id}`}>
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={2} />
+              {drawHead(bx, by)}
+              {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
+              {obs.data.label && (
+                <text x={labelX + 8} y={labelY - 8} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                  {obs.data.label}
+                </text>
+              )}
             </g>
           );
         };
@@ -2035,7 +2334,7 @@ import "./styles.css";
             });
           });
           return base;
-        }, [items]);
+        }, [pageItems]);
 
         const photoCaption = (label, photo) => {
           if(photo?.name){
@@ -2155,23 +2454,64 @@ import "./styles.css";
 
         const roofPhotoSections = useMemo(() => {
           const sections = [
-            { key: "ts", title: "Test Squares", entries: [] },
-            { key: "apt", title: "Appurtenances", entries: [] },
-            { key: "ds", title: "Downspouts", entries: [] },
-            { key: "wind", title: "Wind Observations", entries: [] },
-            { key: "obs", title: "Observations", entries: [] }
+            {
+              key: "ts",
+              title: "Test Squares",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "bruise", title: "Bruises", entries: [] },
+                { key: "condition", title: "Conditions", entries: [] }
+              ]
+            },
+            {
+              key: "apt",
+              title: "Appurtenances",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "detail", title: "Details", entries: [] },
+                { key: "damage", title: "Damage", entries: [] }
+              ]
+            },
+            {
+              key: "ds",
+              title: "Downspouts",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "detail", title: "Details", entries: [] },
+                { key: "damage", title: "Damage", entries: [] }
+              ]
+            },
+            {
+              key: "wind",
+              title: "Wind Observations",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "creased", title: "Creased", entries: [] },
+                { key: "torn", title: "Torn/Missing", entries: [] }
+              ]
+            },
+            {
+              key: "obs",
+              title: "Observations",
+              groups: [
+                { key: "obs", title: "Observation Photos", entries: [] }
+              ]
+            }
           ];
 
-          const pushEntry = (key, entry) => {
-            const section = sections.find(s => s.key === key);
-            if(section) section.entries.push(entry);
+          const findSection = (key) => sections.find(section => section.key === key);
+          const pushEntry = (sectionKey, groupKey, entry) => {
+            const section = findSection(sectionKey);
+            if(!section) return;
+            const group = section.groups.find(g => g.key === groupKey);
+            if(group) group.entries.push(entry);
           };
 
           items.forEach(it => {
             const note = it.data?.caption?.trim();
             if(it.type === "ts"){
               if(it.data.overviewPhoto?.url){
-                pushEntry("ts", {
+                pushEntry("ts", "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
                   caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
@@ -2180,7 +2520,7 @@ import "./styles.css";
               }
               (it.data.bruises || []).forEach((b, idx) => {
                 if(!b.photo?.url) return;
-                pushEntry("ts", {
+                pushEntry("ts", "bruise", {
                   id: `${it.id}-bruise-${idx}`,
                   url: b.photo.url,
                   caption: photoCaption(`${it.name} bruise ${idx + 1} • ${b.size}"`, b.photo),
@@ -2189,7 +2529,7 @@ import "./styles.css";
               });
               (it.data.conditions || []).forEach((c, idx) => {
                 if(!c.photo?.url) return;
-                pushEntry("ts", {
+                pushEntry("ts", "condition", {
                   id: `${it.id}-condition-${idx}`,
                   url: c.photo.url,
                   caption: photoCaption(`${it.name} condition ${idx + 1} • ${c.code}`, c.photo),
@@ -2199,7 +2539,7 @@ import "./styles.css";
             }
             if(it.type === "apt" || it.type === "ds"){
               if(it.data.overviewPhoto?.url){
-                pushEntry(it.type, {
+                pushEntry(it.type, "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
                   caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
@@ -2207,7 +2547,7 @@ import "./styles.css";
                 });
               }
               if(it.data.detailPhoto?.url){
-                pushEntry(it.type, {
+                pushEntry(it.type, "detail", {
                   id: `${it.id}-detail`,
                   url: it.data.detailPhoto.url,
                   caption: photoCaption(`${it.name} detail`, it.data.detailPhoto),
@@ -2216,7 +2556,7 @@ import "./styles.css";
               }
               (it.data.damageEntries || []).forEach((entry, idx) => {
                 if(!entry.photo?.url) return;
-                pushEntry(it.type, {
+                pushEntry(it.type, "damage", {
                   id: `${it.id}-damage-${idx}`,
                   url: entry.photo.url,
                   caption: photoCaption(`${it.name} ${damageEntryLabel(entry, idx)}`, entry.photo),
@@ -2226,7 +2566,7 @@ import "./styles.css";
             }
             if(it.type === "wind"){
               if(it.data.overviewPhoto?.url){
-                pushEntry("wind", {
+                pushEntry("wind", "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
                   caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
@@ -2234,7 +2574,7 @@ import "./styles.css";
                 });
               }
               if(it.data.creasedPhoto?.url){
-                pushEntry("wind", {
+                pushEntry("wind", "creased", {
                   id: `${it.id}-creased`,
                   url: it.data.creasedPhoto.url,
                   caption: photoCaption(`${it.name} creased`, it.data.creasedPhoto),
@@ -2242,7 +2582,7 @@ import "./styles.css";
                 });
               }
               if(it.data.tornMissingPhoto?.url){
-                pushEntry("wind", {
+                pushEntry("wind", "torn", {
                   id: `${it.id}-torn`,
                   url: it.data.tornMissingPhoto.url,
                   caption: photoCaption(`${it.name} torn/missing`, it.data.tornMissingPhoto),
@@ -2251,7 +2591,7 @@ import "./styles.css";
               }
             }
             if(it.type === "obs" && it.data.photo?.url){
-              pushEntry("obs", {
+              pushEntry("obs", "obs", {
                 id: `${it.id}-photo`,
                 url: it.data.photo.url,
                 caption: photoCaption(`${it.name} ${it.data.code}`, it.data.photo),
@@ -2278,6 +2618,8 @@ import "./styles.css";
         // === Name editing (heading + pencil; edit -> input + check) ===
         const [nameEditing, setNameEditing] = useState(false);
         const [nameDraft, setNameDraft] = useState("");
+        const [pageNameEditing, setPageNameEditing] = useState(false);
+        const [pageNameDraft, setPageNameDraft] = useState("");
 
         useEffect(() => {
           if(activeItem){
@@ -2285,6 +2627,18 @@ import "./styles.css";
             setNameDraft(activeItem.name);
           }
         }, [selectedId]);
+
+        useEffect(() => {
+          setPageNameEditing(false);
+          setPageNameDraft(activePage?.name || "");
+        }, [activePageId, activePage?.name]);
+
+        useEffect(() => {
+          if(selectedId && !pageItems.find(item => item.id === selectedId)){
+            setSelectedId(null);
+            setPanelView("items");
+          }
+        }, [activePageId, pageItems, selectedId]);
 
         useEffect(() => {
           if(activeItem){
@@ -2301,6 +2655,17 @@ import "./styles.css";
           updateItemName(nameDraft.trim() || activeItem.name);
           setNameEditing(false);
         };
+
+        const startPageNameEdit = () => {
+          setPageNameEditing(true);
+        };
+        const commitPageNameEdit = () => {
+          const fallback = activePage?.name || `Page ${activePageIndex + 1}`;
+          updateActivePage({ name: pageNameDraft.trim() || fallback });
+          setPageNameEditing(false);
+        };
+        const canGoPrevPage = activePageIndex > 0;
+        const canGoNextPage = activePageIndex < pages.length - 1;
 
         const selectItemFromList = (id) => {
           setSelectedId(id);
@@ -2355,9 +2720,66 @@ import "./styles.css";
                 </select>
               </div>
               <div style={{flex:1}}>
-                <div className="lbl">Diagram Image</div>
-                <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+                <div className="lbl">Diagram Pages</div>
+                <input
+                  className="inp"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                />
+                <div className="tiny" style={{marginTop:6}}>Upload images or PDFs (multi-page) to create additional pages.</div>
+                <label className="btn" style={{marginTop:8, cursor:"pointer"}}>
+                  Replace current page
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    style={{display:"none"}}
+                    onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}
+                  />
+                </label>
               </div>
+            </div>
+
+            <div className="card" style={{marginBottom:10}}>
+              <div className="lbl">Google Maps Background</div>
+              <div className="rowTop">
+                <div style={{flex:1}}>
+                  <input
+                    className="inp"
+                    value={activePage?.map?.address || ""}
+                    onChange={(e)=>updateActivePageMap({ address: e.target.value })}
+                    placeholder="Enter address or place"
+                  />
+                </div>
+                <div style={{flex:"0 0 140px"}}>
+                  <input
+                    className="inp"
+                    type="number"
+                    min="14"
+                    max="21"
+                    value={activePage?.map?.zoom || 18}
+                    onChange={(e)=>updateActivePageMap({ zoom: parseInt(e.target.value, 10) || 18 })}
+                  />
+                </div>
+              </div>
+              <div className="row" style={{marginTop:10}}>
+                <button
+                  className="btn btnPrimary"
+                  type="button"
+                  onClick={() => updateActivePage({ background: null, map: { ...activePage?.map, enabled: true } })}
+                >
+                  Use Google Maps
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => updateActivePageMap({ enabled: false })}
+                >
+                  Disable Map
+                </button>
+              </div>
+              <div className="tiny" style={{marginTop:6}}>Adjust zoom, then enable to set the background.</div>
             </div>
 
             {roof.covering==="SHINGLE" && (
@@ -2443,13 +2865,16 @@ import "./styles.css";
           "Inspection Summary",
           "Roof Diagram",
           "Dashboard",
-          `Test Squares (${items.filter(i => i.type === "ts").length})`,
-          `Wind Observations (${items.filter(i => i.type === "wind").length})`,
-          `Appurtenances + Downspouts (${items.filter(i => i.type === "apt" || i.type === "ds").length})`,
-          `Observations (${items.filter(i => i.type === "obs").length})`
+          `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
+          `Wind Observations (${pageItems.filter(i => i.type === "wind").length})`,
+          `Appurtenances + Downspouts (${pageItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
+          `Observations (${pageItems.filter(i => i.type === "obs").length})`
         ];
 
-        const roofPhotoCount = roofPhotoSections.reduce((sum, section) => sum + section.entries.length, 0);
+        const roofPhotoCount = roofPhotoSections.reduce(
+          (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
+          0
+        );
         const photosView = (
           <div className="photosView">
             <div className="photosContent">
@@ -2463,90 +2888,122 @@ import "./styles.css";
               <div className="photoSection">
                 <div className="photoSectionHeader">
                   <div className="photoSectionTitle">Roof Photos</div>
-                  <div className="photoSectionMeta">{roofPhotoCount || "None"}</div>
+                  <div className="photoSectionMeta">{roofPhotoCount ? `${roofPhotoCount} total` : "None"}</div>
                 </div>
                 {roofPhotoCount === 0 ? (
                   <div className="photoEmpty">None</div>
                 ) : (
-                  roofPhotoSections.map(section => (
-                    <div className="photoGroup" key={section.key}>
-                      <div className="photoGroupTitle">{section.title}</div>
-                      {section.entries.length ? (
-                        <div className="photoGrid">
-                          {section.entries.map(entry => (
-                            <div className="photoCard" key={entry.id}>
-                              <div className="photoThumb">
-                                <img src={entry.url} alt={entry.caption} />
+                  roofPhotoSections.map(section => {
+                    const sectionCount = section.groups.reduce((sum, group) => sum + group.entries.length, 0);
+                    const isOpen = photoSectionsOpen[section.key];
+                    return (
+                      <div className="photoGroupSection" key={section.key}>
+                        <button
+                          type="button"
+                          className="photoGroupHeader"
+                          onClick={() => setPhotoSectionsOpen(prev => ({ ...prev, [section.key]: !isOpen }))}
+                        >
+                          <div className="photoGroupTitle">{section.title}</div>
+                          <div className="photoSectionMeta">{sectionCount || "None"}</div>
+                          <Icon name={isOpen ? "chevUp" : "chevDown"} />
+                        </button>
+                        {isOpen && (
+                          <div className="photoGroupBody">
+                            {section.groups.map(group => (
+                              <div className="photoGroup" key={`${section.key}-${group.key}`}>
+                                <div className="photoGroupTitle">{group.title}</div>
+                                {group.entries.length ? (
+                                  <div className="photoGrid">
+                                    {group.entries.map(entry => (
+                                      <div className="photoCard" key={entry.id}>
+                                        <div className="photoThumb">
+                                          <img src={entry.url} alt={entry.caption} />
+                                        </div>
+                                        <div className="photoMeta">
+                                          <div className="photoCaption">{entry.caption}</div>
+                                          {entry.note && <div className="photoNote">Note: {entry.note}</div>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="photoEmpty">None</div>
+                                )}
                               </div>
-                              <div className="photoMeta">
-                                <div className="photoCaption">{entry.caption}</div>
-                                {entry.note && <div className="photoNote">Note: {entry.note}</div>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="photoEmpty">None</div>
-                      )}
-                    </div>
-                  ))
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
 
               <div className="photoSection">
                 <div className="photoSectionHeader">
                   <div className="photoSectionTitle">Exterior Photos</div>
+                  <div className="photoSectionMeta">{exteriorPhotos.length ? `${exteriorPhotos.length} total` : "None"}</div>
                   <button className="btn" type="button" onClick={addExteriorPhoto}>Add exterior photo</button>
+                  <button
+                    className="iconBtn"
+                    type="button"
+                    onClick={() => setPhotoSectionsOpen(prev => ({ ...prev, exterior: !prev.exterior }))}
+                    aria-label="Toggle exterior photos"
+                  >
+                    <Icon name={photoSectionsOpen.exterior ? "chevUp" : "chevDown"} />
+                  </button>
                 </div>
-                {!exteriorPhotos.length ? (
-                  <div className="photoEmpty">None</div>
-                ) : (
-                  <div className="exteriorGrid">
-                    {exteriorPhotos.map(entry => (
-                      <div className="exteriorCard" key={entry.id}>
-                        <div className="exteriorPreview">
-                          {entry.photo?.url ? (
-                            <img src={entry.photo.url} alt={entry.photo.name || "Exterior photo"} />
-                          ) : (
-                            <div className="photoPlaceholder">No photo selected</div>
-                          )}
-                          <input
-                            className="inp"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleExteriorPhotoUpload(entry.id, e.target.files?.[0])}
-                          />
-                        </div>
-                        <div className="exteriorFields">
-                          <div>
-                            <div className="lbl">Elevation</div>
-                            <select
+                {photoSectionsOpen.exterior && (
+                  !exteriorPhotos.length ? (
+                    <div className="photoEmpty">None</div>
+                  ) : (
+                    <div className="exteriorGrid">
+                      {exteriorPhotos.map(entry => (
+                        <div className="exteriorCard" key={entry.id}>
+                          <div className="exteriorPreview">
+                            {entry.photo?.url ? (
+                              <img src={entry.photo.url} alt={entry.photo.name || "Exterior photo"} />
+                            ) : (
+                              <div className="photoPlaceholder">No photo selected</div>
+                            )}
+                            <input
                               className="inp"
-                              value={entry.orientation}
-                              onChange={(e) => updateExteriorPhoto(entry.id, { orientation: e.target.value })}
-                            >
-                              {exteriorOrientations.map(dir => (
-                                <option key={dir} value={dir}>{dir}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Notes</div>
-                            <textarea
-                              className="inp"
-                              rows={3}
-                              value={entry.notes}
-                              onChange={(e) => updateExteriorPhoto(entry.id, { notes: e.target.value })}
-                              placeholder="Add exterior photo notes..."
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleExteriorPhotoUpload(entry.id, e.target.files?.[0])}
                             />
                           </div>
-                          <div className="exteriorActions">
-                            <button className="btn btnDanger" type="button" onClick={() => removeExteriorPhoto(entry.id)}>Remove</button>
+                          <div className="exteriorFields">
+                            <div>
+                              <div className="lbl">Elevation</div>
+                              <select
+                                className="inp"
+                                value={entry.orientation}
+                                onChange={(e) => updateExteriorPhoto(entry.id, { orientation: e.target.value })}
+                              >
+                                {exteriorOrientations.map(dir => (
+                                  <option key={dir} value={dir}>{dir}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Notes</div>
+                              <textarea
+                                className="inp"
+                                rows={3}
+                                value={entry.notes}
+                                onChange={(e) => updateExteriorPhoto(entry.id, { notes: e.target.value })}
+                                placeholder="Add exterior photo notes..."
+                              />
+                            </div>
+                            <div className="exteriorActions">
+                              <button className="btn btnDanger" type="button" onClick={() => removeExteriorPhoto(entry.id)}>Remove</button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -2614,7 +3071,6 @@ import "./styles.css";
                 ref={toolbarRef}
               >
                 <div className="tbCenter">
-                  <div className="tbTitle">Tools</div>
                   <div className="tbTools">
                     {toolDefs.map(t => {
                       const isActive = tool === t.key;
@@ -2632,6 +3088,37 @@ import "./styles.css";
                       );
                     })}
                   </div>
+                  {tool === "obs" && (
+                    <div className="tbMini" role="group" aria-label="Observation tools">
+                      <button
+                        type="button"
+                        className={"miniToolBtn" + (obsTool === "dot" ? " active" : "")}
+                        onClick={() => setObsTool("dot")}
+                        aria-label="Observation dot"
+                        title="Observation dot"
+                      >
+                        <Icon name="dot" />
+                      </button>
+                      <button
+                        type="button"
+                        className={"miniToolBtn" + (obsTool === "arrow" ? " active" : "")}
+                        onClick={() => setObsTool("arrow")}
+                        aria-label="Observation arrow"
+                        title="Observation arrow"
+                      >
+                        <Icon name="arrow" />
+                      </button>
+                      <button
+                        type="button"
+                        className={"miniToolBtn" + (obsTool === "poly" ? " active" : "")}
+                        onClick={() => setObsTool("poly")}
+                        aria-label="Observation polygon"
+                        title="Observation polygon"
+                      >
+                        <Icon name="poly" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="tbDivider" />
                 <div className="tbZoom">
@@ -2641,6 +3128,48 @@ import "./styles.css";
                     <button className="zBtn" onClick={zoomFit}>Fit</button>
                   </div>
                   <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                </div>
+                <div className="tbDivider" />
+                <div className="tbPages" role="group" aria-label="Page navigation">
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
+                    disabled={!canGoPrevPage}
+                    aria-label="Previous page"
+                  >
+                    <Icon name="chevLeft" />
+                  </button>
+                  {pageNameEditing ? (
+                    <input
+                      className="pageNameInput"
+                      value={pageNameDraft}
+                      onChange={(e) => setPageNameDraft(e.target.value)}
+                      onBlur={commitPageNameEdit}
+                      onKeyDown={(e) => {
+                        if(e.key === "Enter") commitPageNameEdit();
+                      }}
+                      aria-label="Page name"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="pageName"
+                      onClick={startPageNameEdit}
+                      title="Rename page"
+                    >
+                      {activePage?.name || `Page ${activePageIndex + 1}`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="iconBtn"
+                    onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
+                    disabled={!canGoNextPage}
+                    aria-label="Next page"
+                  >
+                    <Icon name="chevRight" />
+                  </button>
                 </div>
                 <div className="tbDivider" />
                 <LockIcon
@@ -2669,7 +3198,16 @@ import "./styles.css";
                   }}
                 >
                   <div className="sheet">
-                    {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+                    {activeBackground?.url && (
+                      activeBackground.type === "application/pdf" ? (
+                        <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                      ) : (
+                        <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
+                      )
+                    )}
+                    {mapUrl && (
+                      <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
+                    )}
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
@@ -2678,9 +3216,10 @@ import "./styles.css";
                         </pattern>
                       </defs>
 
-                      <rect width="100%" height="100%" fill="url(#grid)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
-                      {items.filter(i => i.type === "ts").map(renderTS)}
-                      {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsArea)}
+                      <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      {pageItems.filter(i => i.type === "ts").map(renderTS)}
+                      {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsArea)}
+                      {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrow)}
 
                       {drag && drag.mode === "ts-draw" && (
                         <rect
@@ -2706,9 +3245,20 @@ import "./styles.css";
                           strokeWidth="2"
                         />
                       )}
+                      {drag && drag.mode === "obs-arrow" && (
+                        <line
+                          x1={drag.start.x * 1024}
+                          y1={drag.start.y * 720}
+                          x2={drag.cur.x * 1024}
+                          y2={drag.cur.y * 720}
+                          stroke="var(--c-obs)"
+                          strokeDasharray="6,6"
+                          strokeWidth="2"
+                        />
+                      )}
                     </svg>
 
-                    {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                    {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                       const isSel = selectedId === i.id;
                       const m = markerMeta(i);
                       return (
@@ -2731,7 +3281,7 @@ import "./styles.css";
                 </div>
               </div>
 
-              {!roof.diagramBg?.url && (
+              {!hasBackground && (
                 <div style={{
                   position:"absolute",
                   left:"50%",
@@ -2746,16 +3296,99 @@ import "./styles.css";
                   boxShadow:"0 18px 34px rgba(2,6,23,0.14)",
                   padding:"16px"
                 }}>
-                  <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Upload a roof diagram to begin</div>
+                  <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Add a diagram background</div>
                   <div className="tiny" style={{marginTop:6}}>
-                    Tap “Upload Image” (PNG/JPG). Then place test squares and markers.
+                    Upload an image or PDF (multi-page supported), or use a Google Maps address as the background.
                   </div>
-                  <div style={{marginTop:12}}>
+                  <div style={{marginTop:12, display:"flex", flexWrap:"wrap", gap:10}}>
                     <label className="btn btnPrimary" style={{display:"inline-block", cursor:"pointer"}}>
-                      Upload Image
-                      <input type="file" accept="image/*" style={{display:"none"}}
-                        onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}/>
+                      Upload Pages
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        style={{display:"none"}}
+                        onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                      />
                     </label>
+                    <button className="btn" type="button" onClick={() => setHdrEditOpen(true)}>
+                      Google Maps
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="dashLauncher">
+                <button
+                  className="dashLauncherBtn"
+                  type="button"
+                  onClick={() => setDashOpen(prev => !prev)}
+                  aria-label="Toggle dashboard"
+                  title="Dashboard"
+                >
+                  <Icon name="dash" />
+                </button>
+              </div>
+              {dashOpen && (
+                <div className="dashPopover" role="dialog" aria-label="Hail and wind dashboard">
+                  <div className="dashHeader">
+                    <div>
+                      <div className="dashTitleText">Hail + Wind Dashboard</div>
+                      <div className="dashSubtitle">Current page summary for directions, sizes, and indicators.</div>
+                    </div>
+                    <button className="iconBtn" type="button" onClick={() => setDashOpen(false)} aria-label="Close dashboard">
+                      <Icon name="chevDown" />
+                    </button>
+                  </div>
+                  <div className="dashCompact">
+                    <div className="dashCompactSection">
+                      <div className="dashCompactTitle">Damage Summary</div>
+                      <div className="dashSummaryGrid">
+                        {WIND_DIRS.map(dir => {
+                          const d = dashboard[dir];
+                          return (
+                            <div className="dashSummaryCard" key={`summary-${dir}`}>
+                              <div className="dashDir">{dir}</div>
+                              <div className="dashStatRow">
+                                <span>Hits</span>
+                                <strong className={d.tsHits ? "dashAlert" : "dashMuted"}>{d.tsHits}</strong>
+                              </div>
+                              <div className="dashStatRow">
+                                <span>Max Hail</span>
+                                <strong className="dashOk">{d.tsMaxHail ? `${d.tsMaxHail}"` : "—"}</strong>
+                              </div>
+                              <div className="dashStatRow">
+                                <span>Wind</span>
+                                <strong className={d.wind.creased || d.wind.torn_missing ? "dashWind" : "dashMuted"}>
+                                  {d.wind.creased}/{d.wind.torn_missing}
+                                </strong>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="dashCompactSection">
+                      <div className="dashCompactTitle">Indicators by Direction</div>
+                      <div className="dashIndicatorsGrid">
+                        {CARDINAL_DIRS.map(dir => {
+                          const d = dashboard[dir];
+                          return (
+                            <div className="dashIndicatorCard" key={`indicator-${dir}`}>
+                              <div className="dashDir">{dir}</div>
+                              <div className="dashStatRow">
+                                <span>APT Max</span>
+                                <strong className={d.aptMax ? "dashDark" : "dashMuted"}>{d.aptMax ? `${d.aptMax}"` : "—"}</strong>
+                              </div>
+                              <div className="dashStatRow">
+                                <span>DS Max</span>
+                                <strong className={d.dsMax ? "dashBlue" : "dashMuted"}>{d.dsMax ? `${d.dsMax}"` : "—"}</strong>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2763,10 +3396,13 @@ import "./styles.css";
 
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
-              <div className="panelRail">
+              <div className="panelHeader">
+                <div className="panelHeaderTitle">
+                  {panelView === "items" ? "Inspection Items" : "Properties"}
+                </div>
                 {!isMobile && (
                   <button
-                    className="panelToggleBtn"
+                    className="panelToggleBtn iconOnly"
                     type="button"
                     onClick={() => setSidebarCollapsed(v => !v)}
                     title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
@@ -2781,8 +3417,6 @@ import "./styles.css";
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
-                    <div className="lbl">Inspection Items</div>
-
                     {["ts","apt","ds","obs","wind"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
@@ -2847,7 +3481,7 @@ import "./styles.css";
 
                                 {type==="obs" && (
                                   <span>
-                                    {item.data.code} {item.data.points?.length ? "• area" : "• pin"}
+                                    {item.data.code} • {item.data.kind === "arrow" ? "arrow" : (item.data.points?.length ? "area" : "pin")}
                                   </span>
                                 )}
                                 {type==="wind" && (
@@ -3278,11 +3912,36 @@ import "./styles.css";
                               <select className="inp" value={activeItem.data.code} onChange={(e)=>updateItemData("code", e.target.value)}>
                                 {OBS_CODES.map(c => <option key={c.code} value={c.code}>{c.code} — {c.label}</option>)}
                               </select>
-                              <div className="tiny" style={{marginTop:6}}>Tip: drag to draw a purple observation area, then drag the corners to match the shape.</div>
+                              <div className="tiny" style={{marginTop:6}}>
+                                Tip: choose dot, arrow, or polygon in the mini toolbar to place the observation.
+                              </div>
                               {activeItem.data.code === "DDM" && (
                                 <div className="tiny dashAlert" style={{marginTop:6}}>Deferred maintenance observations require a photo and caption.</div>
                               )}
                             </div>
+
+                            {activeItem.data.kind === "arrow" && (
+                              <>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Arrow Label</div>
+                                  <input
+                                    className="inp"
+                                    value={activeItem.data.label}
+                                    onChange={(e)=>updateItemData("label", e.target.value)}
+                                    placeholder="e.g., Front entry, garage impact"
+                                  />
+                                </div>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Arrow End</div>
+                                  <select className="inp" value={activeItem.data.arrowType} onChange={(e)=>updateItemData("arrowType", e.target.value)}>
+                                    <option value="triangle">Triangle</option>
+                                    <option value="circle">Circle</option>
+                                    <option value="box">Box</option>
+                                    <option value="double">Double Arrow</option>
+                                  </select>
+                                </div>
+                              </>
+                            )}
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Observation Photo</div>
@@ -3305,134 +3964,6 @@ import "./styles.css";
                 )}
               </div>
             </div>
-          <div className={"dashDock" + (dashCollapsed ? " collapsed" : "") + (!isMobile && sidebarCollapsed ? " hidden" : "")}>
-                <div className="dashTitle">
-                  {!dashCollapsed && <span>Dashboard</span>}
-                  <div style={{display:"flex", gap:8}}>
-                    {!dashCollapsed && (
-                      <button
-                        className="btn"
-                        style={{padding:"8px 10px"}}
-                        type="button"
-                        onClick={() => setDashSections(prev => ({
-                          summary: !prev.summary,
-                          indicators: !prev.indicators
-                        }))}
-                        title="Toggle all dashboard sections"
-                        aria-label="Toggle all dashboard sections"
-                      >
-                        {dashSections.summary || dashSections.indicators ? "Collapse" : "Expand"}
-                      </button>
-                    )}
-                    <button
-                      className="btn"
-                      style={{padding:"10px 10px"}}
-                      type="button"
-                      onClick={()=>setDashCollapsed(v=>!v)}
-                      title={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
-                      aria-label={dashCollapsed ? "Show dashboard" : "Hide dashboard"}
-                    >
-                      <Icon name={dashCollapsed ? "chevUp" : "chevDown"} />
-                    </button>
-                  </div>
-                </div>
-
-                {!dashCollapsed && (
-                  <>
-                    <div className="dashSection">
-                      <button
-                        type="button"
-                        className="dashSectionHeader"
-                        onClick={() => setDashSections(prev => ({ ...prev, summary: !prev.summary }))}
-                        aria-expanded={dashSections.summary}
-                      >
-                        <div className="dashSectionTitle">
-                          <span>Hail + Wind Summary</span>
-                          <span className="dashPill">{WIND_DIRS.length} dirs</span>
-                        </div>
-                        <span className="dashSectionIcon">
-                          <Icon name={dashSections.summary ? "chevUp" : "chevDown"} />
-                        </span>
-                      </button>
-                      {dashSections.summary && (
-                        <div className="dashScroll">
-                          <table className="dashTable">
-                            <thead>
-                              <tr>
-                                <th>Direction</th>
-                                <th>Test Square Hits</th>
-                                <th>Max Hail Size</th>
-                                <th>Wind (Creased)</th>
-                                <th>Wind (Torn/Missing)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {WIND_DIRS.map(dir => {
-                                const d = dashboard[dir];
-                                return (
-                                  <tr key={dir}>
-                                    <td style={{fontWeight:1300}}>{dir}</td>
-                                    <td className={d.tsHits>0 ? "dashAlert":"dashMuted"}>{d.tsHits}</td>
-                                    <td className="dashOk">{d.tsMaxHail>0 ? `${d.tsMaxHail}"` : "—"}</td>
-                                    <td className={d.wind.creased>0 ? "dashWind":"dashMuted"}>{d.wind.creased}</td>
-                                    <td className={d.wind.torn_missing>0 ? "dashWind":"dashMuted"}>{d.wind.torn_missing}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="dashSection">
-                      <button
-                        type="button"
-                        className="dashSectionHeader"
-                        onClick={() => setDashSections(prev => ({ ...prev, indicators: !prev.indicators }))}
-                        aria-expanded={dashSections.indicators}
-                      >
-                        <div className="dashSectionTitle">
-                          <span>Indicators by Direction</span>
-                          <span className="dashPill">{CARDINAL_DIRS.length} dirs</span>
-                        </div>
-                        <span className="dashSectionIcon">
-                          <Icon name={dashSections.indicators ? "chevUp" : "chevDown"} />
-                        </span>
-                      </button>
-                      {dashSections.indicators && (
-                        <div className="dashScroll">
-                          <table className="dashTable">
-                            <thead>
-                              <tr>
-                                <th>Direction</th>
-                                <th>Appurtenances (Max)</th>
-                                <th>Downspouts (Max)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {CARDINAL_DIRS.map(dir => {
-                                const d = dashboard[dir];
-                                return (
-                                  <tr key={dir}>
-                                    <td style={{fontWeight:1300}}>{dir}</td>
-                                    <td className={d.aptMax>0 ? "dashDark":"dashMuted"}>{d.aptMax>0 ? `${d.aptMax}"` : "—"}</td>
-                                    <td className={d.dsMax>0 ? "dashBlue":"dashMuted"}>{d.dsMax>0 ? `${d.dsMax}"` : "—"}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="tiny" style={{marginTop:10}}>
-                      Tip: the first dashboard is for hail + wind outcomes; the second is for hail indicators on appurtenances/downspouts.
-                    </div>
-                  </>
-                )}
-              </div>
             </div>
           </div>
           ) : viewMode === "report" ? (
@@ -4286,18 +4817,28 @@ import "./styles.css";
 
               <div className="printDiagramWrap">
                 <div className="printDiagramSheet">
-                  {roof.diagramBg?.url && <img className="bgImg" src={roof.diagramBg.url} alt="Roof diagram" />}
+                  {activeBackground?.url && (
+                    activeBackground.type === "application/pdf" ? (
+                      <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                    ) : (
+                      <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
+                    )
+                  )}
+                  {mapUrl && (
+                    <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
+                  )}
                   <svg className="gridSvg" width="100%" height="100%" viewBox="0 0 1024 720" preserveAspectRatio="xMidYMid meet">
                     <defs>
                       <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
                         <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
                       </pattern>
                     </defs>
-                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={roof.diagramBg?.url ? 0.45 : 1} />
-                    {items.filter(i => i.type === "ts").map(renderTSPrint)}
-                    {items.filter(i => i.type === "obs" && i.data.points?.length).map(renderObsAreaPrint)}
+                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                    {pageItems.filter(i => i.type === "ts").map(renderTSPrint)}
+                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsAreaPrint)}
+                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrowPrint)}
                   </svg>
-                  {items.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.points?.length)).map(i => {
+                  {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                     const m = markerMeta(i);
                     return (
                       <div
@@ -4367,7 +4908,7 @@ import "./styles.css";
               <div className="printSection">
                 <h3>Test Squares</h3>
                 <div className="printGrid">
-                  {items.filter(i => i.type === "ts").map(ts => {
+                  {pageItems.filter(i => i.type === "ts").map(ts => {
                     const tsPhotos = collectTsPhotos(ts);
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
@@ -4410,7 +4951,7 @@ import "./styles.css";
                   </tbody>
                 </table>
                 <div className="printGrid" style={{marginTop:10}}>
-                  {items.filter(i => i.type === "wind").map(w => (
+                  {pageItems.filter(i => i.type === "wind").map(w => (
                     <div className="printCard" key={`wind-${w.id}`}>
                       <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>
                       <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
@@ -4475,7 +5016,7 @@ import "./styles.css";
                 </table>
 
                 <div className="printGrid">
-                  {items.filter(i => i.type === "apt" || i.type === "ds").map(it => (
+                  {pageItems.filter(i => i.type === "apt" || i.type === "ds").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
                       <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
@@ -4518,7 +5059,7 @@ import "./styles.css";
               <div className="printSection">
                 <h3>Observations</h3>
                 <div className="printGrid">
-                  {items.filter(i => i.type === "obs").map(obs => (
+                  {pageItems.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
                       <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
