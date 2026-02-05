@@ -92,7 +92,8 @@
         align-items:center;
         justify-content:flex-end;
         min-width:0;
-        gap:12px;
+        gap:10px 12px;
+        flex-wrap:wrap;
       }
       .propertiesInfo{
         min-width:0;
@@ -216,13 +217,13 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        gap:10px;
-        padding:5px 8px;
-        border-radius: 12px;
-        background: var(--glass2);
+        gap:8px;
+        padding:6px 8px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.92);
         backdrop-filter: blur(12px);
-        border: 1px solid var(--glassBorder);
-        box-shadow: var(--shadowSoft);
+        border: 1px solid rgba(226,232,240,0.9);
+        box-shadow: 0 12px 22px rgba(2,6,23,0.12);
         z-index: 80;
         user-select:none;
         -webkit-user-select:none;
@@ -245,13 +246,17 @@
         display:flex;
         flex-direction:column;
         align-items:center;
-        gap:4px;
+        gap:6px;
       }
       .tbTools{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap:6px;
         flex-wrap:nowrap;
+        padding:4px;
+        border-radius:12px;
+        background: rgba(248,250,252,0.9);
+        border:1px solid rgba(226,232,240,0.85);
       }
       .tbMini{
         display:flex;
@@ -318,7 +323,11 @@
       .tbZoom{
         display:flex;
         align-items:center;
-        gap:6px;
+        gap:4px;
+        padding:4px;
+        border-radius:12px;
+        background: rgba(248,250,252,0.9);
+        border:1px solid rgba(226,232,240,0.85);
       }
       .toolbar.vertical .tbZoom{
         flex-direction:column;
@@ -336,6 +345,10 @@
         display:flex;
         align-items:center;
         gap:6px;
+        padding:4px;
+        border-radius:12px;
+        background: rgba(248,250,252,0.9);
+        border:1px solid rgba(226,232,240,0.85);
       }
       .toolbar.vertical .tbPages{
         flex-direction:column;
@@ -363,23 +376,23 @@
         flex-direction:column;
         align-items:center;
         gap:4px;
-        min-width:140px;
+        min-width:120px;
       }
       .pageIndex{
-        font-size:10px;
+        font-size:9px;
         font-weight:1100;
         color: var(--sub);
       }
       .pageName{
         border:1px solid rgba(148,163,184,0.35);
         background:#fff;
-        padding:6px 10px;
+        padding:5px 8px;
         border-radius:10px;
-        font-size:11px;
+        font-size:10px;
         font-weight:1200;
         color: var(--navy);
         cursor:pointer;
-        max-width: 160px;
+        max-width: 140px;
         text-overflow: ellipsis;
         overflow: hidden;
         white-space: nowrap;
@@ -393,19 +406,19 @@
         flex:0 0 auto;
       }
       .pageNameInput{
-        width:160px;
+        width:140px;
         border-radius:10px;
         border:1px solid rgba(148,163,184,0.35);
-        padding:6px 8px;
-        font-size:11px;
+        padding:5px 8px;
+        font-size:10px;
         font-weight:1100;
         color: var(--navy);
         text-align:center;
       }
       .iconBtn{
-        width:28px;
-        height:28px;
-        border-radius:10px;
+        width:26px;
+        height:26px;
+        border-radius:9px;
         border:1px solid rgba(148,163,184,0.35);
         background:#fff;
         display:flex;
@@ -428,9 +441,9 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        height:30px;
-        width:38px;
-        min-width:38px;
+        height:28px;
+        width:34px;
+        min-width:34px;
         padding:0 6px;
         border-radius: 999px;
         border:2px solid var(--toolColor);
@@ -444,14 +457,14 @@
         touch-action: manipulation;
       }
       .toolBtn .toolText{
-        font-size:10px;
+        font-size:9px;
         font-weight:1200;
         letter-spacing:0.4px;
       }
       .toolBtn.expanded{
         width:auto;
         min-width:0;
-        padding:0 12px;
+        padding:0 10px;
       }
       .toolBtn:hover{
         transform: translateY(-1px);
@@ -470,12 +483,12 @@
       .toolBtn.obs{ --toolColor: var(--c-obs); }
 
       .lockIcon{
-        width:32px;
-        height:32px;
+        width:28px;
+        height:28px;
         display:flex;
         align-items:center;
         justify-content:center;
-        border-radius: 10px;
+        border-radius: 9px;
         border:1px solid rgba(226,232,240,0.95);
         background:#fff;
         cursor:pointer;
@@ -486,12 +499,24 @@
       .lockIcon svg{ width:18px; height:18px; }
       .lockIcon.locked svg{ color:#F59E0B; }
       .lockIcon.unlocked svg{ color: rgba(148,163,184,1); }
+      .tbGrab{
+        width:24px;
+        height:24px;
+        border-radius: 9px;
+        border:1px solid rgba(226,232,240,0.95);
+        background:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color: rgba(100,116,139,0.9);
+      }
+      .tbGrab svg{ width:14px; height:14px; }
 
       .toolbar.mobile{
         flex-direction: column;
         align-items:center;
         gap:6px;
-        padding:8px 10px;
+        padding:6px 8px;
         border-radius:18px;
         cursor: default;
       }
@@ -511,8 +536,8 @@
         gap:8px;
       }
       .tbMobileTabs .iconBtn{
-        width:32px;
-        height:32px;
+        width:28px;
+        height:28px;
         border-radius:12px;
       }
       .tbMobileTabs .iconBtn svg{
@@ -531,13 +556,13 @@
         gap:6px;
       }
       .toolbar.mobile .toolBtn{
-        width:32px;
-        min-width:32px;
-        height:32px;
+        width:30px;
+        min-width:30px;
+        height:30px;
         padding:0;
       }
       .toolbar.mobile .toolBtn.expanded{
-        width:32px;
+        width:30px;
         padding:0;
       }
       .toolbar.mobile .toolText{
@@ -594,26 +619,26 @@
       }
       .zBtns{ display:flex; gap:6px; flex-wrap:nowrap; }
       .zBtn{
-        padding:6px 8px;
-        border-radius:10px;
+        padding:4px 6px;
+        border-radius:9px;
         border:1px solid rgba(226,232,240,0.95);
         background:#fff;
         cursor:pointer;
-        font-size:11px;
+        font-size:10px;
         font-weight:1100;
         user-select:none;
         touch-action: manipulation;
       }
       .zBtn:hover{ background:#F8FAFC; }
       .zReadout{
-        font-size:11px;
+        font-size:10px;
         font-weight:1100;
         color: var(--navy);
-        padding: 6px 8px;
-        border-radius:10px;
+        padding: 4px 6px;
+        border-radius:9px;
         border:1px solid rgba(226,232,240,0.95);
         background: #fff;
-        min-width: 56px;
+        min-width: 48px;
         text-align:center;
       }
 
@@ -629,6 +654,7 @@
         min-height: 0;
         height: 100%;
         backdrop-filter: blur(10px);
+        transition: width 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
       }
       .panel.collapsed{
         width:56px;
@@ -962,13 +988,15 @@
         padding: 16px;
       }
       .modalCard{
-        width: min(760px, 96vw);
-        max-height: 86vh;
+        width: min(860px, 96vw);
+        max-height: 92vh;
         background: #fff;
         border-radius: 18px;
         border: 1px solid rgba(226,232,240,0.95);
         box-shadow: 0 20px 40px rgba(2,6,23,0.2);
-        overflow: auto;
+        overflow: hidden;
+        display:flex;
+        flex-direction:column;
       }
       .modalHeader{
         padding: 14px 18px;
@@ -986,6 +1014,9 @@
       }
       .modalBody{
         padding: 16px 18px 6px;
+        overflow:auto;
+        min-height:0;
+        flex:1;
       }
       .modalActions{
         padding: 12px 18px 16px;
@@ -2156,7 +2187,7 @@
           padding: 6px 8px;
         }
         .toolbar.mobile{
-          padding: 8px 10px;
+          padding: 6px 8px;
         }
         .tbTools{
           max-width: 100%;
@@ -2197,6 +2228,16 @@
         .panelOverlay.show{
           opacity: 1;
           pointer-events: auto;
+        }
+        .modalCard{
+          width: min(96vw, 720px);
+          max-height: calc(100dvh - 24px);
+          border-radius:16px;
+        }
+        .modalHeader,
+        .modalActions{
+          flex-wrap: wrap;
+          gap:8px;
         }
         .pHeader{
           flex-direction: column;

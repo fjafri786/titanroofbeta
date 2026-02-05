@@ -231,6 +231,18 @@ declare global {
         if(name === "unlock"){
           return (<svg {...common}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7-2"/></svg>);
         }
+        if(name === "grip"){
+          return (
+            <svg {...common}>
+              <circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none" />
+            </svg>
+          );
+        }
         if(name === "chevDown"){
           return (<svg {...common}><path d="M6 9l6 6 6-6"/></svg>);
         }
@@ -1100,8 +1112,8 @@ declare global {
           const zoneRect = canvasRef.current?.getBoundingClientRect();
           const toolbarRect = toolbarRef.current?.getBoundingClientRect();
           if(!zoneRect || !toolbarRect) return current || "horizontal";
-          const threshold = 10;
-          const hysteresis = 12;
+          const threshold = 24;
+          const hysteresis = 16;
           const leftEdge = zoneRect.left + threshold;
           const rightEdge = zoneRect.right - toolbarRect.width - threshold;
           if(current === "vertical"){
@@ -1110,7 +1122,7 @@ declare global {
             }
             return "vertical";
           }
-          if(pos.x <= leftEdge - hysteresis || pos.x >= rightEdge + hysteresis){
+          if(pos.x <= leftEdge || pos.x >= rightEdge){
             return "vertical";
           }
           return "horizontal";
@@ -3696,6 +3708,9 @@ declare global {
                       </div>
                     </div>
                     <div className="tbDivider" />
+                    <div className="tbGrab" aria-hidden="true" title="Drag toolbar">
+                      <Icon name="grip" />
+                    </div>
                     <LockIcon
                       locked={toolbarLocked}
                       onToggle={() => {
