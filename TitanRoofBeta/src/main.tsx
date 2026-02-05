@@ -1097,16 +1097,6 @@ import "./styles.css";
           setView({ scale: s, tx: 0, ty: 0 });
         };
 
-        // Fit when BG first set
-        const bgWasSetRef = useRef(false);
-        useEffect(() => {
-          if((activeBackground?.url || mapUrl) && !bgWasSetRef.current){
-            bgWasSetRef.current = true;
-            setTimeout(() => zoomFit(), 0);
-          }
-          if(!activeBackground?.url && !mapUrl) bgWasSetRef.current = false;
-        }, [activeBackground?.url, mapUrl]);
-
         const onWheel = (e) => {
           e.preventDefault();
           const isZoom = e.ctrlKey || e.metaKey;
@@ -2083,6 +2073,16 @@ import "./styles.css";
           return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&output=embed`;
         }, [activePage?.map?.address, activePage?.map?.enabled, activePage?.map?.zoom]);
         const hasBackground = Boolean(activeBackground?.url || mapUrl);
+
+        // Fit when BG first set
+        const bgWasSetRef = useRef(false);
+        useEffect(() => {
+          if((activeBackground?.url || mapUrl) && !bgWasSetRef.current){
+            bgWasSetRef.current = true;
+            setTimeout(() => zoomFit(), 0);
+          }
+          if(!activeBackground?.url && !mapUrl) bgWasSetRef.current = false;
+        }, [activeBackground?.url, mapUrl]);
 
         // === TS SVG ===
         const renderTS = (ts) => {
