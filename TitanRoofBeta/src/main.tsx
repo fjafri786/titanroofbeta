@@ -380,6 +380,9 @@ declare global {
         const [selectedId, setSelectedId] = useState(null);
         const [panelView, setPanelView] = useState("items"); // items | props
         const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+        const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const [mobileToolbarPanel, setMobileToolbarPanel] = useState(null);
+        const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
         const [isAuthenticated, setIsAuthenticated] = useState(false);
         const [passwordInput, setPasswordInput] = useState("");
@@ -883,8 +886,8 @@ declare global {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.1 Beta",
-            version: "4.1",
+            app: "TitanRoof 4.1.2 Beta",
+            version: "4.1.2",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1008,6 +1011,10 @@ declare global {
         const sidebarToolbarPosRef = useRef(null);
 
         useEffect(() => {
+          document.documentElement.style.setProperty("--mobile-scale", String(mobileScale));
+        }, [mobileScale]);
+
+        useEffect(() => {
           previousToolbarLock.current = toolbarLocked;
         }, [toolbarLocked]);
 
@@ -1022,10 +1029,14 @@ declare global {
             previousToolbarLock.current = toolbarLocked;
             setToolbarLocked(true);
             setToolbarPos({ x: window.innerWidth / 2, y: 10 });
+            setObsPaletteOpen(false);
           } else {
             setToolbarLocked(previousToolbarLock.current);
             setToolbarPos(previousToolbarPos.current || { x: 20, y: 80 });
             setMobilePanelOpen(false);
+            setMobileMenuOpen(false);
+            setMobileToolbarPanel(null);
+            setObsPaletteOpen(false);
           }
         }, [isMobile]);
 
@@ -2589,6 +2600,17 @@ declare global {
           setObsPaletteOpen(true);
         };
 
+        const handleMobileToolSelect = (key) => {
+          setObsPaletteOpen(false);
+          if(key === "obs"){
+            setTool("obs");
+            setMobileToolbarPanel(null);
+            return;
+          }
+          setTool(prev => (prev === key ? null : key));
+          setMobileToolbarPanel(null);
+        };
+
         const isDamaged = (it) => {
           if(it.type === "apt" || it.type === "ds"){
             return (it.data.damageEntries || []).length > 0;
@@ -2987,6 +3009,11 @@ declare global {
           if(isMobile) setMobilePanelOpen(true);
         };
 
+        const handleMobileAction = (action) => {
+          action();
+          setMobileMenuOpen(false);
+        };
+
         const headerContent = (
           <PropertiesBar
             viewMode={viewMode}
@@ -2999,6 +3026,8 @@ declare global {
             onOpen={() => trpInputRef.current?.click()}
             onExport={() => { saveState("manual"); setExportMode(true); }}
             isMobile={isMobile}
+            mobileMenuOpen={mobileMenuOpen}
+            onMobileMenuToggle={() => setMobileMenuOpen(v => !v)}
           />
         );
 
@@ -3336,7 +3365,7 @@ declare global {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.1" />
+          <TopBar label="TitanRoof Beta v4.1.2" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3354,7 +3383,7 @@ declare global {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.1 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.1.2 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3383,138 +3412,290 @@ declare global {
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
-              <div
-                className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "")}
-                style={isMobile
-                  ? { left: "50%", top: "calc(var(--topbar-height) + var(--propsbar-height) + 6px)", transform: "translateX(-50%)" }
-                  : { left: toolbarPos.x, top: toolbarPos.y }}
-                onPointerDown={handleToolbarPointerDown}
-                onPointerMove={handleToolbarPointerMove}
-                onPointerUp={handleToolbarPointerUp}
-                onPointerCancel={handleToolbarPointerUp}
-                ref={toolbarRef}
-              >
-                <div className="tbCenter">
-                  <div className="tbTools">
-                    {toolDefs.map(t => {
-                      const isActive = tool === t.key;
-                      return (
-                        <button
-                          key={t.key}
-                          className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
-                          type="button"
-                          onClick={() => handleToolSelect(t.key)}
-                          title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                          aria-label={t.label}
-                        >
-                          <span className="toolText">{isActive ? t.label : t.code}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {tool === "obs" && !obsPaletteOpen && (
-                    <div className="tbMiniHint" aria-live="polite">
-                      Choose an OBS tool
-                    </div>
-                  )}
-                </div>
-                <div className="tbDivider" />
-                <div className="tbZoom">
-                  <div className="tbZoomRow">
-                    <button className="zBtn" onClick={zoomOut}>−</button>
-                    <button className="zBtn" onClick={zoomIn}>+</button>
-                    <button className="zBtn" onClick={zoomFit}>Fit</button>
-                  </div>
-                  <div className="zReadout">{Math.round(view.scale*100)}%</div>
-                </div>
-                <div className="tbDivider" />
-                <div className="tbPages" role="group" aria-label="Page navigation">
-                  <div className="tbPageNav">
+              {isMobile ? (
+                <>
+                  <div className="mobileToolbar">
                     <button
+                      className={`mobileToolbarBtn ${mobileToolbarPanel === "tools" ? "active" : ""}`}
                       type="button"
-                      className="iconBtn"
-                      onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
-                      disabled={!canGoPrevPage}
-                      aria-label="Previous page"
+                      onClick={() => setMobileToolbarPanel(prev => (prev === "tools" ? null : "tools"))}
+                      aria-pressed={mobileToolbarPanel === "tools"}
                     >
-                      <Icon name="chevLeft" />
+                      <Icon name="dash" />
+                      Tools
                     </button>
-                    <div className="pageMeta">
-                      <div className="pageIndex">Page {activePageIndex + 1} of {pages.length}</div>
-                      {pageNameEditing ? (
-                        <input
-                          className="pageNameInput"
-                          value={pageNameDraft}
-                          onChange={(e) => setPageNameDraft(e.target.value)}
-                          onBlur={commitPageNameEdit}
-                          onKeyDown={(e) => {
-                            if(e.key === "Enter") commitPageNameEdit();
-                          }}
-                          aria-label="Page name"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="pageName"
-                          onClick={startPageNameEdit}
-                          title="Rename page"
-                        >
-                          <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                          <Icon name="pencil" />
-                        </button>
-                      )}
-                    </div>
                     <button
+                      className={`mobileToolbarBtn ${mobileToolbarPanel === "zoom" ? "active" : ""}`}
                       type="button"
-                      className="iconBtn"
-                      onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
-                      disabled={!canGoNextPage}
-                      aria-label="Next page"
-                    >
-                      <Icon name="chevRight" />
-                    </button>
-                  </div>
-                  <div className="tbPageTools">
-                    <label className="iconBtn" title="Upload pages">
-                      <Icon name="upload" />
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        multiple
-                        style={{ display: "none" }}
-                        onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="iconBtn"
-                      onClick={insertBlankPageAfter}
-                      aria-label="Add blank page after"
-                      title="Add blank page after"
+                      onClick={() => setMobileToolbarPanel(prev => (prev === "zoom" ? null : "zoom"))}
+                      aria-pressed={mobileToolbarPanel === "zoom"}
                     >
                       <Icon name="plus" />
+                      Zoom
                     </button>
                     <button
+                      className={`mobileToolbarBtn ${mobileToolbarPanel === "pages" ? "active" : ""}`}
                       type="button"
-                      className="iconBtn"
-                      onClick={rotateActivePage}
-                      aria-label="Rotate page"
-                      title="Rotate page"
+                      onClick={() => setMobileToolbarPanel(prev => (prev === "pages" ? null : "pages"))}
+                      aria-pressed={mobileToolbarPanel === "pages"}
                     >
-                      <Icon name="rotate" />
+                      <Icon name="panel" />
+                      Pages
                     </button>
                   </div>
+                  <div
+                    className={"mobileToolbarOverlay" + (mobileToolbarPanel ? " show" : "")}
+                    onClick={() => setMobileToolbarPanel(null)}
+                  />
+                  <div className={"mobileToolbarSheet" + (mobileToolbarPanel ? " open" : "")}>
+                    {mobileToolbarPanel === "tools" && (
+                      <div className="mobileToolbarPanel">
+                        <div className="mobileToolbarTitle">Tools</div>
+                        <div className="mobileToolbarGrid">
+                          {toolDefs.map(t => {
+                            const isActive = tool === t.key;
+                            return (
+                              <button
+                                key={t.key}
+                                className={`btn ${isActive ? "btnPrimary" : ""}`}
+                                type="button"
+                                onClick={() => handleMobileToolSelect(t.key)}
+                              >
+                                {t.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {tool === "obs" && (
+                          <div className="mobileToolbarSubpanel">
+                            <div className="mobileToolbarLabel">Observation Type</div>
+                            <div className="mobileToolbarGrid">
+                              {[
+                                { key: "dot", label: "Dot" },
+                                { key: "arrow", label: "Arrow" },
+                                { key: "poly", label: "Polygon" },
+                              ].map(option => (
+                                <button
+                                  key={option.key}
+                                  className={`btn ${obsTool === option.key ? "btnPrimary" : ""}`}
+                                  type="button"
+                                  onClick={() => setObsTool(option.key)}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {mobileToolbarPanel === "zoom" && (
+                      <div className="mobileToolbarPanel">
+                        <div className="mobileToolbarTitle">Zoom</div>
+                        <div className="mobileToolbarGrid">
+                          <button className="btn" type="button" onClick={zoomOut}>Zoom Out</button>
+                          <button className="btn" type="button" onClick={zoomIn}>Zoom In</button>
+                          <button className="btn" type="button" onClick={zoomFit}>Fit to Screen</button>
+                        </div>
+                        <div className="mobileToolbarMeta">Zoom: {Math.round(view.scale * 100)}%</div>
+                      </div>
+                    )}
+                    {mobileToolbarPanel === "pages" && (
+                      <div className="mobileToolbarPanel">
+                        <div className="mobileToolbarTitle">Pages</div>
+                        <div className="mobileToolbarRow">
+                          <button
+                            type="button"
+                            className="iconBtn"
+                            onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
+                            disabled={!canGoPrevPage}
+                            aria-label="Previous page"
+                          >
+                            <Icon name="chevLeft" />
+                          </button>
+                          <div className="mobileToolbarMeta">
+                            Page {activePageIndex + 1} of {pages.length}
+                          </div>
+                          <button
+                            type="button"
+                            className="iconBtn"
+                            onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
+                            disabled={!canGoNextPage}
+                            aria-label="Next page"
+                          >
+                            <Icon name="chevRight" />
+                          </button>
+                        </div>
+                        {pageNameEditing ? (
+                          <input
+                            className="inp"
+                            value={pageNameDraft}
+                            onChange={(e) => setPageNameDraft(e.target.value)}
+                            onBlur={commitPageNameEdit}
+                            onKeyDown={(e) => {
+                              if(e.key === "Enter") commitPageNameEdit();
+                            }}
+                            aria-label="Page name"
+                          />
+                        ) : (
+                          <button className="btn btnFull" type="button" onClick={startPageNameEdit}>
+                            Rename Page
+                          </button>
+                        )}
+                        <div className="mobileToolbarGrid">
+                          <label className="btn">
+                            Upload Pages
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              multiple
+                              style={{ display: "none" }}
+                              onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                            />
+                          </label>
+                          <button className="btn" type="button" onClick={insertBlankPageAfter}>
+                            Add Page
+                          </button>
+                          <button className="btn" type="button" onClick={rotateActivePage}>
+                            Rotate
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div
+                  className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "")}
+                  style={{ left: toolbarPos.x, top: toolbarPos.y }}
+                  onPointerDown={handleToolbarPointerDown}
+                  onPointerMove={handleToolbarPointerMove}
+                  onPointerUp={handleToolbarPointerUp}
+                  onPointerCancel={handleToolbarPointerUp}
+                  ref={toolbarRef}
+                >
+                  <div className="tbCenter">
+                    <div className="tbTools">
+                      {toolDefs.map(t => {
+                        const isActive = tool === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
+                            type="button"
+                            onClick={() => handleToolSelect(t.key)}
+                            title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                            aria-label={t.label}
+                          >
+                            <span className="toolText">{isActive ? t.label : t.code}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {tool === "obs" && !obsPaletteOpen && (
+                      <div className="tbMiniHint" aria-live="polite">
+                        Choose an OBS tool
+                      </div>
+                    )}
+                  </div>
+                  <div className="tbDivider" />
+                  <div className="tbZoom">
+                    <div className="tbZoomRow">
+                      <button className="zBtn" onClick={zoomOut}>−</button>
+                      <button className="zBtn" onClick={zoomIn}>+</button>
+                      <button className="zBtn" onClick={zoomFit}>Fit</button>
+                    </div>
+                    <div className="zReadout">{Math.round(view.scale*100)}%</div>
+                  </div>
+                  <div className="tbDivider" />
+                  <div className="tbPages" role="group" aria-label="Page navigation">
+                    <div className="tbPageNav">
+                      <button
+                        type="button"
+                        className="iconBtn"
+                        onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
+                        disabled={!canGoPrevPage}
+                        aria-label="Previous page"
+                      >
+                        <Icon name="chevLeft" />
+                      </button>
+                      <div className="pageMeta">
+                        <div className="pageIndex">Page {activePageIndex + 1} of {pages.length}</div>
+                        {pageNameEditing ? (
+                          <input
+                            className="pageNameInput"
+                            value={pageNameDraft}
+                            onChange={(e) => setPageNameDraft(e.target.value)}
+                            onBlur={commitPageNameEdit}
+                            onKeyDown={(e) => {
+                              if(e.key === "Enter") commitPageNameEdit();
+                            }}
+                            aria-label="Page name"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="pageName"
+                            onClick={startPageNameEdit}
+                            title="Rename page"
+                          >
+                            <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                            <Icon name="pencil" />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="iconBtn"
+                        onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
+                        disabled={!canGoNextPage}
+                        aria-label="Next page"
+                      >
+                        <Icon name="chevRight" />
+                      </button>
+                    </div>
+                    <div className="tbPageTools">
+                      <label className="iconBtn" title="Upload pages">
+                        <Icon name="upload" />
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          multiple
+                          style={{ display: "none" }}
+                          onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="iconBtn"
+                        onClick={insertBlankPageAfter}
+                        aria-label="Add blank page after"
+                        title="Add blank page after"
+                      >
+                        <Icon name="plus" />
+                      </button>
+                      <button
+                        type="button"
+                        className="iconBtn"
+                        onClick={rotateActivePage}
+                        aria-label="Rotate page"
+                        title="Rotate page"
+                      >
+                        <Icon name="rotate" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="tbDivider" />
+                  <LockIcon
+                    locked={toolbarLocked}
+                    onToggle={() => {
+                      if(isMobile) return;
+                      setToolbarLocked(prev => !prev);
+                    }}
+                  />
                 </div>
-                <div className="tbDivider" />
-                <LockIcon
-                  locked={toolbarLocked}
-                  onToggle={() => {
-                    if(isMobile) return;
-                    setToolbarLocked(prev => !prev);
-                  }}
-                />
-              </div>
-              {tool === "obs" && obsPaletteOpen && (
+              )}
+              {!isMobile && tool === "obs" && obsPaletteOpen && (
                 <div
                   className="obsPalette"
                   style={{ left: obsPalettePos.left, top: obsPalettePos.top }}
@@ -4988,10 +5169,113 @@ declare global {
             </>
           )}
 
+          {isMobile && isAuthenticated && (
+            <>
+              <div
+                className={"mobileMenuOverlay" + (mobileMenuOpen ? " show" : "")}
+                onClick={() => setMobileMenuOpen(false)}
+              />
+              <div
+                className={"mobileMenuSheet" + (mobileMenuOpen ? " open" : "")}
+                id="mobile-actions-menu"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Mobile actions menu"
+              >
+                <div className="mobileMenuHeader">
+                  <div>
+                    <div className="mobileMenuTitle">Field Menu</div>
+                    <div className="mobileMenuSubtitle">Quick access for inspections</div>
+                  </div>
+                  <button className="iconBtn" type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+                    <Icon name="chevDown" />
+                  </button>
+                </div>
+                <div className="mobileMenuContent">
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Actions</div>
+                    <div className="mobileMenuGrid">
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => saveState("manual"))}>
+                        Save
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(exportTrp)}>
+                        Save As
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => trpInputRef.current?.click())}>
+                        Open
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
+                        Export
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Inspection Tools</div>
+                    <div className="mobileMenuGrid">
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => setHdrEditOpen(true))}>
+                        Edit Property
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => { setPanelView("items"); setMobilePanelOpen(true); })}>
+                        Items ({items.length})
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={!activeItem}
+                        onClick={() => handleMobileAction(() => { setPanelView("props"); setMobilePanelOpen(true); })}
+                      >
+                        Selected Item
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">View Mode</div>
+                    <div className="mobileMenuGrid">
+                      {["diagram", "photos", "report"].map(mode => (
+                        <button
+                          key={mode}
+                          className={`btn ${viewMode === mode ? "btnPrimary" : ""}`}
+                          type="button"
+                          aria-pressed={viewMode === mode}
+                          onClick={() => handleMobileAction(() => setViewMode(mode))}
+                        >
+                          {mode === "diagram" ? "Diagram" : mode === "photos" ? "Photos" : "Report"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Text Size</div>
+                    <div className="mobileMenuGrid">
+                      {[
+                        { key: "compact", label: "Compact", value: 0.92 },
+                        { key: "default", label: "Default", value: 1 },
+                        { key: "large", label: "Large", value: 1.08 },
+                      ].map(option => (
+                        <button
+                          key={option.key}
+                          className={`btn ${mobileScale === option.value ? "btnPrimary" : ""}`}
+                          type="button"
+                          aria-pressed={mobileScale === option.value}
+                          onClick={() => setMobileScale(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.1</div>
+                <div className="printTitleHero">Titan Roof Version 4.1.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
