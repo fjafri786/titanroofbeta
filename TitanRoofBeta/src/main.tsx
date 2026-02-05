@@ -4,6 +4,15 @@ import PropertiesBar from "./components/PropertiesBar";
 import TopBar from "./components/TopBar";
 import "./styles.css";
 
+declare global {
+  interface Window {
+    pdfjsLib?: {
+      GlobalWorkerOptions?: { workerSrc?: string };
+      getDocument?: (options: { data: ArrayBuffer }) => { promise: Promise<any> };
+    };
+  }
+}
+
       const SIZES = ["1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.25", "1.5", "1.75", "2", "2.5", "3+"];
       const CARDINAL_DIRS = ["N", "S", "E", "W"];
       const WIND_DIRS = ["N", "S", "E", "W", "Ridge", "Hip", "Valley"];
@@ -32,6 +41,10 @@ import "./styles.css";
         { code: "DII", label: "Improper Installation" },
         { code: "ShP", label: "Premium Shingles" }
       ];
+
+      const SHEET_BASE_WIDTH = 1024;
+      const DEFAULT_ASPECT_RATIO = 1024 / 720;
+      const LETTER_ASPECT_RATIO = 8.5 / 11;
 
       const SHINGLE_KIND = [
         { code: "LAM", label: "Laminate Shingles" },
@@ -170,6 +183,46 @@ import "./styles.css";
         if(obj?.url && obj.url.startsWith("blob:")) URL.revokeObjectURL(obj.url);
       }
 
+      const buildImageObj = (dataUrl, name = "image", type = "image/png") => ({
+        name,
+        url: dataUrl,
+        dataUrl,
+        type
+      });
+
+      async function renderPdfToPages(file){
+        const buffer = await file.arrayBuffer();
+        const pdfjsLib = window.pdfjsLib;
+        if(!pdfjsLib?.getDocument){
+          console.warn("PDF support is not available.");
+          return [];
+        }
+        if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
+        }
+        const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const pages = [];
+        for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
+          const page = await doc.getPage(pageNum);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          if(ctx){
+            await page.render({ canvasContext: ctx, viewport }).promise;
+          }
+          const dataUrl = canvas.toDataURL("image/png");
+          pages.push({
+            background: buildImageObj(dataUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`),
+            aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
+          });
+        }
+        if(doc.cleanup) doc.cleanup();
+        if(doc.destroy) doc.destroy();
+        return pages;
+      }
+
       const Icon = ({name, className=""}) => {
         const common = { className: `ico ${className}`, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round" };
         if(name === "lock"){
@@ -244,6 +297,31 @@ import "./styles.css";
             </svg>
           );
         }
+        if(name === "upload"){
+          return (
+            <svg {...common}>
+              <path d="M12 16V4" />
+              <path d="M8 8l4-4 4 4" />
+              <path d="M4 20h16" />
+            </svg>
+          );
+        }
+        if(name === "plus"){
+          return (
+            <svg {...common}>
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          );
+        }
+        if(name === "rotate"){
+          return (
+            <svg {...common}>
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          );
+        }
         if(name === "dash"){
           return (
             <svg {...common}>
@@ -287,12 +365,15 @@ import "./styles.css";
         const canvasRef = useRef(null);
         const [tool, setTool] = useState(null);
         const [obsTool, setObsTool] = useState("dot");
+        const [obsPaletteOpen, setObsPaletteOpen] = useState(false);
+        const [obsPalettePos, setObsPalettePos] = useState({ left: 0, top: 0 });
         const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
         const [toolbarDragging, setToolbarDragging] = useState(false);
         const [toolbarLocked, setToolbarLocked] = useState(false);
         const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
         const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
+        const obsPaletteRef = useRef(null);
         const trpInputRef = useRef(null);
 
         const [items, setItems] = useState([]);
@@ -408,12 +489,19 @@ import "./styles.css";
           id: uid(),
           name: "Page 1",
           background: null,
-          map: { enabled: false, address: "", zoom: 18 }
+          map: { enabled: false, address: "", zoom: 18, type: "map" },
+          aspectRatio: DEFAULT_ASPECT_RATIO,
+          rotation: 0
         }), []);
         const [pages, setPages] = useState([initialPage]);
         const [activePageId, setActivePageId] = useState(initialPage.id);
         const [dashOpen, setDashOpen] = useState(false);
+        const [dashPos, setDashPos] = useState({ x: 0, y: 0 });
+        const [dashDragging, setDashDragging] = useState(false);
         const pagesRef = useRef(pages);
+        const dashRef = useRef(null);
+        const dashDragRef = useRef(null);
+        const dashInitialized = useRef(false);
 
         // Dash collapse
         const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -709,13 +797,17 @@ import "./styles.css";
             ? parsed.pages.map(page => ({
               ...page,
               background: reviveFileObj(page.background),
-              map: page.map || { enabled: false, address: "", zoom: 18 }
+              map: { enabled: false, address: "", zoom: 18, type: "map", ...(page.map || {}) },
+              aspectRatio: page.aspectRatio || DEFAULT_ASPECT_RATIO,
+              rotation: page.rotation || 0
             }))
             : [{
               id: uid(),
               name: "Page 1",
               background: reviveFileObj(parsed.roof?.diagramBg),
-              map: parsed.roof?.map || { enabled: false, address: "", zoom: 18 }
+              map: { enabled: false, address: "", zoom: 18, type: "map", ...(parsed.roof?.map || {}) },
+              aspectRatio: DEFAULT_ASPECT_RATIO,
+              rotation: 0
             }];
           setPages(revivedPages);
           const fallbackPageId = parsed.activePageId || revivedPages[0]?.id;
@@ -1006,6 +1098,27 @@ import "./styles.css";
           setToolbarDragging(false);
         }, [toolbarLocked]);
 
+        useEffect(() => {
+          if(tool !== "obs"){
+            setObsPaletteOpen(false);
+          }
+        }, [tool]);
+
+        useEffect(() => {
+          if(!obsPaletteOpen) return;
+          const rect = toolbarRef.current?.getBoundingClientRect();
+          if(!rect) return;
+          const offset = 10;
+          let left = toolbarOrientation === "vertical" ? rect.right + offset : rect.left;
+          let top = toolbarOrientation === "vertical" ? rect.top : rect.bottom + offset;
+          const paletteRect = obsPaletteRef.current?.getBoundingClientRect();
+          if(paletteRect){
+            left = clamp(left, 10, window.innerWidth - paletteRect.width - 10);
+            top = clamp(top, 10, window.innerHeight - paletteRect.height - 10);
+          }
+          setObsPalettePos({ left, top });
+        }, [obsPaletteOpen, toolbarOrientation, toolbarPos, viewportSize.w, viewportSize.h]);
+
         const handleToolbarPointerDown = (e) => {
           if(isMobile) return;
           if(e.button !== 0) return;
@@ -1035,6 +1148,77 @@ import "./styles.css";
           if(!toolbarDragRef.current) return;
           toolbarDragRef.current = null;
           setToolbarDragging(false);
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+        };
+
+        const clampDashPos = useCallback((pos) => {
+          const zoneRect = canvasRef.current?.getBoundingClientRect();
+          const dashRect = dashRef.current?.getBoundingClientRect();
+          if(!zoneRect || !dashRect) return pos;
+          const padding = 12;
+          return {
+            x: clamp(pos.x, zoneRect.left + padding, zoneRect.right - dashRect.width - padding),
+            y: clamp(pos.y, zoneRect.top + padding, zoneRect.bottom - dashRect.height - padding)
+          };
+        }, []);
+
+        const ensureDashPosition = useCallback(() => {
+          if(!dashOpen) return;
+          if(!dashRef.current) return;
+          if(!dashInitialized.current){
+            const zoneRect = canvasRef.current?.getBoundingClientRect();
+            const dashRect = dashRef.current?.getBoundingClientRect();
+            if(zoneRect && dashRect){
+              dashInitialized.current = true;
+              setDashPos({
+                x: zoneRect.right - dashRect.width - 18,
+                y: zoneRect.bottom - dashRect.height - 18
+              });
+            }
+            return;
+          }
+          setDashPos(prev => clampDashPos(prev));
+        }, [dashOpen, clampDashPos]);
+
+        useEffect(() => {
+          if(!dashOpen) return;
+          const id = requestAnimationFrame(() => ensureDashPosition());
+          return () => cancelAnimationFrame(id);
+        }, [dashOpen, viewportSize.w, viewportSize.h, ensureDashPosition]);
+
+        useEffect(() => {
+          if(!dashOpen){
+            dashInitialized.current = false;
+          }
+        }, [dashOpen]);
+
+        const handleDashPointerDown = (e) => {
+          if(e.button !== 0) return;
+          if(e.target.closest("button")) return;
+          e.preventDefault();
+          dashDragRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            originX: dashPos.x,
+            originY: dashPos.y
+          };
+          setDashDragging(true);
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+        };
+
+        const handleDashPointerMove = (e) => {
+          if(!dashDragRef.current) return;
+          const { startX, startY, originX, originY } = dashDragRef.current;
+          setDashPos(clampDashPos({
+            x: originX + (e.clientX - startX),
+            y: originY + (e.clientY - startY)
+          }));
+        };
+
+        const handleDashPointerUp = (e) => {
+          if(!dashDragRef.current) return;
+          dashDragRef.current = null;
+          setDashDragging(false);
           try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
         };
 
@@ -1091,8 +1275,8 @@ import "./styles.css";
           const v = viewportRef.current?.getBoundingClientRect();
           if(!v) return;
           const pad = 80;
-          const sx = (v.width - pad) / 1024;
-          const sy = (v.height - pad) / 720;
+          const sx = (v.width - pad) / sheetWidth;
+          const sy = (v.height - pad) / sheetHeight;
           const s = clamp(Math.min(sx, sy), 0.35, 3.0);
           setView({ scale: s, tx: 0, ty: 0 });
         };
@@ -1390,17 +1574,64 @@ import "./styles.css";
         };
 
         // === Files ===
+        const buildPageEntry = ({ name, background, aspectRatio, rotation = 0 }) => ({
+          id: uid(),
+          name,
+          background,
+          map: { enabled: false, address: "", zoom: 18, type: "map" },
+          aspectRatio: aspectRatio || DEFAULT_ASPECT_RATIO,
+          rotation
+        });
+
+        const buildPagesFromFile = async (file, pageIndexBase) => {
+          if(file.type === "application/pdf"){
+            const renderedPages = await renderPdfToPages(file);
+            if(renderedPages.length){
+              return renderedPages.map((entry, idx) => buildPageEntry({
+                name: renderedPages.length > 1
+                  ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                  : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
+                background: entry.background,
+                aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
+              }));
+            }
+            const background = await fileToObj(file);
+            return [buildPageEntry({
+              name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageIndexBase + 1}`,
+              background,
+              aspectRatio: LETTER_ASPECT_RATIO
+            })];
+          }
+          const background = await fileToObj(file);
+          return [buildPageEntry({
+            name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageIndexBase + 1}`,
+            background
+          })];
+        };
+
         const setDiagramBg = async (file) => {
-          const diagramBg = await fileToObj(file);
-          setPages(prev => prev.map(page => {
-            if(page.id !== activePageId) return page;
-            revokeFileObj(page.background);
-            return {
-              ...page,
-              background: diagramBg,
-              map: { ...page.map, enabled: false }
-            };
-          }));
+          const pageEntries = await buildPagesFromFile(file, activePageIndex);
+          if(!pageEntries.length) return;
+          const [first, ...rest] = pageEntries;
+          setPages(prev => {
+            const next = [...prev];
+            const target = next.find(page => page.id === activePageId);
+            if(target){
+              revokeFileObj(target.background);
+              next.splice(activePageIndex, 1, {
+                ...target,
+                name: first.name,
+                background: first.background,
+                map: { ...target.map, enabled: false },
+                aspectRatio: first.aspectRatio || DEFAULT_ASPECT_RATIO,
+                rotation: first.rotation || 0
+              });
+              if(rest.length){
+                next.splice(activePageIndex + 1, 0, ...rest);
+              }
+            }
+            return next;
+          });
         };
 
         const updateActivePage = (patch) => {
@@ -1420,24 +1651,46 @@ import "./styles.css";
         const addPagesFromFiles = async (files) => {
           if(!files?.length) return;
           const fileList = Array.from(files);
-          const pageOffset = pages.length;
-          const prepared = await Promise.all(fileList.map(async (file, idx) => ({
-            id: uid(),
-            name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageOffset + idx + 1}`,
-            background: await fileToObj(file),
-            map: { enabled: false, address: "", zoom: 18 }
-          })));
+          let pageOffset = pages.length;
+          const prepared = [];
+          for(const file of fileList){
+            const entries = await buildPagesFromFile(file, pageOffset);
+            prepared.push(...entries);
+            pageOffset += entries.length;
+          }
+          if(!prepared.length) return;
 
           const activeHasContent = activePage?.background?.url
             || activePage?.map?.enabled
             || items.some(item => item.pageId === activePageId);
 
-          if(prepared.length === 1 && !activeHasContent){
-            setPages(prev => prev.map(page => (
-              page.id === activePageId ? { ...page, background: prepared[0].background, name: page.name || prepared[0].name } : page
-            )));
+          if(!activeHasContent){
+            const [first, ...rest] = prepared;
+            setPages(prev => {
+              const next = [...prev];
+              const target = next.find(page => page.id === activePageId);
+              if(target){
+                revokeFileObj(target.background);
+                next.splice(activePageIndex, 1, {
+                  ...target,
+                  name: first.name,
+                  background: first.background,
+                  map: { ...target.map, enabled: false },
+                  aspectRatio: first.aspectRatio || DEFAULT_ASPECT_RATIO,
+                  rotation: first.rotation || 0
+                });
+                if(rest.length){
+                  next.splice(activePageIndex + 1, 0, ...rest);
+                }
+              }
+              return next;
+            });
           } else {
-            setPages(prev => [...prev, ...prepared]);
+            setPages(prev => {
+              const next = [...prev];
+              next.splice(activePageIndex + 1, 0, ...prepared);
+              return next;
+            });
             setActivePageId(prepared[0].id);
           }
         };
@@ -1449,7 +1702,9 @@ import "./styles.css";
             id: resetPageId,
             name: "Page 1",
             background: null,
-            map: { enabled: false, address: "", zoom: 18 }
+            map: { enabled: false, address: "", zoom: 18, type: "map" },
+            aspectRatio: DEFAULT_ASPECT_RATIO,
+            rotation: 0
           }]);
           setActivePageId(resetPageId);
           // clear all items
@@ -2070,9 +2325,28 @@ import "./styles.css";
         const mapUrl = useMemo(() => {
           if(!activePage?.map?.enabled || !activePage?.map?.address) return "";
           const address = encodeURIComponent(activePage.map.address);
-          return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&output=embed`;
-        }, [activePage?.map?.address, activePage?.map?.enabled, activePage?.map?.zoom]);
+          const mapType = activePage.map.type === "satellite" ? "k" : "m";
+          return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&t=${mapType}&output=embed`;
+        }, [activePage?.map?.address, activePage?.map?.enabled, activePage?.map?.zoom, activePage?.map?.type]);
         const hasBackground = Boolean(activeBackground?.url || mapUrl);
+
+        const sheetMetrics = useMemo(() => {
+          const baseAspect = activePage?.aspectRatio || DEFAULT_ASPECT_RATIO;
+          const rotation = activePage?.rotation || 0;
+          const effectiveAspect = rotation % 180 === 90 ? 1 / baseAspect : baseAspect;
+          return {
+            width: SHEET_BASE_WIDTH,
+            height: SHEET_BASE_WIDTH / effectiveAspect,
+            rotation
+          };
+        }, [activePage?.aspectRatio, activePage?.rotation]);
+        const sheetWidth = sheetMetrics.width;
+        const sheetHeight = sheetMetrics.height;
+        const toPxX = (value) => value * sheetWidth;
+        const toPxY = (value) => value * sheetHeight;
+        const backgroundStyle = sheetMetrics.rotation
+          ? { transform: `rotate(${sheetMetrics.rotation}deg)` }
+          : undefined;
 
         // Fit when BG first set
         const bgWasSetRef = useRef(false);
@@ -2087,11 +2361,11 @@ import "./styles.css";
         // === TS SVG ===
         const renderTS = (ts) => {
           const pts = ts.data.points || [];
-          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const isSel = selectedId === ts.id;
 
           const bb = bboxFromPoints(pts);
-          const topRight = { x: bb.maxX*1024, y: bb.minY*720 };
+          const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
 
           return (
             <g key={ts.id}>
@@ -2101,8 +2375,8 @@ import "./styles.css";
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
                 {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
               </text>
 
@@ -2113,8 +2387,8 @@ import "./styles.css";
 
               {isSel && !ts.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
-                  <circle className="handle" cx={p.x*1024} cy={p.y*720} r="7" />
-                  <circle className="handleDot" cx={p.x*1024} cy={p.y*720} r="2.5" />
+                  <circle className="handle" cx={toPxX(p.x)} cy={toPxY(p.y)} r="7" />
+                  <circle className="handleDot" cx={toPxX(p.x)} cy={toPxY(p.y)} r="2.5" />
                 </g>
               ))}
             </g>
@@ -2123,9 +2397,9 @@ import "./styles.css";
 
         const renderTSPrint = (ts) => {
           const pts = ts.data.points || [];
-          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
-          const topRight = { x: bb.maxX*1024, y: bb.minY*720 };
+          const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
           return (
             <g key={`print-${ts.id}`}>
               <polygon
@@ -2134,8 +2408,8 @@ import "./styles.css";
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
                 {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
               </text>
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
@@ -2148,7 +2422,7 @@ import "./styles.css";
 
         const renderObsArea = (obs) => {
           const pts = obs.data.points || [];
-          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const isSel = selectedId === obs.id;
           const bb = bboxFromPoints(pts);
           return (
@@ -2159,13 +2433,13 @@ import "./styles.css";
                 stroke="var(--c-obs)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
               {isSel && !obs.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
-                  <circle className="handleObs" cx={p.x*1024} cy={p.y*720} r="7" />
-                  <circle className="handleObsDot" cx={p.x*1024} cy={p.y*720} r="2.5" />
+                  <circle className="handleObs" cx={toPxX(p.x)} cy={toPxY(p.y)} r="7" />
+                  <circle className="handleObsDot" cx={toPxX(p.x)} cy={toPxY(p.y)} r="2.5" />
                 </g>
               ))}
             </g>
@@ -2176,10 +2450,10 @@ import "./styles.css";
           const [a, b] = obs.data.points || [];
           if(!a || !b) return null;
           const isSel = selectedId === obs.id;
-          const ax = a.x * 1024;
-          const ay = a.y * 720;
-          const bx = b.x * 1024;
-          const by = b.y * 720;
+          const ax = toPxX(a.x);
+          const ay = toPxY(a.y);
+          const bx = toPxX(b.x);
+          const by = toPxY(b.y);
           const angle = Math.atan2(by - ay, bx - ax);
           const headSize = 12;
           const drawHead = (x, y, flip = false) => {
@@ -2195,15 +2469,16 @@ import "./styles.css";
             }
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
           };
-          const labelX = (ax + bx) / 2;
-          const labelY = (ay + by) / 2;
+          const labelOffset = 16;
+          const labelX = bx + Math.cos(angle) * labelOffset;
+          const labelY = by + Math.sin(angle) * labelOffset;
           return (
             <g key={obs.id}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={isSel ? 3 : 2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX + 8} y={labelY - 8} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
                   {obs.data.label}
                 </text>
               )}
@@ -2213,7 +2488,7 @@ import "./styles.css";
 
         const renderObsAreaPrint = (obs) => {
           const pts = obs.data.points || [];
-          const ptsPx = pts.map(p => `${p.x*1024},${p.y*720}`).join(" ");
+          const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
           return (
             <g key={`print-${obs.id}`}>
@@ -2223,7 +2498,7 @@ import "./styles.css";
                 stroke="var(--c-obs)"
                 strokeWidth={2}
               />
-              <text x={(bb.minX*1024)+8} y={(bb.minY*720)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
             </g>
@@ -2233,10 +2508,10 @@ import "./styles.css";
         const renderObsArrowPrint = (obs) => {
           const [a, b] = obs.data.points || [];
           if(!a || !b) return null;
-          const ax = a.x * 1024;
-          const ay = a.y * 720;
-          const bx = b.x * 1024;
-          const by = b.y * 720;
+          const ax = toPxX(a.x);
+          const ay = toPxY(a.y);
+          const bx = toPxX(b.x);
+          const by = toPxY(b.y);
           const angle = Math.atan2(by - ay, bx - ax);
           const headSize = 12;
           const drawHead = (x, y, flip = false) => {
@@ -2252,15 +2527,16 @@ import "./styles.css";
             }
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
           };
-          const labelX = (ax + bx) / 2;
-          const labelY = (ay + by) / 2;
+          const labelOffset = 16;
+          const labelX = bx + Math.cos(angle) * labelOffset;
+          const labelY = by + Math.sin(angle) * labelOffset;
           return (
             <g key={`print-${obs.id}`}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX + 8} y={labelY - 8} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
                   {obs.data.label}
                 </text>
               )}
@@ -2293,6 +2569,25 @@ import "./styles.css";
           { key:"wind", label:"Wind", code:"W", cls:"wind" },
           { key:"obs", label:"Observation", code:"OBS", cls:"obs" },
         ];
+
+        const handleToolSelect = (key) => {
+          if(key !== "obs"){
+            setObsPaletteOpen(false);
+            setTool(prev => (prev === key ? null : key));
+            return;
+          }
+          if(tool !== "obs"){
+            setTool("obs");
+            setObsPaletteOpen(true);
+            return;
+          }
+          if(obsPaletteOpen){
+            setObsPaletteOpen(false);
+            setTool(null);
+            return;
+          }
+          setObsPaletteOpen(true);
+        };
 
         const isDamaged = (it) => {
           if(it.type === "apt" || it.type === "ds"){
@@ -2666,6 +2961,25 @@ import "./styles.css";
         };
         const canGoPrevPage = activePageIndex > 0;
         const canGoNextPage = activePageIndex < pages.length - 1;
+        const insertBlankPageAfter = () => {
+          const blankPage = buildPageEntry({
+            name: `Page ${pages.length + 1}`,
+            background: null,
+            aspectRatio: activePage?.aspectRatio || DEFAULT_ASPECT_RATIO,
+            rotation: activePage?.rotation || 0
+          });
+          setPages(prev => {
+            const next = [...prev];
+            next.splice(activePageIndex + 1, 0, blankPage);
+            return next;
+          });
+          setActivePageId(blankPage.id);
+        };
+        const rotateActivePage = () => {
+          if(!activePage) return;
+          const nextRotation = ((activePage.rotation || 0) + 90) % 360;
+          updateActivePage({ rotation: nextRotation });
+        };
 
         const selectItemFromList = (id) => {
           setSelectedId(id);
@@ -2761,6 +3075,16 @@ import "./styles.css";
                     value={activePage?.map?.zoom || 18}
                     onChange={(e)=>updateActivePageMap({ zoom: parseInt(e.target.value, 10) || 18 })}
                   />
+                </div>
+                <div style={{flex:"0 0 160px"}}>
+                  <select
+                    className="inp"
+                    value={activePage?.map?.type || "map"}
+                    onChange={(e)=>updateActivePageMap({ type: e.target.value })}
+                  >
+                    <option value="map">Map</option>
+                    <option value="satellite">Satellite</option>
+                  </select>
                 </div>
               </div>
               <div className="row" style={{marginTop:10}}>
@@ -3079,7 +3403,7 @@ import "./styles.css";
                           key={t.key}
                           className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
                           type="button"
-                          onClick={() => setTool(prev => (prev === t.key ? null : t.key))}
+                          onClick={() => handleToolSelect(t.key)}
                           title={t.key==="ts" ? "Drag to draw a test square" : t.label}
                           aria-label={t.label}
                         >
@@ -3088,35 +3412,9 @@ import "./styles.css";
                       );
                     })}
                   </div>
-                  {tool === "obs" && (
-                    <div className="tbMini" role="group" aria-label="Observation tools">
-                      <button
-                        type="button"
-                        className={"miniToolBtn" + (obsTool === "dot" ? " active" : "")}
-                        onClick={() => setObsTool("dot")}
-                        aria-label="Observation dot"
-                        title="Observation dot"
-                      >
-                        <Icon name="dot" />
-                      </button>
-                      <button
-                        type="button"
-                        className={"miniToolBtn" + (obsTool === "arrow" ? " active" : "")}
-                        onClick={() => setObsTool("arrow")}
-                        aria-label="Observation arrow"
-                        title="Observation arrow"
-                      >
-                        <Icon name="arrow" />
-                      </button>
-                      <button
-                        type="button"
-                        className={"miniToolBtn" + (obsTool === "poly" ? " active" : "")}
-                        onClick={() => setObsTool("poly")}
-                        aria-label="Observation polygon"
-                        title="Observation polygon"
-                      >
-                        <Icon name="poly" />
-                      </button>
+                  {tool === "obs" && !obsPaletteOpen && (
+                    <div className="tbMiniHint" aria-live="polite">
+                      Choose an OBS tool
                     </div>
                   )}
                 </div>
@@ -3131,45 +3429,81 @@ import "./styles.css";
                 </div>
                 <div className="tbDivider" />
                 <div className="tbPages" role="group" aria-label="Page navigation">
-                  <button
-                    type="button"
-                    className="iconBtn"
-                    onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
-                    disabled={!canGoPrevPage}
-                    aria-label="Previous page"
-                  >
-                    <Icon name="chevLeft" />
-                  </button>
-                  {pageNameEditing ? (
-                    <input
-                      className="pageNameInput"
-                      value={pageNameDraft}
-                      onChange={(e) => setPageNameDraft(e.target.value)}
-                      onBlur={commitPageNameEdit}
-                      onKeyDown={(e) => {
-                        if(e.key === "Enter") commitPageNameEdit();
-                      }}
-                      aria-label="Page name"
-                    />
-                  ) : (
+                  <div className="tbPageNav">
                     <button
                       type="button"
-                      className="pageName"
-                      onClick={startPageNameEdit}
-                      title="Rename page"
+                      className="iconBtn"
+                      onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
+                      disabled={!canGoPrevPage}
+                      aria-label="Previous page"
                     >
-                      {activePage?.name || `Page ${activePageIndex + 1}`}
+                      <Icon name="chevLeft" />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="iconBtn"
-                    onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
-                    disabled={!canGoNextPage}
-                    aria-label="Next page"
-                  >
-                    <Icon name="chevRight" />
-                  </button>
+                    <div className="pageMeta">
+                      <div className="pageIndex">Page {activePageIndex + 1} of {pages.length}</div>
+                      {pageNameEditing ? (
+                        <input
+                          className="pageNameInput"
+                          value={pageNameDraft}
+                          onChange={(e) => setPageNameDraft(e.target.value)}
+                          onBlur={commitPageNameEdit}
+                          onKeyDown={(e) => {
+                            if(e.key === "Enter") commitPageNameEdit();
+                          }}
+                          aria-label="Page name"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="pageName"
+                          onClick={startPageNameEdit}
+                          title="Rename page"
+                        >
+                          <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                          <Icon name="pencil" />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="iconBtn"
+                      onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
+                      disabled={!canGoNextPage}
+                      aria-label="Next page"
+                    >
+                      <Icon name="chevRight" />
+                    </button>
+                  </div>
+                  <div className="tbPageTools">
+                    <label className="iconBtn" title="Upload pages">
+                      <Icon name="upload" />
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="iconBtn"
+                      onClick={insertBlankPageAfter}
+                      aria-label="Add blank page after"
+                      title="Add blank page after"
+                    >
+                      <Icon name="plus" />
+                    </button>
+                    <button
+                      type="button"
+                      className="iconBtn"
+                      onClick={rotateActivePage}
+                      aria-label="Rotate page"
+                      title="Rotate page"
+                    >
+                      <Icon name="rotate" />
+                    </button>
+                  </div>
                 </div>
                 <div className="tbDivider" />
                 <LockIcon
@@ -3180,6 +3514,43 @@ import "./styles.css";
                   }}
                 />
               </div>
+              {tool === "obs" && obsPaletteOpen && (
+                <div
+                  className="obsPalette"
+                  style={{ left: obsPalettePos.left, top: obsPalettePos.top }}
+                  ref={obsPaletteRef}
+                  role="group"
+                  aria-label="Observation tools"
+                >
+                  <button
+                    type="button"
+                    className={"miniToolBtn" + (obsTool === "dot" ? " active" : "")}
+                    onClick={() => { setObsTool("dot"); setObsPaletteOpen(false); }}
+                    aria-label="Observation dot"
+                    title="Observation dot"
+                  >
+                    <Icon name="dot" />
+                  </button>
+                  <button
+                    type="button"
+                    className={"miniToolBtn" + (obsTool === "arrow" ? " active" : "")}
+                    onClick={() => { setObsTool("arrow"); setObsPaletteOpen(false); }}
+                    aria-label="Observation arrow"
+                    title="Observation arrow"
+                  >
+                    <Icon name="arrow" />
+                  </button>
+                  <button
+                    type="button"
+                    className={"miniToolBtn" + (obsTool === "poly" ? " active" : "")}
+                    onClick={() => { setObsTool("poly"); setObsPaletteOpen(false); }}
+                    aria-label="Observation polygon"
+                    title="Observation polygon"
+                  >
+                    <Icon name="poly" />
+                  </button>
+                </div>
+              )}
 
               {/* VIEWPORT */}
               <div
@@ -3194,20 +3565,22 @@ import "./styles.css";
                   className="stage"
                   ref={stageRef}
                   style={{
-                    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale}) translate(-512px, -360px)`,
+                    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale}) translate(-${sheetWidth / 2}px, -${sheetHeight / 2}px)`,
                   }}
                 >
-                  <div className="sheet">
-                    {activeBackground?.url && (
-                      activeBackground.type === "application/pdf" ? (
-                        <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
-                      ) : (
-                        <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
-                      )
-                    )}
-                    {mapUrl && (
-                      <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
-                    )}
+                  <div className="sheet" style={{ width: sheetWidth, height: sheetHeight }}>
+                    <div className="bgLayer" style={backgroundStyle}>
+                      {activeBackground?.url && (
+                        activeBackground.type === "application/pdf" ? (
+                          <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                        ) : (
+                          <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
+                        )
+                      )}
+                      {mapUrl && (
+                        <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
+                      )}
+                    </div>
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
@@ -3223,10 +3596,10 @@ import "./styles.css";
 
                       {drag && drag.mode === "ts-draw" && (
                         <rect
-                          x={Math.min(drag.start.x, drag.cur.x) * 1024}
-                          y={Math.min(drag.start.y, drag.cur.y) * 720}
-                          width={Math.abs(drag.cur.x - drag.start.x) * 1024}
-                          height={Math.abs(drag.cur.y - drag.start.y) * 720}
+                          x={Math.min(drag.start.x, drag.cur.x) * sheetWidth}
+                          y={Math.min(drag.start.y, drag.cur.y) * sheetHeight}
+                          width={Math.abs(drag.cur.x - drag.start.x) * sheetWidth}
+                          height={Math.abs(drag.cur.y - drag.start.y) * sheetHeight}
                           fill="rgba(220,38,38,0.10)"
                           stroke="var(--c-ts)"
                           strokeDasharray="6,6"
@@ -3235,10 +3608,10 @@ import "./styles.css";
                       )}
                       {drag && drag.mode === "obs-draw" && (
                         <rect
-                          x={Math.min(drag.start.x, drag.cur.x) * 1024}
-                          y={Math.min(drag.start.y, drag.cur.y) * 720}
-                          width={Math.abs(drag.cur.x - drag.start.x) * 1024}
-                          height={Math.abs(drag.cur.y - drag.start.y) * 720}
+                          x={Math.min(drag.start.x, drag.cur.x) * sheetWidth}
+                          y={Math.min(drag.start.y, drag.cur.y) * sheetHeight}
+                          width={Math.abs(drag.cur.x - drag.start.x) * sheetWidth}
+                          height={Math.abs(drag.cur.y - drag.start.y) * sheetHeight}
                           fill="rgba(147,51,234,0.10)"
                           stroke="var(--c-obs)"
                           strokeDasharray="6,6"
@@ -3247,10 +3620,10 @@ import "./styles.css";
                       )}
                       {drag && drag.mode === "obs-arrow" && (
                         <line
-                          x1={drag.start.x * 1024}
-                          y1={drag.start.y * 720}
-                          x2={drag.cur.x * 1024}
-                          y2={drag.cur.y * 720}
+                          x1={drag.start.x * sheetWidth}
+                          y1={drag.start.y * sheetHeight}
+                          x2={drag.cur.x * sheetWidth}
+                          y2={drag.cur.y * sheetHeight}
                           stroke="var(--c-obs)"
                           strokeDasharray="6,6"
                           strokeWidth="2"
@@ -3266,8 +3639,8 @@ import "./styles.css";
                           key={i.id}
                           className="marker"
                           style={{
-                            left: i.x * 1024,
-                            top: i.y * 720,
+                            left: i.x * sheetWidth,
+                            top: i.y * sheetHeight,
                             background: m.bg,
                             borderRadius: m.radius,
                             outline: isSel ? "2px solid var(--teal)" : "none"
@@ -3330,8 +3703,20 @@ import "./styles.css";
                 </button>
               </div>
               {dashOpen && (
-                <div className="dashPopover" role="dialog" aria-label="Hail and wind dashboard">
-                  <div className="dashHeader">
+                <div
+                  className={"dashPopover" + (dashDragging ? " dragging" : "")}
+                  role="dialog"
+                  aria-label="Hail and wind dashboard"
+                  style={{ left: dashPos.x, top: dashPos.y }}
+                  ref={dashRef}
+                >
+                  <div
+                    className="dashHeader"
+                    onPointerDown={handleDashPointerDown}
+                    onPointerMove={handleDashPointerMove}
+                    onPointerUp={handleDashPointerUp}
+                    onPointerCancel={handleDashPointerUp}
+                  >
                     <div>
                       <div className="dashTitleText">Hail + Wind Dashboard</div>
                       <div className="dashSubtitle">Current page summary for directions, sizes, and indicators.</div>
@@ -4816,18 +5201,20 @@ import "./styles.css";
               </div>
 
               <div className="printDiagramWrap">
-                <div className="printDiagramSheet">
-                  {activeBackground?.url && (
-                    activeBackground.type === "application/pdf" ? (
-                      <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
-                    ) : (
-                      <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
-                    )
-                  )}
-                  {mapUrl && (
-                    <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
-                  )}
-                  <svg className="gridSvg" width="100%" height="100%" viewBox="0 0 1024 720" preserveAspectRatio="xMidYMid meet">
+                <div className="printDiagramSheet" style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
+                  <div className="bgLayer" style={backgroundStyle}>
+                    {activeBackground?.url && (
+                      activeBackground.type === "application/pdf" ? (
+                        <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                      ) : (
+                        <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
+                      )
+                    )}
+                    {mapUrl && (
+                      <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
+                    )}
+                  </div>
+                  <svg className="gridSvg" width="100%" height="100%" viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} preserveAspectRatio="xMidYMid meet">
                     <defs>
                       <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
                         <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
