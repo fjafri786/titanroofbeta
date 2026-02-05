@@ -28,6 +28,7 @@
         --panelSoft: #F4F7FB;
         --panelEdge: rgba(148,163,184,0.25);
         --dashBg: rgba(219,234,254,0.8);
+        --mobile-scale: 1;
       }
 
       *{ box-sizing:border-box; }
@@ -712,6 +713,16 @@
         justify-content:center;
         gap:6px;
         touch-action: manipulation;
+      }
+      .hdrBtn.mobileMenuBtn{
+        padding:6px 12px;
+        border-radius:999px;
+        background: rgba(15,23,42,0.35);
+        border-color: rgba(255,255,255,0.4);
+      }
+      .hdrBtn.mobileMenuBtn.active{
+        background: rgba(15,23,42,0.55);
+        box-shadow: 0 6px 14px rgba(2,6,23,0.25);
       }
       .hdrBtn.iconOnly{
         padding:6px 8px;
@@ -1886,19 +1897,105 @@
       /* ========= Icons ========= */
       .ico{ width:18px; height:18px; color: currentColor; }
 
+      /* ========= Mobile Menu ========= */
+      .mobileMenuOverlay{
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,0.35);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 170;
+      }
+      .mobileMenuOverlay.show{
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .mobileMenuSheet{
+        position: fixed;
+        left: 50%;
+        bottom: 14px;
+        transform: translateX(-50%) translateY(120%);
+        width: min(520px, calc(100% - 24px));
+        background: rgba(255,255,255,0.98);
+        border-radius: 24px;
+        box-shadow: 0 24px 46px rgba(2,6,23,0.28);
+        border: 1px solid rgba(226,232,240,0.9);
+        z-index: 180;
+        transition: transform 0.25s ease;
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100dvh - 120px);
+        overflow: hidden;
+        backdrop-filter: blur(12px);
+      }
+      .mobileMenuSheet.open{
+        transform: translateX(-50%) translateY(0);
+      }
+      .mobileMenuHeader{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        padding:14px 18px 10px;
+        border-bottom:1px solid rgba(226,232,240,0.8);
+      }
+      .mobileMenuTitle{
+        font-size:16px;
+        font-weight:1200;
+        color: var(--text);
+      }
+      .mobileMenuSubtitle{
+        font-size:12px;
+        color: var(--sub);
+      }
+      .mobileMenuContent{
+        padding: 12px 18px 18px;
+        overflow-y: auto;
+      }
+      .mobileMenuSection + .mobileMenuSection{
+        margin-top: 16px;
+      }
+      .mobileMenuSectionTitle{
+        font-size:12px;
+        font-weight:1200;
+        color: var(--sub);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 8px;
+      }
+      .mobileMenuGrid{
+        display:grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
       /* ========= Responsive ========= */
       @media (max-width: 980px){
         .app{ grid-template-columns: 1fr minmax(300px, 360px); }
       }
       @media (max-width: 820px){
         :root{
-          --propsbar-height: 112px;
+          --propsbar-height: 124px;
+          --mobile-font: calc(13px * var(--mobile-scale));
+          --mobile-title: calc(18px * var(--mobile-scale));
+          --mobile-control: calc(36px * var(--mobile-scale));
+        }
+        body{
+          font-size: var(--mobile-font);
+        }
+        .topBar{
+          font-size: calc(10px * var(--mobile-scale));
         }
         .propertiesBar{
           flex-direction: column;
           align-items: flex-start;
           gap: 8px;
           height: var(--propsbar-height);
+          padding: 10px 14px 12px;
+        }
+        .propertiesBar.isMobile{
+          background: linear-gradient(145deg, rgba(14,165,233,0.98), rgba(59,130,246,0.98));
         }
         .propertiesLeft{
           width: 100%;
@@ -1907,9 +2004,62 @@
         .propertiesInfo{
           max-width: 100%;
         }
+        .propertiesTitle{
+          font-size: var(--mobile-title);
+        }
+        .propertiesSub{
+          font-size: calc(11px * var(--mobile-scale));
+        }
+        .propertiesRight{
+          width: 100%;
+          justify-content: space-between;
+          gap: 10px;
+        }
         .propertiesActions{
           width: 100%;
           justify-content: flex-start;
+        }
+        .hdrBtn,
+        .hdrPillBtn{
+          font-size: calc(12px * var(--mobile-scale));
+          min-height: var(--mobile-control);
+        }
+        .modeToggle{
+          flex: 1;
+          justify-content: space-between;
+        }
+        .modeToggle button{
+          font-size: calc(12px * var(--mobile-scale));
+          padding: 8px 12px;
+        }
+        .panelHeaderTitle{
+          font-size: calc(11px * var(--mobile-scale));
+        }
+        .lbl{
+          font-size: calc(10px * var(--mobile-scale));
+        }
+        .inp,
+        select,
+        textarea{
+          font-size: calc(13px * var(--mobile-scale));
+          padding: 12px 14px;
+        }
+        textarea{
+          min-height: calc(84px * var(--mobile-scale));
+        }
+        .btn{
+          font-size: calc(12px * var(--mobile-scale));
+          min-height: var(--mobile-control);
+        }
+        .radio{
+          font-size: calc(12px * var(--mobile-scale));
+          min-height: var(--mobile-control);
+        }
+        .chip{
+          font-size: calc(11px * var(--mobile-scale));
+        }
+        .mobileMenuSheet{
+          width: min(560px, calc(100% - 20px));
         }
         .app{ grid-template-columns: 1fr; }
         .toolbar{
@@ -1934,7 +2084,7 @@
           right: 0;
           bottom: 0;
           height: calc(100vh - var(--topbar-height) - var(--propsbar-height));
-          width: min(100%, 420px);
+          width: min(100%, 520px);
           border-radius: 18px 0 0 18px;
           transform: translateX(100%);
           transition: transform 0.2s ease;
@@ -1987,16 +2137,23 @@
         }
         .mobileDock{
           position: fixed;
-          left: 12px;
-          right: 12px;
+          left: 10px;
+          right: 10px;
           bottom: 16px;
           display: flex;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 8px;
+          padding: 10px;
+          border-radius: 20px;
+          background: rgba(15,23,42,0.65);
+          box-shadow: 0 16px 30px rgba(2,6,23,0.24);
+          backdrop-filter: blur(12px);
           z-index: 80;
         }
         .mobileDock .btn{
           flex: 1 1 0;
+          min-height: var(--mobile-control);
+          font-size: calc(12px * var(--mobile-scale));
         }
         .dashDock{
           margin: 0 4px 12px;

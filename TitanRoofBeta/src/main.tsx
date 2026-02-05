@@ -380,6 +380,8 @@ declare global {
         const [selectedId, setSelectedId] = useState(null);
         const [panelView, setPanelView] = useState("items"); // items | props
         const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+        const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+        const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
         const [isAuthenticated, setIsAuthenticated] = useState(false);
         const [passwordInput, setPasswordInput] = useState("");
@@ -883,8 +885,8 @@ declare global {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.1 Beta",
-            version: "4.1",
+            app: "TitanRoof 4.1.2 Beta",
+            version: "4.1.2",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1008,6 +1010,10 @@ declare global {
         const sidebarToolbarPosRef = useRef(null);
 
         useEffect(() => {
+          document.documentElement.style.setProperty("--mobile-scale", String(mobileScale));
+        }, [mobileScale]);
+
+        useEffect(() => {
           previousToolbarLock.current = toolbarLocked;
         }, [toolbarLocked]);
 
@@ -1026,6 +1032,7 @@ declare global {
             setToolbarLocked(previousToolbarLock.current);
             setToolbarPos(previousToolbarPos.current || { x: 20, y: 80 });
             setMobilePanelOpen(false);
+            setMobileMenuOpen(false);
           }
         }, [isMobile]);
 
@@ -2987,6 +2994,11 @@ declare global {
           if(isMobile) setMobilePanelOpen(true);
         };
 
+        const handleMobileAction = (action) => {
+          action();
+          setMobileMenuOpen(false);
+        };
+
         const headerContent = (
           <PropertiesBar
             viewMode={viewMode}
@@ -2999,6 +3011,8 @@ declare global {
             onOpen={() => trpInputRef.current?.click()}
             onExport={() => { saveState("manual"); setExportMode(true); }}
             isMobile={isMobile}
+            mobileMenuOpen={mobileMenuOpen}
+            onMobileMenuToggle={() => setMobileMenuOpen(v => !v)}
           />
         );
 
@@ -3336,7 +3350,7 @@ declare global {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.1" />
+          <TopBar label="TitanRoof Beta v4.1.2" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3354,7 +3368,7 @@ declare global {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.1 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.1.2 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -4988,10 +5002,113 @@ declare global {
             </>
           )}
 
+          {isMobile && isAuthenticated && (
+            <>
+              <div
+                className={"mobileMenuOverlay" + (mobileMenuOpen ? " show" : "")}
+                onClick={() => setMobileMenuOpen(false)}
+              />
+              <div
+                className={"mobileMenuSheet" + (mobileMenuOpen ? " open" : "")}
+                id="mobile-actions-menu"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Mobile actions menu"
+              >
+                <div className="mobileMenuHeader">
+                  <div>
+                    <div className="mobileMenuTitle">Field Menu</div>
+                    <div className="mobileMenuSubtitle">Quick access for inspections</div>
+                  </div>
+                  <button className="iconBtn" type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+                    <Icon name="chevDown" />
+                  </button>
+                </div>
+                <div className="mobileMenuContent">
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Actions</div>
+                    <div className="mobileMenuGrid">
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => saveState("manual"))}>
+                        Save
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(exportTrp)}>
+                        Save As
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => trpInputRef.current?.click())}>
+                        Open
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
+                        Export
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Inspection Tools</div>
+                    <div className="mobileMenuGrid">
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => setHdrEditOpen(true))}>
+                        Edit Property
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(() => { setPanelView("items"); setMobilePanelOpen(true); })}>
+                        Items ({items.length})
+                      </button>
+                      <button
+                        className="btn"
+                        type="button"
+                        disabled={!activeItem}
+                        onClick={() => handleMobileAction(() => { setPanelView("props"); setMobilePanelOpen(true); })}
+                      >
+                        Selected Item
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">View Mode</div>
+                    <div className="mobileMenuGrid">
+                      {["diagram", "photos", "report"].map(mode => (
+                        <button
+                          key={mode}
+                          className={`btn ${viewMode === mode ? "btnPrimary" : ""}`}
+                          type="button"
+                          aria-pressed={viewMode === mode}
+                          onClick={() => handleMobileAction(() => setViewMode(mode))}
+                        >
+                          {mode === "diagram" ? "Diagram" : mode === "photos" ? "Photos" : "Report"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Text Size</div>
+                    <div className="mobileMenuGrid">
+                      {[
+                        { key: "compact", label: "Compact", value: 0.92 },
+                        { key: "default", label: "Default", value: 1 },
+                        { key: "large", label: "Large", value: 1.08 },
+                      ].map(option => (
+                        <button
+                          key={option.key}
+                          className={`btn ${mobileScale === option.value ? "btnPrimary" : ""}`}
+                          type="button"
+                          aria-pressed={mobileScale === option.value}
+                          onClick={() => setMobileScale(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.1</div>
+                <div className="printTitleHero">Titan Roof Version 4.1.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
