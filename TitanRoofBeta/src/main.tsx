@@ -204,7 +204,6 @@ declare global {
 
       async function renderPdfToPages(file){
         const buffer = await file.arrayBuffer();
-        const dataUrl = await readFileAsDataUrl(file);
         const pdfjsLib = window.pdfjsLib;
         if(!pdfjsLib?.getDocument){
           console.warn("PDF support is not available.");
@@ -217,10 +216,16 @@ declare global {
         const pages = [];
         for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
           const page = await doc.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 1 });
-          const pageUrl = `${dataUrl}#page=${pageNum}`;
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d");
+          if(!ctx) continue;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL("image/png");
           pages.push({
-            background: buildPdfObj(pageUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`),
+            background: buildImageObj(dataUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
             aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
           });
         }
@@ -439,7 +444,7 @@ declare global {
         const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
         const [toolbarDragging, setToolbarDragging] = useState(false);
         const [toolbarLocked, setToolbarLocked] = useState(false);
-        const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
+        const [toolbarOrientation, setToolbarOrientation] = useState("vertical");
         const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
         const obsPaletteRef = useRef(null);
@@ -1125,38 +1130,18 @@ declare global {
           };
         }, []);
 
-        const getToolbarOrientation = useCallback((pos, current) => {
-          const zoneRect = canvasRef.current?.getBoundingClientRect();
-          const toolbarRect = toolbarRef.current?.getBoundingClientRect();
-          if(!zoneRect || !toolbarRect) return current || "horizontal";
-          const threshold = 28;
-          const hysteresis = 40;
-          const leftDistance = pos.x - zoneRect.left;
-          const rightDistance = zoneRect.right - (pos.x + toolbarRect.width);
-          const nearEdge = leftDistance <= threshold || rightDistance <= threshold;
-          if(current === "vertical"){
-            const farFromEdge = leftDistance > threshold + hysteresis && rightDistance > threshold + hysteresis;
-            return farFromEdge ? "horizontal" : "vertical";
-          }
-          return nearEdge ? "vertical" : "horizontal";
-        }, []);
-
         useEffect(() => {
           setToolbarPos(prev => clampToolbarPos(prev));
         }, [viewportSize.w, viewportSize.h, tool, clampToolbarPos]);
 
         useEffect(() => {
-          if(isMobile){
-            setToolbarOrientation("horizontal");
-            return;
-          }
-          setToolbarOrientation(prev => getToolbarOrientation(toolbarPos, prev));
-        }, [toolbarPos, isMobile, getToolbarOrientation]);
+          setToolbarOrientation(isMobile ? "horizontal" : "vertical");
+        }, [isMobile]);
 
         useEffect(() => {
           if(isMobile) return;
           setToolbarPos(prev => clampToolbarPos(prev));
-        }, [sidebarCollapsed, toolbarOrientation, isMobile, clampToolbarPos]);
+        }, [sidebarCollapsed, isMobile, clampToolbarPos]);
 
         useEffect(() => {
           if(isMobile) return;
