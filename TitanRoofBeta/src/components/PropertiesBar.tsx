@@ -5,6 +5,9 @@ interface PropertiesBarProps {
   onViewModeChange: (mode: "diagram" | "report" | "photos") => void;
   residenceName: string;
   roofSummary: string;
+  pages: { id: string; name: string }[];
+  activePageId: string;
+  onPageChange: (pageId: string) => void;
   onEdit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -20,6 +23,9 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onViewModeChange,
   residenceName,
   roofSummary,
+  pages,
+  activePageId,
+  onPageChange,
   onEdit,
   onSave,
   onSaveAs,
@@ -29,6 +35,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   mobileMenuOpen,
   onMobileMenuToggle,
 }) => {
+  const activePageIndex = Math.max(0, pages.findIndex((page) => page.id === activePageId));
   return (
     <div className={`propertiesBar${isMobile ? " isMobile" : ""}`}>
       <div className="propertiesLeft">
@@ -58,6 +65,37 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             </button>
           </div>
           <div className="propertiesSub">{roofSummary}</div>
+          <div className="propertiesPage">
+            <span className="propertiesPageLabel">
+              Page {activePageIndex + 1} of {pages.length}
+            </span>
+            <div className="propertiesPageSelect">
+              <select
+                className="propertiesPageInput"
+                value={activePageId}
+                onChange={(event) => onPageChange(event.target.value)}
+                aria-label="Select page"
+              >
+                {pages.map((page, index) => (
+                  <option key={page.id} value={page.id}>
+                    {page.name || `Page ${index + 1}`}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="propertiesPageChevron"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
       <div className="propertiesRight">

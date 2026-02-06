@@ -334,6 +334,14 @@ declare global {
             </svg>
           );
         }
+        if(name === "reset"){
+          return (
+            <svg {...common}>
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <path d="M3 4v6h6" />
+            </svg>
+          );
+        }
         if(name === "tools"){
           return (
             <svg {...common}>
@@ -555,25 +563,21 @@ declare global {
         const [pages, setPages] = useState([initialPage]);
         const [activePageId, setActivePageId] = useState(initialPage.id);
         const [dashOpen, setDashOpen] = useState(false);
+        const [dashClosing, setDashClosing] = useState(false);
+        const [dashAnimatingIn, setDashAnimatingIn] = useState(false);
         const [dashPos, setDashPos] = useState({ x: 0, y: 0 });
         const [dashDragging, setDashDragging] = useState(false);
         const pagesRef = useRef(pages);
         const dashRef = useRef(null);
         const dashDragRef = useRef(null);
         const dashInitialized = useRef(false);
+        const [dashSectionsOpen, setDashSectionsOpen] = useState({ summary: true, indicators: true });
 
         // Dash collapse
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
-        const [photoSectionsOpen, setPhotoSectionsOpen] = useState({
-          ts: true,
-          apt: true,
-          ds: true,
-          wind: true,
-          obs: true,
-          exterior: true
-        });
+        const [photoSectionsOpen, setPhotoSectionsOpen] = useState({});
 
         const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
         const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
@@ -942,8 +946,8 @@ declare global {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.1.3 Beta",
-            version: "4.1.3",
+            app: "TitanRoof 4.1.4 Beta",
+            version: "4.1.4",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1185,7 +1189,7 @@ declare global {
 
         const handleToolbarPointerDown = (e) => {
           if(isMobile) return;
-          if(e.button !== 0) return;
+          if(typeof e.button === "number" && e.button !== 0) return;
           if(toolbarLocked) return;
           if(e.target.closest("button") || e.target.closest(".lockIcon")) return;
           e.preventDefault();
@@ -1256,8 +1260,39 @@ declare global {
           }
         }, [dashOpen]);
 
+        useEffect(() => {
+          if(!dashOpen){
+            setDashAnimatingIn(false);
+            return;
+          }
+          const id = requestAnimationFrame(() => setDashAnimatingIn(true));
+          return () => cancelAnimationFrame(id);
+        }, [dashOpen]);
+
+        const openDashboard = () => {
+          setDashClosing(false);
+          setDashOpen(true);
+        };
+
+        const closeDashboard = () => {
+          setDashClosing(true);
+          setDashAnimatingIn(false);
+          window.setTimeout(() => {
+            setDashOpen(false);
+            setDashClosing(false);
+          }, 180);
+        };
+
+        const toggleDashboard = () => {
+          if(dashOpen && !dashClosing){
+            closeDashboard();
+            return;
+          }
+          openDashboard();
+        };
+
         const handleDashPointerDown = (e) => {
-          if(e.button !== 0) return;
+          if(typeof e.button === "number" && e.button !== 0) return;
           if(e.target.closest("button")) return;
           e.preventDefault();
           dashDragRef.current = {
@@ -3071,6 +3106,9 @@ declare global {
             onViewModeChange={setViewMode}
             residenceName={residenceName}
             roofSummary={roofSummary}
+            pages={pages.map(page => ({ id: page.id, name: page.name }))}
+            activePageId={activePageId}
+            onPageChange={setActivePageId}
             onEdit={() => { setHdrEditOpen(v => !v); }}
             onSave={() => saveState("manual")}
             onSaveAs={exportTrp}
@@ -3279,6 +3317,11 @@ declare global {
           (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
           0
         );
+        const showResetView = Math.abs(view.tx) > sheetWidth / 2
+          || Math.abs(view.ty) > sheetHeight / 2
+          || view.scale < 0.6
+          || view.scale > 1.6;
+        const exteriorOpen = exteriorPhotos.length ? (photoSectionsOpen.exterior ?? true) : false;
         const photosView = (
           <div className="photosView">
             <div className="photosContent">
@@ -3299,7 +3342,7 @@ declare global {
                 ) : (
                   roofPhotoSections.map(section => {
                     const sectionCount = section.groups.reduce((sum, group) => sum + group.entries.length, 0);
-                    const isOpen = photoSectionsOpen[section.key];
+                    const isOpen = sectionCount ? (photoSectionsOpen[section.key] ?? true) : false;
                     return (
                       <div className="photoGroupSection" key={section.key}>
                         <button
@@ -3351,13 +3394,13 @@ declare global {
                   <button
                     className="iconBtn"
                     type="button"
-                    onClick={() => setPhotoSectionsOpen(prev => ({ ...prev, exterior: !prev.exterior }))}
+                    onClick={() => setPhotoSectionsOpen(prev => ({ ...prev, exterior: !exteriorOpen }))}
                     aria-label="Toggle exterior photos"
                   >
-                    <Icon name={photoSectionsOpen.exterior ? "chevUp" : "chevDown"} />
+                    <Icon name={exteriorOpen ? "chevUp" : "chevDown"} />
                   </button>
                 </div>
-                {photoSectionsOpen.exterior && (
+                {exteriorOpen && (
                   !exteriorPhotos.length ? (
                     <div className="photoEmpty">None</div>
                   ) : (
@@ -3416,7 +3459,7 @@ declare global {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.1.3" />
+          <TopBar label="TitanRoof Beta v4.1.4" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3434,7 +3477,7 @@ declare global {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.1.3 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.1.4 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3536,6 +3579,9 @@ declare global {
                           <button className="iconBtn" onClick={zoomFit} aria-label="Zoom to fit">
                             <Icon name="fit" />
                           </button>
+                          <button className="iconBtn" onClick={zoomReset} aria-label="Reset view">
+                            <Icon name="reset" />
+                          </button>
                         </div>
                       )}
                       {mobileToolbarSection === "pages" && (
@@ -3626,6 +3672,7 @@ declare global {
                         <button className="zBtn" onClick={zoomOut}>−</button>
                         <button className="zBtn" onClick={zoomIn}>+</button>
                         <button className="zBtn" onClick={zoomFit}>Fit</button>
+                        <button className="zBtn" onClick={zoomReset}>Reset</button>
                       </div>
                       <div className="zReadout">{Math.round(view.scale*100)}%</div>
                     </div>
@@ -3665,6 +3712,21 @@ declare global {
                               <Icon name="pencil" />
                             </button>
                           )}
+                        </div>
+                        <div className="pageSelect">
+                          <select
+                            className="pageSelectInput"
+                            value={activePageId}
+                            onChange={(event) => setActivePageId(event.target.value)}
+                            aria-label="Select page"
+                          >
+                            {pages.map((page, index) => (
+                              <option key={page.id} value={page.id}>
+                                {page.name || `Page ${index + 1}`}
+                              </option>
+                            ))}
+                          </select>
+                          <Icon name="chevDown" className="pageSelectChevron" />
                         </div>
                         <button
                           type="button"
@@ -3861,6 +3923,13 @@ declare global {
                 </div>
               </div>
 
+              {showResetView && (
+                <button className="resetViewBtn" type="button" onClick={zoomReset}>
+                  <Icon name="reset" />
+                  Reset view
+                </button>
+              )}
+
               {!hasBackground && (
                 <div style={{
                   position:"absolute",
@@ -3902,16 +3971,21 @@ declare global {
                 <button
                   className="dashLauncherBtn"
                   type="button"
-                  onClick={() => setDashOpen(prev => !prev)}
+                  onClick={toggleDashboard}
                   aria-label="Toggle dashboard"
                   title="Dashboard"
                 >
                   <Icon name="dash" />
                 </button>
               </div>
-              {dashOpen && (
+              {(dashOpen || dashClosing) && (
                 <div
-                  className={"dashPopover" + (dashDragging ? " dragging" : "")}
+                  className={[
+                    "dashPopover",
+                    dashDragging ? " dragging" : "",
+                    dashClosing ? " closing" : "",
+                    dashAnimatingIn ? " open" : ""
+                  ].filter(Boolean).join(" ")}
                   role="dialog"
                   aria-label="Hail and wind dashboard"
                   style={{ left: dashPos.x, top: dashPos.y }}
@@ -3928,14 +4002,23 @@ declare global {
                       <div className="dashTitleText">Hail + Wind Dashboard</div>
                       <div className="dashSubtitle">Current page summary for directions, sizes, and indicators.</div>
                     </div>
-                    <button className="iconBtn" type="button" onClick={() => setDashOpen(false)} aria-label="Close dashboard">
+                    <button className="iconBtn" type="button" onClick={closeDashboard} aria-label="Close dashboard">
                       <Icon name="chevDown" />
                     </button>
                   </div>
                   <div className="dashCompact">
-                    <div className="dashCompactSection">
-                      <div className="dashCompactTitle">Damage Summary</div>
-                      <div className="dashSummaryGrid">
+                    <div className="dashCompactSection summary">
+                      <button
+                        className="dashSectionToggle"
+                        type="button"
+                        onClick={() => setDashSectionsOpen(prev => ({ ...prev, summary: !prev.summary }))}
+                        aria-expanded={dashSectionsOpen.summary}
+                      >
+                        <span className="dashCompactTitle">Damage Summary</span>
+                        <Icon name={dashSectionsOpen.summary ? "chevUp" : "chevDown"} />
+                      </button>
+                      {dashSectionsOpen.summary && (
+                        <div className="dashSummaryGrid">
                         {WIND_DIRS.map(dir => {
                           const d = dashboard[dir];
                           return (
@@ -3959,10 +4042,20 @@ declare global {
                           );
                         })}
                       </div>
+                      )}
                     </div>
-                    <div className="dashCompactSection">
-                      <div className="dashCompactTitle">Indicators by Direction</div>
-                      <div className="dashIndicatorsGrid">
+                    <div className="dashCompactSection indicators">
+                      <button
+                        className="dashSectionToggle"
+                        type="button"
+                        onClick={() => setDashSectionsOpen(prev => ({ ...prev, indicators: !prev.indicators }))}
+                        aria-expanded={dashSectionsOpen.indicators}
+                      >
+                        <span className="dashCompactTitle">Indicators by Direction</span>
+                        <Icon name={dashSectionsOpen.indicators ? "chevUp" : "chevDown"} />
+                      </button>
+                      {dashSectionsOpen.indicators && (
+                        <div className="dashIndicatorsGrid">
                         {CARDINAL_DIRS.map(dir => {
                           const d = dashboard[dir];
                           return (
@@ -3980,6 +4073,7 @@ declare global {
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4131,21 +4225,18 @@ declare global {
                           <div className="lbl">Item Lock</div>
                           <div className="row">
                             <button
-                              className={"btn " + (!activeItem.data.locked ? "btnPrimary" : "")}
+                              className={"iconBtn lockToggle" + (activeItem.data.locked ? " active" : "")}
                               type="button"
-                              onClick={() => updateItemData("locked", false)}
+                              onClick={() => updateItemData("locked", !activeItem.data.locked)}
+                              aria-pressed={activeItem.data.locked}
+                              aria-label={activeItem.data.locked ? "Unlock item" : "Lock item"}
                             >
-                              Unlocked
+                              <Icon name={activeItem.data.locked ? "lock" : "unlock"} />
                             </button>
-                            <button
-                              className={"btn " + (activeItem.data.locked ? "btnPrimary" : "")}
-                              type="button"
-                              onClick={() => updateItemData("locked", true)}
-                            >
-                              Locked
-                            </button>
+                            <span className="lockStatus">
+                              {activeItem.data.locked ? "Locked" : "Unlocked"}
+                            </span>
                           </div>
-                          <div className="tiny" style={{marginTop:6}}>Locked items cannot be moved or resized on the diagram.</div>
                         </div>
 
                         {/* === TEST SQUARE === */}
@@ -4170,7 +4261,6 @@ declare global {
                               <div className="row" style={{marginBottom:8}}>
                                 <div style={{flex:1}}>
                                   <div className="lbl" style={{marginBottom:2}}>Hail Bruises ({(activeItem.data.bruises||[]).length})</div>
-                                  <div className="tiny">Size + optional photo per bruise.</div>
                                 </div>
                                 <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={addBruise}>Add</button>
                               </div>
@@ -4199,7 +4289,6 @@ declare global {
                               <div className="row" style={{marginBottom:8}}>
                                 <div style={{flex:1}}>
                                   <div className="lbl" style={{marginBottom:2}}>Add Condition</div>
-                                  <div className="tiny">General condition(s) within the test square (not dashboard).</div>
                                 </div>
                                 <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={addTsCondition}>Add</button>
                               </div>
@@ -5304,7 +5393,7 @@ declare global {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.1.3</div>
+                <div className="printTitleHero">Titan Roof Version 4.1.4</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">

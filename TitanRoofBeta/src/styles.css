@@ -78,6 +78,7 @@
         color: #fff;
         box-shadow: 0 12px 22px rgba(2,6,23,0.16);
         gap: 16px;
+        pointer-events: auto;
       }
       .propertiesLeft{
         display:flex;
@@ -121,6 +122,43 @@
         overflow:hidden;
         text-overflow:ellipsis;
       }
+      .propertiesPage{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin-top:6px;
+        flex-wrap:wrap;
+      }
+      .propertiesPageLabel{
+        font-size:10px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        color:#E0F2FE;
+        text-transform:uppercase;
+      }
+      .propertiesPageSelect{
+        position:relative;
+        display:flex;
+        align-items:center;
+      }
+      .propertiesPageInput{
+        appearance:none;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,0.4);
+        background: rgba(255,255,255,0.18);
+        color:#fff;
+        font-size:11px;
+        font-weight:1100;
+        padding:4px 26px 4px 10px;
+      }
+      .propertiesPageChevron{
+        position:absolute;
+        right:8px;
+        width:12px;
+        height:12px;
+        pointer-events:none;
+        color:#fff;
+      }
       .propertiesActions{
         display:flex;
         align-items:center;
@@ -159,6 +197,28 @@
         /* IMPORTANT for iPad: allow our custom multi-touch */
         touch-action: none;
         cursor: default;
+      }
+      .resetViewBtn{
+        position:absolute;
+        right:16px;
+        bottom:16px;
+        display:flex;
+        align-items:center;
+        gap:6px;
+        padding:8px 12px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.35);
+        background: rgba(255,255,255,0.92);
+        box-shadow: var(--shadowSoft);
+        font-size:11px;
+        font-weight:1100;
+        color: var(--navy);
+        cursor:pointer;
+        z-index:70;
+      }
+      .resetViewBtn svg{
+        width:14px;
+        height:14px;
       }
       .stage{
         position:absolute;
@@ -349,6 +409,7 @@
         border-radius:12px;
         background: rgba(248,250,252,0.9);
         border:1px solid rgba(226,232,240,0.85);
+        flex-wrap:wrap;
       }
       .toolbar.vertical .tbPages{
         flex-direction:column;
@@ -361,6 +422,7 @@
         border-radius:14px;
         border:1px solid rgba(148,163,184,0.28);
         background: rgba(255,255,255,0.92);
+        flex-wrap:wrap;
       }
       .tbPageTools{
         display:flex;
@@ -405,6 +467,30 @@
         height:12px;
         flex:0 0 auto;
       }
+      .pageSelect{
+        position:relative;
+        display:flex;
+        align-items:center;
+      }
+      .pageSelectInput{
+        appearance:none;
+        border-radius:10px;
+        border:1px solid rgba(148,163,184,0.35);
+        padding:5px 24px 5px 8px;
+        font-size:10px;
+        font-weight:1100;
+        color: var(--navy);
+        background:#fff;
+        min-width:120px;
+      }
+      .pageSelectChevron{
+        position:absolute;
+        right:8px;
+        width:12px;
+        height:12px;
+        pointer-events:none;
+        color: var(--sub);
+      }
       .pageNameInput{
         width:140px;
         border-radius:10px;
@@ -416,9 +502,9 @@
         text-align:center;
       }
       .iconBtn{
-        width:26px;
-        height:26px;
-        border-radius:9px;
+        width:30px;
+        height:30px;
+        border-radius:10px;
         border:1px solid rgba(148,163,184,0.35);
         background:#fff;
         display:flex;
@@ -441,9 +527,9 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        height:28px;
-        width:34px;
-        min-width:34px;
+        height:30px;
+        width:32px;
+        min-width:32px;
         padding:0 6px;
         border-radius: 999px;
         border:2px solid var(--toolColor);
@@ -483,12 +569,12 @@
       .toolBtn.obs{ --toolColor: var(--c-obs); }
 
       .lockIcon{
-        width:28px;
-        height:28px;
+        width:30px;
+        height:30px;
         display:flex;
         align-items:center;
         justify-content:center;
-        border-radius: 9px;
+        border-radius: 10px;
         border:1px solid rgba(226,232,240,0.95);
         background:#fff;
         cursor:pointer;
@@ -499,10 +585,18 @@
       .lockIcon svg{ width:18px; height:18px; }
       .lockIcon.locked svg{ color:#F59E0B; }
       .lockIcon.unlocked svg{ color: rgba(148,163,184,1); }
+      .lockToggle{
+        flex:0 0 auto;
+      }
+      .lockStatus{
+        font-size:12px;
+        font-weight:1100;
+        color: var(--navy);
+      }
       .tbGrab{
-        width:24px;
-        height:24px;
-        border-radius: 9px;
+        width:30px;
+        height:30px;
+        border-radius: 10px;
         border:1px solid rgba(226,232,240,0.95);
         background:#fff;
         display:flex;
@@ -950,13 +1044,14 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        width:28px;
-        height:28px;
+        width:32px;
+        height:32px;
         border-radius:10px;
         background: rgba(15,23,42,0.08);
         border:1px solid rgba(148,163,184,0.35);
         cursor:pointer;
         color: var(--navy);
+        touch-action: manipulation;
       }
       .panelToggleBtn:hover{ background: rgba(15,23,42,0.18); }
       .panelBody{
@@ -981,7 +1076,7 @@
         inset: 0;
         background: rgba(15,23,42,0.45);
         backdrop-filter: blur(3px);
-        z-index: 170;
+        z-index: 220;
         display:flex;
         align-items:center;
         justify-content:center;
@@ -989,7 +1084,7 @@
       }
       .modalCard{
         width: min(860px, 96vw);
-        max-height: 92vh;
+        max-height: 92dvh;
         background: #fff;
         border-radius: 18px;
         border: 1px solid rgba(226,232,240,0.95);
@@ -1357,7 +1452,7 @@
       .dashPopover{
         position:fixed;
         width:min(540px, 92vw);
-        background: #0B2A3A;
+        background: linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,64,175,0.92));
         border:1px solid rgba(148,163,184,0.25);
         border-radius:18px;
         box-shadow: var(--shadow);
@@ -1367,6 +1462,18 @@
         gap:12px;
         z-index:80;
         color: #F8FAFC;
+        opacity:0;
+        transform: translate(-8px, 8px) scale(0.95);
+        transform-origin: left bottom;
+        transition: opacity 0.18s ease, transform 0.18s ease;
+      }
+      .dashPopover.open{
+        opacity:1;
+        transform: translate(0, 0) scale(1);
+      }
+      .dashPopover.closing{
+        opacity:0;
+        transform: translate(-6px, 6px) scale(0.94);
       }
       .dashPopover.dragging{
         cursor: grabbing;
@@ -1398,6 +1505,30 @@
         display:flex;
         flex-direction:column;
         gap:8px;
+        padding:10px;
+        border-radius:14px;
+        border:1px solid rgba(255,255,255,0.12);
+      }
+      .dashCompactSection.summary{
+        background: rgba(248,113,113,0.12);
+      }
+      .dashCompactSection.indicators{
+        background: rgba(96,165,250,0.12);
+      }
+      .dashSectionToggle{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        background: transparent;
+        border:0;
+        padding:0;
+        cursor:pointer;
+        color: inherit;
+      }
+      .dashSectionToggle svg{
+        width:14px;
+        height:14px;
       }
       .dashCompactTitle{
         font-size:11px;
@@ -1420,7 +1551,7 @@
       .dashIndicatorCard{
         border-radius:14px;
         border:1px solid rgba(148,163,184,0.2);
-        background: rgba(15,42,63,0.85);
+        background: rgba(15,42,63,0.75);
         padding:10px;
         display:flex;
         flex-direction:column;
@@ -1572,7 +1703,7 @@
       .photoSectionHeader{
         display:flex;
         align-items:center;
-        justify-content:space-between;
+        justify-content:flex-start;
         gap:12px;
         flex-wrap:wrap;
       }
@@ -1614,6 +1745,9 @@
         font-size:11px;
         font-weight:1100;
         color: var(--sub);
+        margin-left:auto;
+        text-align:right;
+        min-width:72px;
       }
       .photoGroup{
         display:flex;
@@ -1628,7 +1762,7 @@
       .photoGrid{
         display:grid;
         gap:12px;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       }
       .photoCard{
         border:1px solid rgba(226,232,240,0.95);
@@ -1643,7 +1777,8 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        height:160px;
+        height:150px;
+        aspect-ratio: 4 / 3;
         overflow:hidden;
       }
       .photoThumb img{
@@ -2088,6 +2223,21 @@
       }
 
       /* ========= Responsive ========= */
+      @media (max-width: 1180px){
+        .app{ grid-template-columns: 1fr minmax(280px, 360px); }
+        .panelHeader{
+          padding:8px 10px 4px;
+        }
+        .panelHeaderTitle{
+          font-size:11px;
+        }
+        .pScroll{
+          padding:8px;
+        }
+        .card{
+          padding:10px;
+        }
+      }
       @media (max-width: 980px){
         .app{ grid-template-columns: 1fr minmax(300px, 360px); }
       }
@@ -2126,6 +2276,12 @@
         }
         .propertiesSub{
           font-size: calc(11px * var(--mobile-scale));
+        }
+        .propertiesPageLabel{
+          font-size: calc(9px * var(--mobile-scale));
+        }
+        .propertiesPageInput{
+          font-size: calc(10px * var(--mobile-scale));
         }
         .propertiesRight{
           width: 100%;
