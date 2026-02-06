@@ -277,10 +277,10 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        gap:8px;
-        padding:6px 8px;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.92);
+        gap:10px;
+        padding:8px 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.96);
         backdrop-filter: blur(12px);
         border: 1px solid rgba(226,232,240,0.9);
         box-shadow: 0 12px 22px rgba(2,6,23,0.12);
@@ -293,8 +293,9 @@
       .toolbar.vertical{
         flex-direction:column;
         align-items:stretch;
-        gap:8px;
-        padding:8px 6px;
+        gap:10px;
+        padding:12px 8px;
+        border-radius: 32px;
       }
       .toolbar.locked{
         cursor: default;
@@ -311,12 +312,12 @@
       .tbTools{
         display:flex;
         align-items:center;
-        gap:6px;
+        gap:8px;
         flex-wrap:nowrap;
-        padding:4px;
-        border-radius:12px;
-        background: rgba(248,250,252,0.9);
-        border:1px solid rgba(226,232,240,0.85);
+        padding:0;
+        border-radius:0;
+        background: transparent;
+        border:none;
       }
       .tbMini{
         display:flex;
@@ -368,11 +369,11 @@
       .toolbar.vertical .tbTools{
         flex-direction:column;
         align-items:stretch;
-        gap:6px;
+        gap:8px;
       }
       .tbDivider{
         width:1px;
-        height:32px;
+        height:34px;
         background: rgba(148,163,184,0.4);
         border-radius: 999px;
       }
@@ -383,11 +384,11 @@
       .tbZoom{
         display:flex;
         align-items:center;
-        gap:4px;
-        padding:4px;
-        border-radius:12px;
-        background: rgba(248,250,252,0.9);
-        border:1px solid rgba(226,232,240,0.85);
+        gap:8px;
+        padding:0;
+        border-radius:0;
+        background: transparent;
+        border:none;
       }
       .toolbar.vertical .tbZoom{
         flex-direction:column;
@@ -396,7 +397,7 @@
       .tbZoomRow{
         display:flex;
         align-items:center;
-        gap:6px;
+        gap:8px;
       }
       .toolbar.vertical .tbZoomRow{
         flex-direction:column;
@@ -404,24 +405,25 @@
       .tbPages{
         display:flex;
         align-items:center;
-        gap:6px;
-        padding:4px;
-        border-radius:12px;
-        background: rgba(248,250,252,0.9);
-        border:1px solid rgba(226,232,240,0.85);
+        gap:8px;
+        padding:0;
+        border-radius:0;
+        background: transparent;
+        border:none;
         flex-wrap:wrap;
       }
       .toolbar.vertical .tbPages{
         flex-direction:column;
+        align-items:center;
       }
       .tbPageNav{
         display:flex;
         align-items:center;
-        gap:6px;
-        padding:4px 6px;
-        border-radius:14px;
-        border:1px solid rgba(148,163,184,0.28);
-        background: rgba(255,255,255,0.92);
+        gap:8px;
+        padding:0;
+        border-radius:0;
+        border:none;
+        background: transparent;
         flex-wrap:wrap;
       }
       .tbPageTools{
@@ -433,12 +435,15 @@
       .toolbar.vertical .tbPageTools{
         flex-direction:column;
       }
+      .toolbar.vertical .tbPageNav{
+        gap:10px;
+      }
       .pageMeta{
         display:flex;
         flex-direction:column;
         align-items:center;
-        gap:4px;
-        min-width:120px;
+        gap:6px;
+        min-width:0;
       }
       .pageIndex{
         font-size:9px;
@@ -446,21 +451,32 @@
         color: var(--sub);
       }
       .pageName{
-        border:1px solid rgba(148,163,184,0.35);
+        border:2px solid rgba(107,114,128,0.65);
         background:#fff;
-        padding:5px 8px;
-        border-radius:10px;
-        font-size:10px;
+        padding:6px 12px;
+        border-radius:18px;
+        font-size:11px;
         font-weight:1200;
         color: var(--navy);
         cursor:pointer;
-        max-width: 140px;
+        max-width: 220px;
         text-overflow: ellipsis;
         overflow: hidden;
         white-space: nowrap;
         display:flex;
         align-items:center;
         gap:6px;
+      }
+      .toolbar.vertical .pageName{
+        flex-direction:column;
+        text-align:center;
+        padding:10px 8px;
+        min-height:86px;
+        white-space:normal;
+      }
+      .toolbar.vertical .pageName span{
+        white-space:normal;
+        line-height:1.2;
       }
       .pageName svg{
         width:12px;
@@ -474,38 +490,43 @@
       }
       .pageSelectInput{
         appearance:none;
-        border-radius:10px;
-        border:1px solid rgba(148,163,184,0.35);
-        padding:5px 24px 5px 8px;
-        font-size:10px;
+        border-radius:999px;
+        border:2px solid rgba(107,114,128,0.65);
+        padding:6px 28px 6px 12px;
+        font-size:12px;
         font-weight:1100;
         color: var(--navy);
         background:#fff;
-        min-width:120px;
+        min-width:72px;
+        text-align:center;
       }
       .pageSelectChevron{
         position:absolute;
-        right:8px;
-        width:12px;
-        height:12px;
+        right:10px;
+        width:14px;
+        height:14px;
         pointer-events:none;
         color: var(--sub);
       }
       .pageNameInput{
-        width:140px;
-        border-radius:10px;
-        border:1px solid rgba(148,163,184,0.35);
-        padding:5px 8px;
-        font-size:10px;
+        width:180px;
+        border-radius:18px;
+        border:2px solid rgba(107,114,128,0.65);
+        padding:6px 12px;
+        font-size:11px;
         font-weight:1100;
         color: var(--navy);
         text-align:center;
       }
+      .toolbar.vertical .pageNameInput{
+        width:92px;
+        min-height:86px;
+      }
       .iconBtn{
-        width:30px;
-        height:30px;
-        border-radius:10px;
-        border:1px solid rgba(148,163,184,0.35);
+        width:32px;
+        height:32px;
+        border-radius:999px;
+        border:2px solid rgba(148,163,184,0.55);
         background:#fff;
         display:flex;
         align-items:center;
@@ -516,10 +537,18 @@
         opacity:0.45;
         cursor:not-allowed;
       }
-      .iconBtn svg{ width:16px; height:16px; }
+      .iconBtn svg{ width:18px; height:18px; }
       .iconBtn.active{
         background: rgba(15,23,42,0.08);
         border-color: rgba(15,23,42,0.28);
+      }
+      .iconBtn.zoom{
+        border-color: rgba(147,197,253,0.9);
+        color: rgba(30,64,175,0.9);
+      }
+      .iconBtn.nav{
+        border-color: rgba(107,114,128,0.65);
+        color: rgba(55,65,81,0.9);
       }
 
       .toolBtn{
@@ -527,11 +556,11 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        height:30px;
-        width:32px;
-        min-width:32px;
-        padding:0 6px;
-        border-radius: 999px;
+        height:36px;
+        width:36px;
+        min-width:36px;
+        padding:0;
+        border-radius: 50%;
         border:2px solid var(--toolColor);
         background:#fff;
         cursor:pointer;
@@ -543,14 +572,9 @@
         touch-action: manipulation;
       }
       .toolBtn .toolText{
-        font-size:9px;
+        font-size:11px;
         font-weight:1200;
         letter-spacing:0.4px;
-      }
-      .toolBtn.expanded{
-        width:auto;
-        min-width:0;
-        padding:0 10px;
       }
       .toolBtn:hover{
         transform: translateY(-1px);
@@ -594,10 +618,10 @@
         color: var(--navy);
       }
       .tbGrab{
-        width:30px;
-        height:30px;
-        border-radius: 10px;
-        border:1px solid rgba(226,232,240,0.95);
+        width:32px;
+        height:32px;
+        border-radius: 999px;
+        border:2px solid rgba(226,232,240,0.95);
         background:#fff;
         display:flex;
         align-items:center;
@@ -611,7 +635,7 @@
         align-items:center;
         gap:6px;
         padding:6px 8px;
-        border-radius:18px;
+        border-radius:22px;
         cursor: default;
       }
       .toolbar.mobile .tbDivider{
@@ -667,11 +691,29 @@
         align-items:center;
         gap:8px;
       }
+      .toolbar .zReadout{
+        font-size:12px;
+        font-weight:1200;
+        color: var(--navy);
+        padding:6px 12px;
+        border-radius:999px;
+        border:2px solid rgba(147,197,253,0.9);
+        background: #fff;
+        min-width:64px;
+        text-align:center;
+      }
       .toolbar.mobile .tbPages{
         display:flex;
         flex-direction:column;
         align-items:center;
         gap:6px;
+      }
+      .toolbar.mobile .pageSelectInput{
+        min-width:64px;
+        padding:6px 26px 6px 10px;
+      }
+      .toolbar.mobile .pageName{
+        max-width:160px;
       }
       .toolbar.mobile .tbPageNav.compact{
         display:flex;
@@ -748,7 +790,8 @@
         min-height: 0;
         height: 100%;
         backdrop-filter: blur(10px);
-        transition: width 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        transform: translateX(0);
+        transition: width 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
       }
       .panel.collapsed{
         width:56px;
@@ -758,6 +801,7 @@
         pointer-events:auto;
         overflow:hidden;
         align-items:center;
+        transform: translateX(10px);
       }
       .panel.collapsed .panelHeader{
         justify-content:center;

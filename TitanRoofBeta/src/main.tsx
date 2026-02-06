@@ -1065,7 +1065,7 @@ declare global {
           return () => observer.disconnect();
         }, []);
 
-        const isMobile = viewportSize.w <= 820;
+        const isMobile = viewportSize.w <= 600;
         const previousToolbarLock = useRef(toolbarLocked);
         const previousToolbarPos = useRef(toolbarPos);
         const sidebarToolbarPosRef = useRef(null);
@@ -3556,13 +3556,13 @@ declare global {
                             return (
                               <button
                                 key={t.key}
-                                className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
+                                className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                 type="button"
                                 onClick={() => handleToolSelect(t.key)}
                                 title={t.key==="ts" ? "Drag to draw a test square" : t.label}
                                 aria-label={t.label}
                               >
-                                <span className="toolText">{isActive ? t.label : t.code}</span>
+                                <span className="toolText">{t.code}</span>
                               </button>
                             );
                           })}
@@ -3570,18 +3570,16 @@ declare global {
                       )}
                       {mobileToolbarSection === "zoom" && (
                         <div className="tbZoomRow" role="group" aria-label="Zoom controls">
-                          <button className="iconBtn" onClick={zoomOut} aria-label="Zoom out">
+                          <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
                             <Icon name="minus" />
                           </button>
-                          <button className="iconBtn" onClick={zoomIn} aria-label="Zoom in">
+                          <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
                             <Icon name="plus" />
                           </button>
-                          <button className="iconBtn" onClick={zoomFit} aria-label="Zoom to fit">
+                          <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
                             <Icon name="fit" />
                           </button>
-                          <button className="iconBtn" onClick={zoomReset} aria-label="Reset view">
-                            <Icon name="reset" />
-                          </button>
+                          <div className="zReadout">{Math.round(view.scale*100)}%</div>
                         </div>
                       )}
                       {mobileToolbarSection === "pages" && (
@@ -3589,22 +3587,61 @@ declare global {
                           <div className="tbPageNav compact">
                             <button
                               type="button"
-                              className="iconBtn"
+                              className="iconBtn nav"
                               onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
                               disabled={!canGoPrevPage}
                               aria-label="Previous page"
                             >
                               <Icon name="chevLeft" />
                             </button>
+                            <div className="pageSelect">
+                              <select
+                                className="pageSelectInput"
+                                value={activePageId}
+                                onChange={(event) => setActivePageId(event.target.value)}
+                                aria-label="Select page"
+                              >
+                                {pages.map((page, index) => (
+                                  <option key={page.id} value={page.id}>
+                                    {index + 1}/{pages.length}
+                                  </option>
+                                ))}
+                              </select>
+                              <Icon name="chevDown" className="pageSelectChevron" />
+                            </div>
                             <button
                               type="button"
-                              className="iconBtn"
+                              className="iconBtn nav"
                               onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
                               disabled={!canGoNextPage}
                               aria-label="Next page"
                             >
                               <Icon name="chevRight" />
                             </button>
+                          </div>
+                          <div className="pageMeta">
+                            {pageNameEditing ? (
+                              <input
+                                className="pageNameInput"
+                                value={pageNameDraft}
+                                onChange={(e) => setPageNameDraft(e.target.value)}
+                                onBlur={commitPageNameEdit}
+                                onKeyDown={(e) => {
+                                  if(e.key === "Enter") commitPageNameEdit();
+                                }}
+                                aria-label="Page name"
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                className="pageName"
+                                onClick={startPageNameEdit}
+                                title="Rename page"
+                              >
+                                <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                                <Icon name="pencil" />
+                              </button>
+                            )}
                           </div>
                           <div className="tbPageTools">
                             <label className="iconBtn" title="Upload pages">
@@ -3644,21 +3681,21 @@ declare global {
                   <>
                     <div className="tbCenter">
                       <div className="tbTools">
-                        {toolDefs.map(t => {
-                          const isActive = tool === t.key;
-                          return (
-                            <button
-                              key={t.key}
-                              className={"toolBtn " + t.cls + " " + (isActive ? "active expanded" : "")}
-                              type="button"
-                              onClick={() => handleToolSelect(t.key)}
-                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                              aria-label={t.label}
-                            >
-                              <span className="toolText">{isActive ? t.label : t.code}</span>
-                            </button>
-                          );
-                        })}
+                          {toolDefs.map(t => {
+                            const isActive = tool === t.key;
+                            return (
+                              <button
+                                key={t.key}
+                                className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
+                                type="button"
+                                onClick={() => handleToolSelect(t.key)}
+                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                                aria-label={t.label}
+                              >
+                                <span className="toolText">{t.code}</span>
+                              </button>
+                            );
+                          })}
                       </div>
                       {tool === "obs" && !obsPaletteOpen && (
                         <div className="tbMiniHint" aria-live="polite">
@@ -3669,50 +3706,30 @@ declare global {
                     <div className="tbDivider" />
                     <div className="tbZoom">
                       <div className="tbZoomRow">
-                        <button className="zBtn" onClick={zoomOut}>−</button>
-                        <button className="zBtn" onClick={zoomIn}>+</button>
-                        <button className="zBtn" onClick={zoomFit}>Fit</button>
-                        <button className="zBtn" onClick={zoomReset}>Reset</button>
+                        <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
+                          <Icon name="minus" />
+                        </button>
+                        <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
+                          <Icon name="plus" />
+                        </button>
+                        <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
+                          <Icon name="fit" />
+                        </button>
+                        <div className="zReadout">{Math.round(view.scale*100)}%</div>
                       </div>
-                      <div className="zReadout">{Math.round(view.scale*100)}%</div>
                     </div>
                     <div className="tbDivider" />
                     <div className="tbPages" role="group" aria-label="Page navigation">
                       <div className="tbPageNav">
                         <button
                           type="button"
-                          className="iconBtn"
+                          className="iconBtn nav"
                           onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
                           disabled={!canGoPrevPage}
                           aria-label="Previous page"
                         >
                           <Icon name="chevLeft" />
                         </button>
-                        <div className="pageMeta">
-                          <div className="pageIndex">Page {activePageIndex + 1} of {pages.length}</div>
-                          {pageNameEditing ? (
-                            <input
-                              className="pageNameInput"
-                              value={pageNameDraft}
-                              onChange={(e) => setPageNameDraft(e.target.value)}
-                              onBlur={commitPageNameEdit}
-                              onKeyDown={(e) => {
-                                if(e.key === "Enter") commitPageNameEdit();
-                              }}
-                              aria-label="Page name"
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="pageName"
-                              onClick={startPageNameEdit}
-                              title="Rename page"
-                            >
-                              <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                              <Icon name="pencil" />
-                            </button>
-                          )}
-                        </div>
                         <div className="pageSelect">
                           <select
                             className="pageSelectInput"
@@ -3722,7 +3739,7 @@ declare global {
                           >
                             {pages.map((page, index) => (
                               <option key={page.id} value={page.id}>
-                                {page.name || `Page ${index + 1}`}
+                                {index + 1}/{pages.length}
                               </option>
                             ))}
                           </select>
@@ -3730,13 +3747,37 @@ declare global {
                         </div>
                         <button
                           type="button"
-                          className="iconBtn"
+                          className="iconBtn nav"
                           onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
                           disabled={!canGoNextPage}
                           aria-label="Next page"
                         >
                           <Icon name="chevRight" />
                         </button>
+                      </div>
+                      <div className="pageMeta">
+                        {pageNameEditing ? (
+                          <input
+                            className="pageNameInput"
+                            value={pageNameDraft}
+                            onChange={(e) => setPageNameDraft(e.target.value)}
+                            onBlur={commitPageNameEdit}
+                            onKeyDown={(e) => {
+                              if(e.key === "Enter") commitPageNameEdit();
+                            }}
+                            aria-label="Page name"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="pageName"
+                            onClick={startPageNameEdit}
+                            title="Rename page"
+                          >
+                            <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                            <Icon name="pencil" />
+                          </button>
+                        )}
                       </div>
                       <div className="tbPageTools">
                         <label className="iconBtn" title="Upload pages">
