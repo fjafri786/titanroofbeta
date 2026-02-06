@@ -189,9 +189,16 @@ declare global {
         dataUrl,
         type
       });
+      const buildPdfObj = (dataUrl, name = "PDF") => ({
+        name,
+        url: dataUrl,
+        dataUrl,
+        type: "application/pdf"
+      });
 
       async function renderPdfToPages(file){
         const buffer = await file.arrayBuffer();
+        const dataUrl = await readFileAsDataUrl(file);
         const pdfjsLib = window.pdfjsLib;
         if(!pdfjsLib?.getDocument){
           console.warn("PDF support is not available.");
@@ -204,17 +211,10 @@ declare global {
         const pages = [];
         for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
           const page = await doc.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 2 });
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          if(ctx){
-            await page.render({ canvasContext: ctx, viewport }).promise;
-          }
-          const dataUrl = canvas.toDataURL("image/png");
+          const viewport = page.getViewport({ scale: 1 });
+          const pageUrl = `${dataUrl}#page=${pageNum}`;
           pages.push({
-            background: buildImageObj(dataUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`),
+            background: buildPdfObj(pageUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`),
             aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
           });
         }
@@ -465,6 +465,7 @@ declare global {
         const [frontFaces, setFrontFaces] = useState("North"); // display "Front faces: North"
         const [viewMode, setViewMode] = useState("diagram");
         const [reportTab, setReportTab] = useState("project");
+        const [diagramSource, setDiagramSource] = useState("upload");
         const [reportData, setReportData] = useState({
           project: {
             reportNumber: "",
@@ -583,6 +584,12 @@ declare global {
         const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
         const activeItem = items.find(i => i.id === selectedId);
         const activePageIndex = useMemo(() => pages.findIndex(page => page.id === activePageId), [pages, activePageId]);
+        const mapZoom = activePage?.map?.zoom || 18;
+
+        useEffect(() => {
+          const hasMapData = Boolean(activePage?.map?.enabled || activePage?.map?.address);
+          setDiagramSource(hasMapData ? "map" : "upload");
+        }, [activePageId, activePage?.map?.enabled, activePage?.map?.address]);
         const updateReportSection = (section, field, value) => {
           setReportData(prev => ({
             ...prev,
@@ -3151,77 +3158,6 @@ declare global {
                   <option value="OTHER">Other</option>
                 </select>
               </div>
-              <div style={{flex:1}}>
-                <div className="lbl">Diagram Pages</div>
-                <input
-                  className="inp"
-                  type="file"
-                  accept="image/*,application/pdf"
-                  multiple
-                  onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                />
-                <div className="tiny" style={{marginTop:6}}>Upload images or PDFs (multi-page) to create additional pages.</div>
-                <label className="btn" style={{marginTop:8, cursor:"pointer"}}>
-                  Replace current page
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    style={{display:"none"}}
-                    onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="card" style={{marginBottom:10}}>
-              <div className="lbl">Google Maps Background</div>
-              <div className="rowTop">
-                <div style={{flex:1}}>
-                  <input
-                    className="inp"
-                    value={activePage?.map?.address || ""}
-                    onChange={(e)=>updateActivePageMap({ address: e.target.value })}
-                    placeholder="Enter address or place"
-                  />
-                </div>
-                <div style={{flex:"0 0 140px"}}>
-                  <input
-                    className="inp"
-                    type="number"
-                    min="14"
-                    max="21"
-                    value={activePage?.map?.zoom || 18}
-                    onChange={(e)=>updateActivePageMap({ zoom: parseInt(e.target.value, 10) || 18 })}
-                  />
-                </div>
-                <div style={{flex:"0 0 160px"}}>
-                  <select
-                    className="inp"
-                    value={activePage?.map?.type || "map"}
-                    onChange={(e)=>updateActivePageMap({ type: e.target.value })}
-                  >
-                    <option value="map">Map</option>
-                    <option value="satellite">Satellite</option>
-                  </select>
-                </div>
-              </div>
-              <div className="row" style={{marginTop:10}}>
-                <button
-                  className="btn btnPrimary"
-                  type="button"
-                  onClick={() => updateActivePage({ background: null, map: { ...activePage?.map, enabled: true } })}
-                >
-                  Use Google Maps
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => updateActivePageMap({ enabled: false })}
-                >
-                  Disable Map
-                </button>
-              </div>
-              <div className="tiny" style={{marginTop:6}}>Adjust zoom, then enable to set the background.</div>
             </div>
 
             {roof.covering==="SHINGLE" && (
@@ -3273,6 +3209,124 @@ declare global {
                 <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
               </div>
             )}
+
+            <div className="card" style={{marginBottom:10}}>
+              <div className="lbl">Diagram Source</div>
+              <div className="radioGrid" style={{marginTop:6}}>
+                <button
+                  type="button"
+                  className={`radio ${diagramSource === "upload" ? "active" : ""}`}
+                  onClick={() => {
+                    setDiagramSource("upload");
+                    updateActivePageMap({ enabled: false });
+                  }}
+                >
+                  Upload PDF / images
+                </button>
+                <button
+                  type="button"
+                  className={`radio ${diagramSource === "map" ? "active" : ""}`}
+                  onClick={() => setDiagramSource("map")}
+                >
+                  Google Maps
+                </button>
+              </div>
+
+              {diagramSource === "upload" ? (
+                <div style={{marginTop:10}}>
+                  <div className="lbl">Diagram Pages</div>
+                  <input
+                    className="inp"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                  />
+                  <div className="tiny" style={{marginTop:6}}>Upload images or PDFs (multi-page) to create additional pages.</div>
+                  <label className="btn" style={{marginTop:8, cursor:"pointer"}}>
+                    Replace current page
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      style={{display:"none"}}
+                      onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div style={{marginTop:10}}>
+                  <div className="lbl">Google Maps Background</div>
+                  <div className="rowTop" style={{alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <input
+                        className="inp"
+                        value={activePage?.map?.address || ""}
+                        onChange={(e)=>updateActivePageMap({ address: e.target.value })}
+                        placeholder="Enter address or place"
+                      />
+                    </div>
+                    <div style={{flex:"0 0 190px"}}>
+                      <div className="mapZoomControls">
+                        <button
+                          type="button"
+                          className="iconBtn zoom"
+                          aria-label="Zoom out map"
+                          onClick={() => updateActivePageMap({ zoom: clamp(mapZoom - 1, 14, 21) })}
+                        >
+                          <Icon name="minus" />
+                        </button>
+                        <input
+                          className="inp mapZoomInput"
+                          type="number"
+                          min="14"
+                          max="21"
+                          value={mapZoom}
+                          onChange={(e)=>updateActivePageMap({ zoom: clamp(parseInt(e.target.value, 10) || 18, 14, 21) })}
+                          aria-label="Map zoom level"
+                        />
+                        <button
+                          type="button"
+                          className="iconBtn zoom"
+                          aria-label="Zoom in map"
+                          onClick={() => updateActivePageMap({ zoom: clamp(mapZoom + 1, 14, 21) })}
+                        >
+                          <Icon name="plus" />
+                        </button>
+                      </div>
+                      <div className="tiny" style={{marginTop:4}}>Zoom level (14–21). 21 = closest.</div>
+                    </div>
+                    <div style={{flex:"0 0 160px"}}>
+                      <select
+                        className="inp"
+                        value={activePage?.map?.type || "map"}
+                        onChange={(e)=>updateActivePageMap({ type: e.target.value })}
+                        aria-label="Map style"
+                      >
+                        <option value="map">Map</option>
+                        <option value="satellite">Satellite</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row" style={{marginTop:10}}>
+                    <button
+                      className="btn btnPrimary"
+                      type="button"
+                      onClick={() => updateActivePage({ background: null, map: { ...activePage?.map, enabled: true } })}
+                    >
+                      Use Google Maps
+                    </button>
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => updateActivePageMap({ enabled: false })}
+                    >
+                      Disable Map
+                    </button>
+                  </div>
+                  <div className="tiny" style={{marginTop:6}}>Adjust zoom, then enable to set the background.</div>
+                </div>
+              )}
+            </div>
           </>
         );
 

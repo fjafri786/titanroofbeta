@@ -296,6 +296,7 @@
         gap:10px;
         padding:12px 8px;
         border-radius: 32px;
+        --toolbar-control-size: 36px;
       }
       .toolbar.locked{
         cursor: default;
@@ -473,6 +474,7 @@
         padding:10px 8px;
         min-height:86px;
         white-space:normal;
+        width:92px;
       }
       .toolbar.vertical .pageName span{
         white-space:normal;
@@ -521,6 +523,15 @@
       .toolbar.vertical .pageNameInput{
         width:92px;
         min-height:86px;
+      }
+      .toolbar.vertical .pageSelectInput,
+      .toolbar.vertical .zReadout{
+        width:92px;
+      }
+      .toolbar.vertical .iconBtn,
+      .toolbar.vertical .tbGrab{
+        width: var(--toolbar-control-size);
+        height: var(--toolbar-control-size);
       }
       .iconBtn{
         width:32px;
@@ -627,6 +638,7 @@
         align-items:center;
         justify-content:center;
         color: rgba(100,116,139,0.9);
+        cursor: grab;
       }
       .tbGrab svg{ width:14px; height:14px; }
 
@@ -1232,6 +1244,19 @@
       .row{ display:flex; gap:10px; align-items:center; min-width:0; }
       .rowTop{ display:flex; gap:10px; align-items:flex-start; min-width:0; }
       .row > *{ flex:1; min-width:0; }
+      .mapZoomControls{
+        display:flex;
+        align-items:center;
+        gap:6px;
+      }
+      .mapZoomControls .iconBtn{
+        width:28px;
+        height:28px;
+      }
+      .mapZoomInput{
+        text-align:center;
+        padding:6px 8px;
+      }
 
       /* uniform direction buttons */
       .radioGrid{
