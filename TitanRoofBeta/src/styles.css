@@ -1,6 +1,6 @@
 :root{
         --topbar-height: 24px;
-        --propsbar-height: 74px;
+        --propsbar-height: 86px;
         --navy:#0B2A3A;
         --navy2:#0E3348;
 
@@ -73,7 +73,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 18px;
+        padding: 14px 18px;
         background: linear-gradient(135deg, rgba(14,165,233,0.95), rgba(59,130,246,0.95));
         color: #fff;
         box-shadow: 0 12px 22px rgba(2,6,23,0.16);
@@ -106,12 +106,13 @@
         min-width:0;
       }
       .propertiesTitle{
-        font-size:18px;
+        font-size:22px;
         font-weight:1200;
         letter-spacing:0.2px;
         white-space:nowrap;
         overflow:hidden;
         text-overflow:ellipsis;
+        line-height:1.2;
       }
       .propertiesSub{
         font-size:11px;
@@ -126,7 +127,7 @@
         display:flex;
         align-items:center;
         gap:10px;
-        margin-top:8px;
+        margin-top:10px;
         padding:2px 0;
         flex-wrap:wrap;
       }
@@ -145,12 +146,14 @@
       .propertiesPageInput{
         appearance:none;
         border-radius:999px;
-        border:1px solid rgba(255,255,255,0.4);
-        background: rgba(255,255,255,0.18);
+        border:1px solid rgba(255,255,255,0.6);
+        background: rgba(15,23,42,0.25);
         color:#fff;
         font-size:12px;
         font-weight:1100;
-        padding:6px 30px 6px 12px;
+        padding:7px 34px 7px 14px;
+        min-width:200px;
+        box-shadow: 0 6px 16px rgba(2,6,23,0.18);
       }
       .propertiesPageChevron{
         position:absolute;
@@ -422,6 +425,7 @@
       }
       .toolbar.vertical .tbZoomRow{
         flex-direction:column;
+        align-items:stretch;
         width:100%;
       }
       .tbPages{
@@ -1546,9 +1550,9 @@
         z-index:80;
         color: #F8FAFC;
         opacity:0;
-        transform: translate(-8px, 8px) scale(0.95);
+        transform: translate(-12px, 12px) scale(0.9);
         transform-origin: left bottom;
-        transition: opacity 0.18s ease, transform 0.18s ease;
+        transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .dashPopover.open{
         opacity:1;
@@ -1556,7 +1560,7 @@
       }
       .dashPopover.closing{
         opacity:0;
-        transform: translate(-6px, 6px) scale(0.94);
+        transform: translate(-10px, 10px) scale(0.92);
       }
       .dashPopover.dragging{
         cursor: grabbing;
@@ -2365,6 +2369,7 @@
         }
         .propertiesPageInput{
           font-size: calc(10px * var(--mobile-scale));
+          min-width: 150px;
         }
         .propertiesRight{
           width: 100%;
