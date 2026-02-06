@@ -189,12 +189,6 @@ declare global {
         dataUrl,
         type
       });
-      const buildPdfObj = (dataUrl, name = "PDF") => ({
-        name,
-        url: dataUrl,
-        dataUrl,
-        type: "application/pdf"
-      });
       const isPdfFile = (file) => {
         if(!file) return false;
         const type = (file.type || "").toLowerCase();
@@ -202,8 +196,7 @@ declare global {
         return type === "application/pdf" || type === "application/x-pdf" || name.endsWith(".pdf");
       };
 
-      async function renderPdfToPages(file){
-        const buffer = await file.arrayBuffer();
+      async function renderPdfBufferToPages(buffer, baseName = "PDF"){
         const pdfjsLib = window.pdfjsLib;
         if(!pdfjsLib?.getDocument){
           console.warn("PDF support is not available.");
@@ -225,13 +218,22 @@ declare global {
           await page.render({ canvasContext: ctx, viewport }).promise;
           const dataUrl = canvas.toDataURL("image/png");
           pages.push({
-            background: buildImageObj(dataUrl, `${file.name.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
+            background: buildImageObj(dataUrl, `${baseName.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
             aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
           });
         }
         if(doc.cleanup) doc.cleanup();
         if(doc.destroy) doc.destroy();
         return pages;
+      }
+      async function renderPdfToPages(file){
+        const buffer = await file.arrayBuffer();
+        return renderPdfBufferToPages(buffer, file.name || "PDF");
+      }
+      async function renderPdfDataUrlToPages(dataUrl, name = "PDF"){
+        const response = await fetch(dataUrl);
+        const buffer = await response.arrayBuffer();
+        return renderPdfBufferToPages(buffer, name);
       }
 
       const Icon = ({name, className=""}) => {
@@ -431,7 +433,7 @@ declare global {
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v4.1.state";
+      const STORAGE_KEY = "titanroof.v4.1.5.state";
 
       function App(){
         const viewportRef = useRef(null);
@@ -964,8 +966,8 @@ declare global {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.1.4 Beta",
-            version: "4.1.4",
+            app: "TitanRoof 4.1.5 Beta",
+            version: "4.1.5",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1070,17 +1072,28 @@ declare global {
         }, []);
         const [viewportBounds, setViewportBounds] = useState({ w: 0, h: 0 });
         const prevViewportBounds = useRef(null);
+        const viewportResizeDebounceRef = useRef(null);
         useEffect(() => {
           const el = viewportRef.current;
           if(!el) return;
           const observer = new ResizeObserver(entries => {
             const rect = entries[0]?.contentRect;
             if(rect){
-              setViewportBounds({ w: rect.width, h: rect.height });
+              if(viewportResizeDebounceRef.current){
+                clearTimeout(viewportResizeDebounceRef.current);
+              }
+              viewportResizeDebounceRef.current = setTimeout(() => {
+                setViewportBounds({ w: rect.width, h: rect.height });
+              }, 100);
             }
           });
           observer.observe(el);
-          return () => observer.disconnect();
+          return () => {
+            observer.disconnect();
+            if(viewportResizeDebounceRef.current){
+              clearTimeout(viewportResizeDebounceRef.current);
+            }
+          };
         }, []);
 
         const isMobile = viewportSize.w <= 600;
@@ -1676,33 +1689,27 @@ declare global {
         };
 
         // === Files ===
-        const buildPageEntry = ({ name, background, aspectRatio, rotation = 0 }) => ({
+        const pdfRasterizingRef = useRef(new Set());
+        const buildPageEntry = useCallback(({ name, background, aspectRatio, rotation = 0 }) => ({
           id: uid(),
           name,
           background,
           map: { enabled: false, address: "", zoom: 18, type: "map" },
           aspectRatio: aspectRatio || DEFAULT_ASPECT_RATIO,
           rotation
-        });
+        }), []);
 
         const buildPagesFromFile = async (file, pageIndexBase) => {
           if(isPdfFile(file)){
             const renderedPages = await renderPdfToPages(file);
-            if(renderedPages.length){
-              return renderedPages.map((entry, idx) => buildPageEntry({
-                name: renderedPages.length > 1
-                  ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
-                  : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
-                background: entry.background,
-                aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
-              }));
-            }
-            const background = await fileToObj(file);
-            return [buildPageEntry({
-              name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageIndexBase + 1}`,
-              background,
-              aspectRatio: LETTER_ASPECT_RATIO
-            })];
+            if(!renderedPages.length) return [];
+            return renderedPages.map((entry, idx) => buildPageEntry({
+              name: renderedPages.length > 1
+                ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
+              background: entry.background,
+              aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
+            }));
           }
           const background = await fileToObj(file);
           return [buildPageEntry({
@@ -1796,6 +1803,56 @@ declare global {
             setActivePageId(prepared[0].id);
           }
         };
+
+        useEffect(() => {
+          if(!pages.length) return;
+          let isActive = true;
+          const rasterize = async () => {
+            for(let i = 0; i < pages.length; i++){
+              const page = pages[i];
+              const background = page.background;
+              if(!background || background.type !== "application/pdf") continue;
+              if(pdfRasterizingRef.current.has(page.id)) continue;
+              const dataUrl = background.dataUrl || background.url;
+              if(!dataUrl) continue;
+              pdfRasterizingRef.current.add(page.id);
+              const renderedPages = await renderPdfDataUrlToPages(dataUrl, background.name || page.name || "PDF");
+              if(!isActive || !renderedPages.length) continue;
+              setPages(prev => {
+                const next = [...prev];
+                const targetIndex = next.findIndex(p => p.id === page.id);
+                if(targetIndex === -1) return prev;
+                const target = next[targetIndex];
+                const normalizedName = (background.name || page.name || `Page ${targetIndex + 1}`);
+                const [first, ...rest] = renderedPages.map((entry, idx) => buildPageEntry({
+                  name: renderedPages.length > 1
+                    ? `${normalizedName.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                    : normalizedName.replace(/\.[^/.]+$/, "") || `Page ${targetIndex + idx + 1}`,
+                  background: entry.background,
+                  aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO,
+                  rotation: target.rotation || 0
+                }));
+                revokeFileObj(target.background);
+                next.splice(targetIndex, 1, {
+                  ...target,
+                  name: first.name,
+                  background: first.background,
+                  map: { ...target.map, enabled: false },
+                  aspectRatio: first.aspectRatio || DEFAULT_ASPECT_RATIO,
+                  rotation: first.rotation || 0
+                });
+                if(rest.length){
+                  next.splice(targetIndex + 1, 0, ...rest);
+                }
+                return next;
+              });
+            }
+          };
+          rasterize();
+          return () => {
+            isActive = false;
+          };
+        }, [pages, buildPageEntry]);
 
         const clearDiagram = () => {
           pagesRef.current.forEach(page => revokeFileObj(page.background));
@@ -3501,7 +3558,7 @@ declare global {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.1.4" />
+          <TopBar label="TitanRoof Beta v4.1.5" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3519,7 +3576,7 @@ declare global {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.1.4 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.1.5 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3921,7 +3978,7 @@ declare global {
                     <div className="bgLayer" style={backgroundStyle}>
                       {activeBackground?.url && (
                         activeBackground.type === "application/pdf" ? (
-                          <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                          <div className="bgPdfNotice">Rasterizing PDF…</div>
                         ) : (
                           <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
                         )
@@ -5473,7 +5530,7 @@ declare global {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.1.4</div>
+                <div className="printTitleHero">Titan Roof Version 4.1.5</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
@@ -5687,7 +5744,7 @@ declare global {
                   <div className="bgLayer" style={backgroundStyle}>
                     {activeBackground?.url && (
                       activeBackground.type === "application/pdf" ? (
-                        <object className="bgPdf" data={activeBackground.url} type="application/pdf" aria-label="Roof diagram PDF" />
+                        <div className="bgPdfNotice">Rasterizing PDF…</div>
                       ) : (
                         <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
                       )
