@@ -446,7 +446,7 @@ declare global {
         const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
         const [toolbarDragging, setToolbarDragging] = useState(false);
         const [toolbarLocked, setToolbarLocked] = useState(false);
-        const [toolbarOrientation, setToolbarOrientation] = useState("vertical");
+        const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
         const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
         const obsPaletteRef = useRef(null);
@@ -1147,9 +1147,19 @@ declare global {
           setToolbarPos(prev => clampToolbarPos(prev));
         }, [viewportSize.w, viewportSize.h, tool, clampToolbarPos]);
 
-        useEffect(() => {
-          setToolbarOrientation(isMobile ? "horizontal" : "vertical");
+        const determineToolbarOrientation = useCallback(() => {
+          if(isMobile) return "horizontal";
+          const rect = toolbarRef.current?.getBoundingClientRect();
+          if(!rect) return "horizontal";
+          const edgeThreshold = 24;
+          const nearLeft = rect.left <= edgeThreshold;
+          const nearRight = rect.right >= window.innerWidth - edgeThreshold;
+          return (nearLeft || nearRight) ? "vertical" : "horizontal";
         }, [isMobile]);
+
+        useEffect(() => {
+          setToolbarOrientation(determineToolbarOrientation());
+        }, [determineToolbarOrientation, toolbarPos, viewportSize.w, viewportSize.h, toolbarDragging, toolbarLocked]);
 
         useEffect(() => {
           if(isMobile) return;
@@ -1198,7 +1208,7 @@ declare global {
           if(isMobile) return;
           if(typeof e.button === "number" && e.button !== 0) return;
           if(toolbarLocked) return;
-          if(e.target.closest("button") || e.target.closest(".lockIcon")) return;
+          if(e.target.closest("button, .lockIcon, input, select, textarea, label")) return;
           e.preventDefault();
           toolbarDragRef.current = {
             startX: e.clientX,
@@ -1229,11 +1239,17 @@ declare global {
         const clampDashPos = useCallback((pos) => {
           const zoneRect = canvasRef.current?.getBoundingClientRect();
           const dashRect = dashRef.current?.getBoundingClientRect();
-          if(!zoneRect || !dashRect) return pos;
+          if(!dashRect) return pos;
           const padding = 12;
+          const bounds = {
+            left: zoneRect ? Math.max(zoneRect.left, 0) : 0,
+            top: zoneRect ? Math.max(zoneRect.top, 0) : 0,
+            right: zoneRect ? Math.min(zoneRect.right, window.innerWidth) : window.innerWidth,
+            bottom: zoneRect ? Math.min(zoneRect.bottom, window.innerHeight) : window.innerHeight
+          };
           return {
-            x: clamp(pos.x, zoneRect.left + padding, zoneRect.right - dashRect.width - padding),
-            y: clamp(pos.y, zoneRect.top + padding, zoneRect.bottom - dashRect.height - padding)
+            x: clamp(pos.x, bounds.left + padding, bounds.right - dashRect.width - padding),
+            y: clamp(pos.y, bounds.top + padding, bounds.bottom - dashRect.height - padding)
           };
         }, []);
 
@@ -1243,12 +1259,29 @@ declare global {
           if(!dashInitialized.current){
             const zoneRect = canvasRef.current?.getBoundingClientRect();
             const dashRect = dashRef.current?.getBoundingClientRect();
-            if(zoneRect && dashRect){
+            if(dashRect){
+              const padding = 12;
+              const bounds = {
+                left: zoneRect ? Math.max(zoneRect.left, 0) : 0,
+                top: zoneRect ? Math.max(zoneRect.top, 0) : 0,
+                right: zoneRect ? Math.min(zoneRect.right, window.innerWidth) : window.innerWidth,
+                bottom: zoneRect ? Math.min(zoneRect.bottom, window.innerHeight) : window.innerHeight
+              };
+              const candidates = [
+                { x: bounds.right - dashRect.width - padding, y: bounds.bottom - dashRect.height - padding },
+                { x: bounds.left + padding, y: bounds.bottom - dashRect.height - padding },
+                { x: bounds.right - dashRect.width - padding, y: bounds.top + padding },
+                { x: bounds.left + padding, y: bounds.top + padding }
+              ];
+              const fits = (candidate) => (
+                candidate.x >= bounds.left + padding
+                && candidate.y >= bounds.top + padding
+                && candidate.x + dashRect.width <= bounds.right - padding
+                && candidate.y + dashRect.height <= bounds.bottom - padding
+              );
+              const preferred = candidates.find(fits) || candidates[0];
               dashInitialized.current = true;
-              setDashPos({
-                x: zoneRect.right - dashRect.width - 18,
-                y: zoneRect.bottom - dashRect.height - 18
-              });
+              setDashPos(clampDashPos(preferred));
             }
             return;
           }
@@ -1701,15 +1734,27 @@ declare global {
 
         const buildPagesFromFile = async (file, pageIndexBase) => {
           if(isPdfFile(file)){
-            const renderedPages = await renderPdfToPages(file);
-            if(!renderedPages.length) return [];
-            return renderedPages.map((entry, idx) => buildPageEntry({
-              name: renderedPages.length > 1
-                ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
-                : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
-              background: entry.background,
-              aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
-            }));
+            try {
+              const renderedPages = await renderPdfToPages(file);
+              if(renderedPages.length){
+                return renderedPages.map((entry, idx) => buildPageEntry({
+                  name: renderedPages.length > 1
+                    ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                    : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
+                  background: entry.background,
+                  aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
+                }));
+              }
+            } catch (err) {
+              console.warn("PDF render failed, preserving PDF file.", err);
+            }
+            const background = await fileToObj(file);
+            if(!background) return [];
+            return [buildPageEntry({
+              name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageIndexBase + 1}`,
+              background: { ...background, type: "application/pdf" },
+              aspectRatio: LETTER_ASPECT_RATIO
+            })];
           }
           const background = await fileToObj(file);
           return [buildPageEntry({
@@ -3072,7 +3117,7 @@ declare global {
         // === Name editing (heading + pencil; edit -> input + check) ===
         const [nameEditing, setNameEditing] = useState(false);
         const [nameDraft, setNameDraft] = useState("");
-        const [pageNameEditing, setPageNameEditing] = useState(false);
+        const [pageNameModalOpen, setPageNameModalOpen] = useState(false);
         const [pageNameDraft, setPageNameDraft] = useState("");
 
         useEffect(() => {
@@ -3083,9 +3128,9 @@ declare global {
         }, [selectedId]);
 
         useEffect(() => {
-          setPageNameEditing(false);
+          if(pageNameModalOpen) return;
           setPageNameDraft(activePage?.name || "");
-        }, [activePageId, activePage?.name]);
+        }, [activePageId, activePage?.name, pageNameModalOpen]);
 
         useEffect(() => {
           if(selectedId && !pageItems.find(item => item.id === selectedId)){
@@ -3111,12 +3156,17 @@ declare global {
         };
 
         const startPageNameEdit = () => {
-          setPageNameEditing(true);
+          setPageNameDraft(activePage?.name || "");
+          setPageNameModalOpen(true);
         };
         const commitPageNameEdit = () => {
           const fallback = activePage?.name || `Page ${activePageIndex + 1}`;
           updateActivePage({ name: pageNameDraft.trim() || fallback });
-          setPageNameEditing(false);
+          setPageNameModalOpen(false);
+        };
+        const cancelPageNameEdit = () => {
+          setPageNameDraft(activePage?.name || "");
+          setPageNameModalOpen(false);
         };
         const canGoPrevPage = activePageIndex > 0;
         const canGoNextPage = activePageIndex < pages.length - 1;
@@ -3396,6 +3446,39 @@ declare global {
           </div>
         );
 
+        const pageNameModal = pageNameModalOpen && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) cancelPageNameEdit(); }}
+          >
+            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Rename page</div>
+                <button className="btn" type="button" onClick={cancelPageNameEdit}>Close</button>
+              </div>
+              <div className="modalBody">
+                <div className="lbl">Page name</div>
+                <input
+                  className="inp"
+                  value={pageNameDraft}
+                  onChange={(e) => setPageNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if(e.key === "Enter") commitPageNameEdit();
+                  }}
+                  autoFocus
+                />
+                <div className="tiny" style={{marginTop:6}}>
+                  Leave blank to keep the current page name.
+                </div>
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={cancelPageNameEdit}>Cancel</button>
+                <button className="btn btnPrimary" type="button" onClick={commitPageNameEdit}>Save</button>
+              </div>
+            </div>
+          </div>
+        );
+
         const exportIndexItems = [
           "Title Page",
           "Index",
@@ -3598,6 +3681,7 @@ declare global {
             <div style={{display:"none"}} aria-hidden="true" />
           )}
           {headerEditModal}
+          {pageNameModal}
           {saveNotice && (
             <div className="saveToast" role="status">Saved {saveNotice}</div>
           )}
@@ -3719,28 +3803,16 @@ declare global {
                             </button>
                           </div>
                           <div className="pageMeta">
-                            {pageNameEditing ? (
-                              <input
-                                className="pageNameInput"
-                                value={pageNameDraft}
-                                onChange={(e) => setPageNameDraft(e.target.value)}
-                                onBlur={commitPageNameEdit}
-                                onKeyDown={(e) => {
-                                  if(e.key === "Enter") commitPageNameEdit();
-                                }}
-                                aria-label="Page name"
-                              />
-                            ) : (
-                              <button
-                                type="button"
-                                className="pageName"
-                                onClick={startPageNameEdit}
-                                title="Rename page"
-                              >
-                                <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                                <Icon name="pencil" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="pageName"
+                              onClick={startPageNameEdit}
+                              title="Rename page"
+                              aria-haspopup="dialog"
+                            >
+                              <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                              <Icon name="pencil" />
+                            </button>
                           </div>
                           <div className="tbPageTools">
                             <label className="iconBtn" title="Upload pages">
@@ -3855,28 +3927,16 @@ declare global {
                         </button>
                       </div>
                       <div className="pageMeta">
-                        {pageNameEditing ? (
-                          <input
-                            className="pageNameInput"
-                            value={pageNameDraft}
-                            onChange={(e) => setPageNameDraft(e.target.value)}
-                            onBlur={commitPageNameEdit}
-                            onKeyDown={(e) => {
-                              if(e.key === "Enter") commitPageNameEdit();
-                            }}
-                            aria-label="Page name"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="pageName"
-                            onClick={startPageNameEdit}
-                            title="Rename page"
-                          >
-                            <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                            <Icon name="pencil" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="pageName"
+                          onClick={startPageNameEdit}
+                          title="Rename page"
+                          aria-haspopup="dialog"
+                        >
+                          <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
+                          <Icon name="pencil" />
+                        </button>
                       </div>
                       <div className="tbPageTools">
                         <label className="iconBtn" title="Upload pages">
