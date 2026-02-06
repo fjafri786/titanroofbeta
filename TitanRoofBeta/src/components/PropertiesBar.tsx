@@ -5,6 +5,7 @@ interface PropertiesBarProps {
   onViewModeChange: (mode: "diagram" | "report" | "photos") => void;
   residenceName: string;
   roofSummary: string;
+  frontFaces: string;
   pages: { id: string; name: string }[];
   activePageId: string;
   onPageChange: (pageId: string) => void;
@@ -23,6 +24,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onViewModeChange,
   residenceName,
   roofSummary,
+  frontFaces,
   pages,
   activePageId,
   onPageChange,
@@ -64,7 +66,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
               </svg>
             </button>
           </div>
-          <div className="propertiesSub">{roofSummary}</div>
+          <div className="propertiesSub">Roof: {roofSummary} • Front faces: {frontFaces}</div>
           <div className="propertiesPage">
             <span className="propertiesPageLabel">
               Page {activePageIndex + 1} of {pages.length}
@@ -76,11 +78,14 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                 onChange={(event) => onPageChange(event.target.value)}
                 aria-label="Select page"
               >
-                {pages.map((page, index) => (
-                  <option key={page.id} value={page.id}>
-                    {page.name || `Page ${index + 1}`}
-                  </option>
-                ))}
+                {pages.map((page, index) => {
+                  const label = page.name?.trim();
+                  return (
+                    <option key={page.id} value={page.id}>
+                      {label ? `Page ${index + 1} • ${label}` : `Page ${index + 1}`}
+                    </option>
+                  );
+                })}
               </select>
               <svg
                 className="propertiesPageChevron"

@@ -195,6 +195,12 @@ declare global {
         dataUrl,
         type: "application/pdf"
       });
+      const isPdfFile = (file) => {
+        if(!file) return false;
+        const type = (file.type || "").toLowerCase();
+        const name = (file.name || "").toLowerCase();
+        return type === "application/pdf" || type === "application/x-pdf" || name.endsWith(".pdf");
+      };
 
       async function renderPdfToPages(file){
         const buffer = await file.arrayBuffer();
@@ -1123,20 +1129,16 @@ declare global {
           const zoneRect = canvasRef.current?.getBoundingClientRect();
           const toolbarRect = toolbarRef.current?.getBoundingClientRect();
           if(!zoneRect || !toolbarRect) return current || "horizontal";
-          const threshold = 24;
-          const hysteresis = 16;
-          const leftEdge = zoneRect.left + threshold;
-          const rightEdge = zoneRect.right - toolbarRect.width - threshold;
+          const threshold = 28;
+          const hysteresis = 40;
+          const leftDistance = pos.x - zoneRect.left;
+          const rightDistance = zoneRect.right - (pos.x + toolbarRect.width);
+          const nearEdge = leftDistance <= threshold || rightDistance <= threshold;
           if(current === "vertical"){
-            if(pos.x > leftEdge + hysteresis && pos.x < rightEdge - hysteresis){
-              return "horizontal";
-            }
-            return "vertical";
+            const farFromEdge = leftDistance > threshold + hysteresis && rightDistance > threshold + hysteresis;
+            return farFromEdge ? "horizontal" : "vertical";
           }
-          if(pos.x <= leftEdge || pos.x >= rightEdge){
-            return "vertical";
-          }
-          return "horizontal";
+          return nearEdge ? "vertical" : "horizontal";
         }, []);
 
         useEffect(() => {
@@ -1699,7 +1701,7 @@ declare global {
         });
 
         const buildPagesFromFile = async (file, pageIndexBase) => {
-          if(file.type === "application/pdf"){
+          if(isPdfFile(file)){
             const renderedPages = await renderPdfToPages(file);
             if(renderedPages.length){
               return renderedPages.map((entry, idx) => buildPageEntry({
@@ -3113,6 +3115,7 @@ declare global {
             onViewModeChange={setViewMode}
             residenceName={residenceName}
             roofSummary={roofSummary}
+            frontFaces={frontFaces}
             pages={pages.map(page => ({ id: page.id, name: page.name }))}
             activePageId={activePageId}
             onPageChange={setActivePageId}
@@ -3865,9 +3868,6 @@ declare global {
                       </div>
                     </div>
                     <div className="tbDivider" />
-                    <div className="tbGrab" aria-hidden="true" title="Drag toolbar">
-                      <Icon name="grip" />
-                    </div>
                     <LockIcon
                       locked={toolbarLocked}
                       onToggle={() => {
