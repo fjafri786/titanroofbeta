@@ -497,7 +497,7 @@ const loadPdfJs = () => {
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v4.1.5.state";
+      const STORAGE_KEY = "titanroof.v4.2.state";
 
       function App(){
         const viewportRef = useRef(null);
@@ -507,11 +507,6 @@ const loadPdfJs = () => {
         const [obsTool, setObsTool] = useState("dot");
         const [obsPaletteOpen, setObsPaletteOpen] = useState(false);
         const [obsPalettePos, setObsPalettePos] = useState({ left: 0, top: 0 });
-        const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 80 });
-        const [toolbarDragging, setToolbarDragging] = useState(false);
-        const [toolbarLocked, setToolbarLocked] = useState(false);
-        const [toolbarOrientation, setToolbarOrientation] = useState("horizontal");
-        const toolbarDragRef = useRef(null);
         const toolbarRef = useRef(null);
         const obsPaletteRef = useRef(null);
         const trpInputRef = useRef(null);
@@ -523,6 +518,7 @@ const loadPdfJs = () => {
         const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         const [mobileToolbarSection, setMobileToolbarSection] = useState("tools");
+        const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
         const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
         const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1030,8 +1026,8 @@ const loadPdfJs = () => {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.1.5 Beta",
-            version: "4.1.5",
+            app: "TitanRoof 4.2 Beta",
+            version: "4.2",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1161,91 +1157,16 @@ const loadPdfJs = () => {
         }, []);
 
         const isMobile = viewportSize.w <= 600;
-        const previousToolbarLock = useRef(toolbarLocked);
-        const previousToolbarPos = useRef(toolbarPos);
-        const sidebarToolbarPosRef = useRef(null);
 
         useEffect(() => {
           document.documentElement.style.setProperty("--mobile-scale", String(mobileScale));
         }, [mobileScale]);
 
         useEffect(() => {
-          previousToolbarLock.current = toolbarLocked;
-        }, [toolbarLocked]);
-
-        useEffect(() => {
-          if(!isMobile){
-            previousToolbarPos.current = toolbarPos;
-          }
-        }, [toolbarPos, isMobile]);
-
-        useEffect(() => {
-          if(isMobile){
-            previousToolbarLock.current = toolbarLocked;
-            setToolbarLocked(true);
-            setToolbarPos({ x: window.innerWidth / 2, y: 10 });
-          } else {
-            setToolbarLocked(previousToolbarLock.current);
-            setToolbarPos(previousToolbarPos.current || { x: 20, y: 80 });
-            setMobilePanelOpen(false);
-            setMobileMenuOpen(false);
-          }
+          if(!isMobile) return;
+          setMobilePanelOpen(false);
+          setMobileMenuOpen(false);
         }, [isMobile]);
-
-        const clampToolbarPos = useCallback((pos) => {
-          const zoneRect = canvasRef.current?.getBoundingClientRect();
-          const toolbarRect = toolbarRef.current?.getBoundingClientRect();
-          if(!zoneRect || !toolbarRect) return pos;
-          const padding = 10;
-          const minX = zoneRect.left + padding;
-          const minY = zoneRect.top + padding;
-          const maxX = zoneRect.right - toolbarRect.width - padding;
-          const maxY = zoneRect.bottom - toolbarRect.height - padding;
-          return {
-            x: clamp(pos.x, minX, Math.max(minX, maxX)),
-            y: clamp(pos.y, minY, Math.max(minY, maxY))
-          };
-        }, []);
-
-        useEffect(() => {
-          setToolbarPos(prev => clampToolbarPos(prev));
-        }, [viewportSize.w, viewportSize.h, tool, clampToolbarPos]);
-
-        const determineToolbarOrientation = useCallback(() => {
-          if(isMobile) return "horizontal";
-          const rect = toolbarRef.current?.getBoundingClientRect();
-          if(!rect) return "horizontal";
-          const edgeThreshold = 24;
-          const nearLeft = rect.left <= edgeThreshold;
-          const nearRight = rect.right >= window.innerWidth - edgeThreshold;
-          return (nearLeft || nearRight) ? "vertical" : "horizontal";
-        }, [isMobile]);
-
-        useEffect(() => {
-          setToolbarOrientation(determineToolbarOrientation());
-        }, [determineToolbarOrientation, toolbarPos, viewportSize.w, viewportSize.h, toolbarDragging, toolbarLocked]);
-
-        useEffect(() => {
-          if(isMobile) return;
-          setToolbarPos(prev => clampToolbarPos(prev));
-        }, [sidebarCollapsed, isMobile, clampToolbarPos]);
-
-        useEffect(() => {
-          if(isMobile) return;
-          if(!sidebarCollapsed){
-            sidebarToolbarPosRef.current = toolbarPos;
-            return;
-          }
-          if(sidebarToolbarPosRef.current){
-            setToolbarPos(clampToolbarPos(sidebarToolbarPosRef.current));
-          }
-        }, [sidebarCollapsed, isMobile, toolbarPos, clampToolbarPos]);
-
-        useEffect(() => {
-          if(!toolbarLocked) return;
-          toolbarDragRef.current = null;
-          setToolbarDragging(false);
-        }, [toolbarLocked]);
 
         useEffect(() => {
           if(tool !== "obs"){
@@ -1257,48 +1178,16 @@ const loadPdfJs = () => {
           if(!obsPaletteOpen) return;
           const rect = toolbarRef.current?.getBoundingClientRect();
           if(!rect) return;
-          const offset = 10;
-          let left = toolbarOrientation === "vertical" ? rect.right + offset : rect.left;
-          let top = toolbarOrientation === "vertical" ? rect.top : rect.bottom + offset;
+          const offset = 8;
+          let left = rect.left + 12;
+          let top = rect.bottom + offset;
           const paletteRect = obsPaletteRef.current?.getBoundingClientRect();
           if(paletteRect){
             left = clamp(left, 10, window.innerWidth - paletteRect.width - 10);
             top = clamp(top, 10, window.innerHeight - paletteRect.height - 10);
           }
           setObsPalettePos({ left, top });
-        }, [obsPaletteOpen, toolbarOrientation, toolbarPos, viewportSize.w, viewportSize.h]);
-
-        const handleToolbarPointerDown = (e) => {
-          if(isMobile) return;
-          if(typeof e.button === "number" && e.button !== 0) return;
-          if(toolbarLocked) return;
-          if(e.target.closest("button, .lockIcon, input, select, textarea, label")) return;
-          e.preventDefault();
-          toolbarDragRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
-            originX: toolbarPos.x,
-            originY: toolbarPos.y
-          };
-          setToolbarDragging(true);
-          try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
-        };
-
-        const handleToolbarPointerMove = (e) => {
-          if(!toolbarDragRef.current) return;
-          const { startX, startY, originX, originY } = toolbarDragRef.current;
-          setToolbarPos(clampToolbarPos({
-            x: originX + (e.clientX - startX),
-            y: originY + (e.clientY - startY)
-          }));
-        };
-
-        const handleToolbarPointerUp = (e) => {
-          if(!toolbarDragRef.current) return;
-          toolbarDragRef.current = null;
-          setToolbarDragging(false);
-          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-        };
+        }, [obsPaletteOpen, viewportSize.w, viewportSize.h]);
 
         const clampDashPos = useCallback((pos) => {
           const zoneRect = canvasRef.current?.getBoundingClientRect();
@@ -3172,18 +3061,6 @@ const loadPdfJs = () => {
           return sections;
         }, [items]);
 
-        // === Compact lock icon (orange locked / gray unlocked) ===
-        const LockIcon = ({locked, onToggle}) => (
-          <div
-            className={"lockIcon " + (locked ? "locked" : "unlocked")}
-            onClick={onToggle}
-            title={locked ? "Toolbar locked" : "Toolbar unlocked"}
-            aria-label={locked ? "Toolbar locked" : "Toolbar unlocked"}
-          >
-            <Icon name={locked ? "lock" : "unlock"} />
-          </div>
-        );
-
         // === Name editing (heading + pencil; edit -> input + check) ===
         const [nameEditing, setNameEditing] = useState(false);
         const [nameDraft, setNameDraft] = useState("");
@@ -3714,7 +3591,7 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.1.5" />
+          <TopBar label="TitanRoof Beta v4.2" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3732,7 +3609,7 @@ const loadPdfJs = () => {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.1.5 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.2 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3763,14 +3640,7 @@ const loadPdfJs = () => {
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
               <div
-                className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "") + (isMobile ? " mobile" : "")}
-                style={isMobile
-                  ? { left: "50%", top: "calc(var(--topbar-height) + var(--propsbar-height) + 6px)", transform: "translateX(-50%)" }
-                  : { left: toolbarPos.x, top: toolbarPos.y }}
-                onPointerDown={handleToolbarPointerDown}
-                onPointerMove={handleToolbarPointerMove}
-                onPointerUp={handleToolbarPointerUp}
-                onPointerCancel={handleToolbarPointerUp}
+                className={"toolbar docked" + (toolbarCollapsed ? " collapsed" : "") + (isMobile ? " mobile" : "")}
                 ref={toolbarRef}
               >
                 {isMobile ? (
@@ -3804,40 +3674,95 @@ const loadPdfJs = () => {
                         <Icon name="pages" />
                       </button>
                     </div>
-                    <div className="tbMobileBody">
-                      {mobileToolbarSection === "tools" && (
-                        <div className="tbTools" role="group" aria-label="Tools">
-                          {toolDefs.map(t => {
-                            const isActive = tool === t.key;
-                            return (
-                              <button
-                                key={t.key}
-                                className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
-                                type="button"
-                                onClick={() => handleToolSelect(t.key)}
-                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                                aria-label={t.label}
-                              >
-                                <Icon name={t.icon} />
-                              </button>
-                            );
-                          })}
+                    {!toolbarCollapsed && (
+                      <div className="tbMobileBody">
+                        {mobileToolbarSection === "tools" && (
+                          <div className="tbTools" role="group" aria-label="Tools">
+                            {toolDefs.map(t => {
+                              const isActive = tool === t.key;
+                              return (
+                                <button
+                                  key={t.key}
+                                  className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
+                                  type="button"
+                                  onClick={() => handleToolSelect(t.key)}
+                                  title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                                  aria-label={t.label}
+                                >
+                                  <Icon name={t.icon} />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {mobileToolbarSection === "zoom" && (
+                          <div className="tbZoomRow" role="group" aria-label="Zoom controls">
+                            <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
+                              <Icon name="minus" />
+                            </button>
+                            <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
+                              <Icon name="plus" />
+                            </button>
+                            <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
+                              <Icon name="fit" />
+                            </button>
+                          </div>
+                        )}
+                        {mobileToolbarSection === "pages" && (
+                          <div className="tbPages" role="group" aria-label="Page navigation">
+                            <div className="tbPageTools">
+                              <label className="iconBtn" title="Upload pages">
+                                <Icon name="upload" />
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf,.pdf,.PDF"
+                                  multiple
+                                  style={{ display: "none" }}
+                                  onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="tbTools" role="group" aria-label="Tools">
+                      {toolDefs.map(t => {
+                        const isActive = tool === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
+                            type="button"
+                            onClick={() => handleToolSelect(t.key)}
+                            title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                            aria-label={t.label}
+                          >
+                            <span className="toolText">{t.shortLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {!toolbarCollapsed && (
+                      <>
+                        <div className="tbDivider" />
+                        <div className="tbZoom">
+                          <div className="tbZoomRow">
+                            <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
+                              <Icon name="minus" />
+                            </button>
+                            <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
+                              <Icon name="plus" />
+                            </button>
+                            <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
+                              <Icon name="fit" />
+                            </button>
+                          </div>
                         </div>
-                      )}
-                      {mobileToolbarSection === "zoom" && (
-                        <div className="tbZoomRow" role="group" aria-label="Zoom controls">
-                          <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
-                            <Icon name="minus" />
-                          </button>
-                          <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
-                            <Icon name="plus" />
-                          </button>
-                          <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
-                            <Icon name="fit" />
-                          </button>
-                        </div>
-                      )}
-                      {mobileToolbarSection === "pages" && (
+                        <div className="tbDivider" />
                         <div className="tbPages" role="group" aria-label="Page navigation">
                           <div className="tbPageTools">
                             <label className="iconBtn" title="Upload pages">
@@ -3852,69 +3777,20 @@ const loadPdfJs = () => {
                             </label>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="tbCenter">
-                      <div className="tbTools">
-                          {toolDefs.map(t => {
-                            const isActive = tool === t.key;
-                            return (
-                              <button
-                                key={t.key}
-                                className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
-                                type="button"
-                                onClick={() => handleToolSelect(t.key)}
-                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                                aria-label={t.label}
-                              >
-                                <span className="toolText">{t.shortLabel}</span>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                    <div className="tbDivider" />
-                    <div className="tbZoom">
-                      <div className="tbZoomRow">
-                        <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
-                          <Icon name="minus" />
-                        </button>
-                        <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
-                          <Icon name="plus" />
-                        </button>
-                        <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
-                          <Icon name="fit" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="tbDivider" />
-                    <div className="tbPages" role="group" aria-label="Page navigation">
-                      <div className="tbPageTools">
-                        <label className="iconBtn" title="Upload pages">
-                          <Icon name="upload" />
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf,.pdf,.PDF"
-                            multiple
-                            style={{ display: "none" }}
-                            onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="tbDivider" />
-                    <LockIcon
-                      locked={toolbarLocked}
-                      onToggle={() => {
-                        if(isMobile) return;
-                        setToolbarLocked(prev => !prev);
-                      }}
-                    />
+                      </>
+                    )}
                   </>
                 )}
+                <div className="tbSpacer" aria-hidden="true" />
+                <button
+                  className="iconBtn collapseBtn"
+                  type="button"
+                  onClick={() => setToolbarCollapsed(prev => !prev)}
+                  aria-label={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
+                  title={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
+                >
+                  <Icon name={toolbarCollapsed ? "chevDown" : "chevUp"} />
+                </button>
               </div>
               {tool === "obs" && obsPaletteOpen && (
                 <div
@@ -5526,7 +5402,7 @@ const loadPdfJs = () => {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.1.5</div>
+                <div className="printTitleHero">Titan Roof Version 4.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
