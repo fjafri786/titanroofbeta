@@ -6,41 +6,36 @@ import "./styles.css";
 
 declare global {
   interface Window {
-    pdfjsLib?: {
-      GlobalWorkerOptions?: { workerSrc?: string };
-      getDocument?: (options: { data: ArrayBuffer }) => { promise: Promise<any> };
-    };
+    pdfjsLib?: any;
   }
 }
 
-const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js";
-const PDFJS_WORKER_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
-let pdfJsLoadPromise: Promise<Window["pdfjsLib"]> | null = null;
-let pdfJsWorkerUrl: string | null = null;
+const PDFJS_CDN = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js";
+const PDFJS_WORKER_CDN = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+
+let pdfJsLoadPromise: Promise<any> | null = null;
 
 const loadPdfJs = () => {
-  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
-  if(pdfJsLoadPromise) return pdfJsLoadPromise;
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfJsLoadPromise) return pdfJsLoadPromise;
+
   pdfJsLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = PDFJS_CDN;
     script.crossOrigin = "anonymous";
-    script.onload = () => resolve(window.pdfjsLib);
+    script.onload = () => {
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_CDN;
+        resolve(window.pdfjsLib);
+      } else {
+        reject(new Error("PDF.js loaded but window.pdfjsLib is undefined"));
+      }
+    };
     script.onerror = () => reject(new Error("Failed to load PDF.js"));
     document.head.appendChild(script);
   });
+  
   return pdfJsLoadPromise;
-};
-
-const ensurePdfWorker = async (pdfjsLib: Window["pdfjsLib"]) => {
-  if(!pdfjsLib?.GlobalWorkerOptions || pdfjsLib.GlobalWorkerOptions.workerSrc) return;
-  if(!pdfJsWorkerUrl){
-    const response = await fetch(PDFJS_WORKER_CDN);
-    const workerText = await response.text();
-    const blob = new Blob([workerText], { type: "text/javascript" });
-    pdfJsWorkerUrl = URL.createObjectURL(blob);
-  }
-  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfJsWorkerUrl;
 };
 
       const SIZES = ["1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.25", "1.5", "1.75", "2", "2.5", "3+"];
@@ -251,11 +246,6 @@ const ensurePdfWorker = async (pdfjsLib: Window["pdfjsLib"]) => {
         if(!pdfjsLib?.getDocument){
           console.warn("PDF support is not available.");
           return [];
-        }
-        try {
-          await ensurePdfWorker(pdfjsLib);
-        } catch (err) {
-          console.warn("Failed to configure PDF worker.", err);
         }
         let doc = null;
         try{
