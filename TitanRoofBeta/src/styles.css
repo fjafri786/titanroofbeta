@@ -170,6 +170,43 @@
         flex-wrap:wrap;
         justify-content:flex-end;
       }
+      .sidebarDock{
+        position: fixed;
+        left: 20px;
+        top: 50%;
+        transform: translateY(-50%) !important;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 10px;
+        background: #ffffff;
+        border-radius: 32px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        z-index: 90;
+        right: auto;
+        bottom: auto;
+      }
+      .sidebarDock button{
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        background: transparent;
+        color: #0F172A;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .sidebarDock button:hover{
+        background: #F1F5F9;
+        border-color: #E2E8F0;
+      }
+      .sidebarDock button.active{
+        background: #0F172A;
+        color: white;
+      }
 
       .app{
         display:grid;
@@ -2561,12 +2598,6 @@
         }
         .hdrText{
           width: 100%;
-        }
-        .sidebarDock{
-          left: 50%;
-          right: auto;
-          transform: translateX(-50%);
-          align-items:center;
         }
         .dashTable{
           font-size:10px;
