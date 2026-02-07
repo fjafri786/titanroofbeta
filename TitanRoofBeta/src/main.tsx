@@ -3769,39 +3769,6 @@ const ensurePdfWorker = async (pdfjsLib: Window["pdfjsLib"]) => {
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
-              <div className="pageNavDock" role="group" aria-label="Page navigation">
-                <button
-                  type="button"
-                  className="pageNavBtn"
-                  onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
-                  disabled={!canGoPrevPage}
-                >
-                  Prev
-                </button>
-                <div className="pageNavSelect">
-                  <select
-                    className="pageNavSelectInput"
-                    value={activePageId}
-                    onChange={(event) => setActivePageId(event.target.value)}
-                    aria-label="Select page"
-                  >
-                    {pages.map((page, index) => (
-                      <option key={page.id} value={page.id}>
-                        {`Page ${index + 1} of ${pages.length}${page.name ? ` — ${page.name}` : ""}`}
-                      </option>
-                    ))}
-                  </select>
-                  <Icon name="chevDown" className="pageNavSelectChevron" />
-                </div>
-                <button
-                  type="button"
-                  className="pageNavBtn"
-                  onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
-                  disabled={!canGoNextPage}
-                >
-                  Next
-                </button>
-              </div>
               <div
                 className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "") + (isMobile ? " mobile" : "")}
                 style={isMobile
