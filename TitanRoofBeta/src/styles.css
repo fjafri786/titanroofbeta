@@ -1,6 +1,6 @@
 :root{
-        --topbar-height: 24px;
-        --propsbar-height: 86px;
+        --topbar-height: 96px;
+        --propsbar-height: 0px;
         --toolbar-height: 64px;
         --navy:#0B2A3A;
         --navy2:#0E3348;
@@ -50,36 +50,51 @@
         top: 0;
         left: 0;
         width: 100%;
-        height: var(--topbar-height);
-        background: #DC2626;
+        min-height: var(--topbar-height);
         z-index: 200;
-        box-shadow: 0 2px 6px rgba(220,38,38,0.35);
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-size:11px;
-        font-weight:1100;
-        letter-spacing:0.8px;
-        text-transform:uppercase;
-        color:#fff;
-      }
-
-      .propertiesBar{
-        position: fixed;
-        top: var(--topbar-height);
-        left: 0;
-        width: 100%;
-        height: var(--propsbar-height);
-        z-index: 190;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 18px;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: center;
+        padding: 12px 18px;
         background: linear-gradient(135deg, rgba(14,165,233,0.95), rgba(59,130,246,0.95));
         color: #fff;
         box-shadow: 0 12px 22px rgba(2,6,23,0.16);
-        gap: 16px;
+        gap: 8px;
         pointer-events: auto;
+      }
+      .topBarMain{
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .topBarLeft{
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .topBarCenter{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        flex: 1;
+        flex-wrap: nowrap;
+      }
+      .topBarRight{
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      .topBarMeta{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
       }
       .propertiesLeft{
         display:flex;
@@ -342,7 +357,7 @@
 
       /* ========= TOOLBAR ========= */
       .toolbar{
-        --toolbar-control-size: 36px;
+        --toolbar-control-size: 40px;
         position: fixed;
         top: calc(var(--topbar-height) + var(--propsbar-height));
         left: 0;
@@ -364,10 +379,6 @@
         -webkit-user-select:none;
         cursor: default;
       }
-      .toolbar.collapsed{
-        height: calc(var(--toolbar-height) - 8px);
-        min-height: calc(var(--toolbar-height) - 8px);
-      }
       .toolbar.mobile{
         padding:8px 12px;
         height: auto;
@@ -386,11 +397,6 @@
       }
       .tbSpacer{
         flex:1 1 auto;
-      }
-      .toolbar.collapsed .tbDivider,
-      .toolbar.collapsed .tbZoom,
-      .toolbar.collapsed .tbPages{
-        display:none;
       }
       .tbMiniHint{
         font-size:10px;
@@ -622,9 +628,11 @@
         touch-action: manipulation;
       }
       .toolBtn.textLabel{
-        padding:0 12px;
-        min-width:56px;
-        border-radius:14px;
+        width: var(--toolbar-control-size);
+        min-width: var(--toolbar-control-size);
+        height: var(--toolbar-control-size);
+        padding:0;
+        border-radius: 50%;
       }
       .toolbar.vertical .toolBtn.textLabel{
         width:100%;
@@ -2237,7 +2245,7 @@
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar{ display:none !important; }
+        .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar{ display:none !important; }
         .printSheet{
           display:block;
           padding:24px;
@@ -2379,7 +2387,8 @@
       }
       @media (max-width: 820px){
         :root{
-          --propsbar-height: 124px;
+          --topbar-height: 124px;
+          --propsbar-height: 0px;
           --toolbar-height: 96px;
           --mobile-font: calc(13px * var(--mobile-scale));
           --mobile-title: calc(18px * var(--mobile-scale));
@@ -2391,15 +2400,32 @@
         .topBar{
           font-size: calc(10px * var(--mobile-scale));
         }
-        .propertiesBar{
+        .topBar{
           flex-direction: column;
           align-items: flex-start;
           gap: 8px;
-          height: var(--propsbar-height);
+          min-height: var(--topbar-height);
           padding: 10px 14px 12px;
         }
-        .propertiesBar.isMobile{
+        .topBar.isMobile{
           background: linear-gradient(145deg, rgba(14,165,233,0.98), rgba(59,130,246,0.98));
+        }
+        .topBarMain{
+          flex-direction: column;
+          align-items: flex-start;
+          width: 100%;
+        }
+        .topBarCenter{
+          justify-content: flex-start;
+          width: 100%;
+          flex-wrap: wrap;
+        }
+        .topBarRight{
+          width: 100%;
+          justify-content: flex-end;
+        }
+        .topBarMeta{
+          width: 100%;
         }
         .propertiesLeft{
           width: 100%;

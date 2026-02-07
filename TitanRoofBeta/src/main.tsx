@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
-import PropertiesBar from "./components/PropertiesBar";
 import TopBar from "./components/TopBar";
 import "./styles.css";
 
@@ -3149,7 +3148,7 @@ const loadPdfJs = () => {
         };
 
         const headerContent = (
-          <PropertiesBar
+          <TopBar
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             residenceName={residenceName}
@@ -3169,6 +3168,16 @@ const loadPdfJs = () => {
             isMobile={isMobile}
             mobileMenuOpen={mobileMenuOpen}
             onMobileMenuToggle={() => setMobileMenuOpen(v => !v)}
+            toolbarCollapsed={toolbarCollapsed}
+            onToolbarToggle={() => {
+              setToolbarCollapsed(prev => {
+                const next = !prev;
+                if(next){
+                  setObsPaletteOpen(false);
+                }
+                return next;
+              });
+            }}
           />
         );
 
@@ -3591,7 +3600,6 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3639,42 +3647,42 @@ const loadPdfJs = () => {
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
-              <div
-                className={"toolbar docked" + (toolbarCollapsed ? " collapsed" : "") + (isMobile ? " mobile" : "")}
-                ref={toolbarRef}
-              >
-                {isMobile ? (
-                  <div className="tbMobile">
-                    <div className="tbMobileTabs" role="tablist" aria-label="Toolbar sections">
-                      <button
-                        type="button"
-                        className={"iconBtn" + (mobileToolbarSection === "tools" ? " active" : "")}
-                        aria-pressed={mobileToolbarSection === "tools"}
-                        onClick={() => setMobileToolbarSection("tools")}
-                        aria-label="Tools"
-                      >
-                        <Icon name="tools" />
-                      </button>
-                      <button
-                        type="button"
-                        className={"iconBtn" + (mobileToolbarSection === "zoom" ? " active" : "")}
-                        aria-pressed={mobileToolbarSection === "zoom"}
-                        onClick={() => setMobileToolbarSection("zoom")}
-                        aria-label="Zoom"
-                      >
-                        <Icon name="zoom" />
-                      </button>
-                      <button
-                        type="button"
-                        className={"iconBtn" + (mobileToolbarSection === "pages" ? " active" : "")}
-                        aria-pressed={mobileToolbarSection === "pages"}
-                        onClick={() => setMobileToolbarSection("pages")}
-                        aria-label="Pages"
-                      >
-                        <Icon name="pages" />
-                      </button>
-                    </div>
-                    {!toolbarCollapsed && (
+              {!toolbarCollapsed && (
+                <div
+                  className={"toolbar docked" + (isMobile ? " mobile" : "")}
+                  ref={toolbarRef}
+                >
+                  {isMobile ? (
+                    <div className="tbMobile">
+                      <div className="tbMobileTabs" role="tablist" aria-label="Toolbar sections">
+                        <button
+                          type="button"
+                          className={"iconBtn" + (mobileToolbarSection === "tools" ? " active" : "")}
+                          aria-pressed={mobileToolbarSection === "tools"}
+                          onClick={() => setMobileToolbarSection("tools")}
+                          aria-label="Tools"
+                        >
+                          <Icon name="tools" />
+                        </button>
+                        <button
+                          type="button"
+                          className={"iconBtn" + (mobileToolbarSection === "zoom" ? " active" : "")}
+                          aria-pressed={mobileToolbarSection === "zoom"}
+                          onClick={() => setMobileToolbarSection("zoom")}
+                          aria-label="Zoom"
+                        >
+                          <Icon name="zoom" />
+                        </button>
+                        <button
+                          type="button"
+                          className={"iconBtn" + (mobileToolbarSection === "pages" ? " active" : "")}
+                          aria-pressed={mobileToolbarSection === "pages"}
+                          onClick={() => setMobileToolbarSection("pages")}
+                          aria-label="Pages"
+                        >
+                          <Icon name="pages" />
+                        </button>
+                      </div>
                       <div className="tbMobileBody">
                         {mobileToolbarSection === "tools" && (
                           <div className="tbTools" role="group" aria-label="Tools">
@@ -3725,73 +3733,60 @@ const loadPdfJs = () => {
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    <div className="tbTools" role="group" aria-label="Tools">
-                      {toolDefs.map(t => {
-                        const isActive = tool === t.key;
-                        return (
-                          <button
-                            key={t.key}
-                            className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
-                            type="button"
-                            onClick={() => handleToolSelect(t.key)}
-                            title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                            aria-label={t.label}
-                          >
-                            <span className="toolText">{t.shortLabel}</span>
-                          </button>
-                        );
-                      })}
                     </div>
-                    {!toolbarCollapsed && (
-                      <>
-                        <div className="tbDivider" />
-                        <div className="tbZoom">
-                          <div className="tbZoomRow">
-                            <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
-                              <Icon name="minus" />
+                  ) : (
+                    <>
+                      <div className="tbTools" role="group" aria-label="Tools">
+                        {toolDefs.map(t => {
+                          const isActive = tool === t.key;
+                          return (
+                            <button
+                              key={t.key}
+                              className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
+                              type="button"
+                              onClick={() => handleToolSelect(t.key)}
+                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                              aria-label={t.label}
+                            >
+                              <span className="toolText">{t.shortLabel}</span>
                             </button>
-                            <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
-                              <Icon name="plus" />
-                            </button>
-                            <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
-                              <Icon name="fit" />
-                            </button>
-                          </div>
+                          );
+                        })}
+                      </div>
+                      <div className="tbDivider" />
+                      <div className="tbZoom">
+                        <div className="tbZoomRow">
+                          <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
+                            <Icon name="minus" />
+                          </button>
+                          <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
+                            <Icon name="plus" />
+                          </button>
+                          <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
+                            <Icon name="fit" />
+                          </button>
                         </div>
-                        <div className="tbDivider" />
-                        <div className="tbPages" role="group" aria-label="Page navigation">
-                          <div className="tbPageTools">
-                            <label className="iconBtn" title="Upload pages">
-                              <Icon name="upload" />
-                              <input
-                                type="file"
-                                accept="image/*,application/pdf,.pdf,.PDF"
-                                multiple
-                                style={{ display: "none" }}
-                                onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                              />
-                            </label>
-                          </div>
+                      </div>
+                      <div className="tbDivider" />
+                      <div className="tbPages" role="group" aria-label="Page navigation">
+                        <div className="tbPageTools">
+                          <label className="iconBtn" title="Upload pages">
+                            <Icon name="upload" />
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf,.pdf,.PDF"
+                              multiple
+                              style={{ display: "none" }}
+                              onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                            />
+                          </label>
                         </div>
-                      </>
-                    )}
-                  </>
-                )}
-                <div className="tbSpacer" aria-hidden="true" />
-                <button
-                  className="iconBtn collapseBtn"
-                  type="button"
-                  onClick={() => setToolbarCollapsed(prev => !prev)}
-                  aria-label={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
-                  title={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
-                >
-                  <Icon name={toolbarCollapsed ? "chevDown" : "chevUp"} />
-                </button>
-              </div>
+                      </div>
+                    </>
+                  )}
+                  <div className="tbSpacer" aria-hidden="true" />
+                </div>
+              )}
               {tool === "obs" && obsPaletteOpen && (
                 <div
                   className="obsPalette"
