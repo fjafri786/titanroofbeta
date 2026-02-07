@@ -3375,7 +3375,7 @@ declare global {
                   <input
                     className="inp"
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept="image/*,application/pdf,.pdf,.PDF"
                     multiple
                     onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
                   />
@@ -3384,7 +3384,7 @@ declare global {
                     Replace current page
                     <input
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept="image/*,application/pdf,.pdf,.PDF"
                       style={{display:"none"}}
                       onChange={(e)=> e.target.files?.[0] && setDiagramBg(e.target.files[0])}
                     />
@@ -3731,6 +3731,40 @@ declare global {
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
+              <div className="pageNavDock" role="group" aria-label="Page navigation">
+                <button
+                  type="button"
+                  className="pageNavBtn"
+                  onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
+                  disabled={!canGoPrevPage}
+                >
+                  Prev
+                </button>
+                <div className="pageNavSelect">
+                  <div className="pageNavStatus">{`Page ${activePageIndex + 1} of ${pages.length}`}</div>
+                  <select
+                    className="pageNavSelectInput"
+                    value={activePageId}
+                    onChange={(event) => setActivePageId(event.target.value)}
+                    aria-label="Select page"
+                  >
+                    {pages.map((page, index) => (
+                      <option key={page.id} value={page.id}>
+                        {`Page ${index + 1} of ${pages.length}${page.name ? ` — ${page.name}` : ""}`}
+                      </option>
+                    ))}
+                  </select>
+                  <Icon name="chevDown" className="pageNavSelectChevron" />
+                </div>
+                <button
+                  type="button"
+                  className="pageNavBtn"
+                  onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
+                  disabled={!canGoNextPage}
+                >
+                  Next
+                </button>
+              </div>
               <div
                 className={"toolbar" + (toolbarDragging ? " dragging" : "") + (toolbarLocked ? " locked" : "") + (toolbarOrientation === "vertical" ? " vertical" : "") + (isMobile ? " mobile" : "")}
                 style={isMobile
@@ -3808,61 +3842,26 @@ declare global {
                       )}
                       {mobileToolbarSection === "pages" && (
                         <div className="tbPages" role="group" aria-label="Page navigation">
-                          <div className="tbPageNav compact">
+                          <div className="tbPageTools">
+                            <label className="iconBtn" title="Upload pages">
+                              <Icon name="upload" />
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf,.pdf,.PDF"
+                                multiple
+                                style={{ display: "none" }}
+                                onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                              />
+                            </label>
                             <button
                               type="button"
-                              className="iconBtn nav"
-                              onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
-                              disabled={!canGoPrevPage}
-                              aria-label="Previous page"
-                            >
-                              <Icon name="chevLeft" />
-                            </button>
-                            <div className="pageSelect">
-                              <select
-                                className="pageSelectInput"
-                                value={activePageId}
-                                onChange={(event) => setActivePageId(event.target.value)}
-                                aria-label="Select page"
-                              >
-                                {pages.map((page, index) => (
-                                  <option key={page.id} value={page.id}>
-                                    {index + 1}/{pages.length}
-                                  </option>
-                                ))}
-                              </select>
-                              <Icon name="chevDown" className="pageSelectChevron" />
-                            </div>
-                            <button
-                              type="button"
-                              className="iconBtn nav"
+                              className="iconBtn"
                               onClick={startPageNameEdit}
                               aria-label="Rename page"
                               title="Rename page"
                             >
                               <Icon name="pencil" />
                             </button>
-                            <button
-                              type="button"
-                              className="iconBtn nav"
-                              onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
-                              disabled={!canGoNextPage}
-                              aria-label="Next page"
-                            >
-                              <Icon name="chevRight" />
-                            </button>
-                          </div>
-                          <div className="tbPageTools">
-                            <label className="iconBtn" title="Upload pages">
-                              <Icon name="upload" />
-                              <input
-                                type="file"
-                                accept="image/*,application/pdf"
-                                multiple
-                                style={{ display: "none" }}
-                                onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                              />
-                            </label>
                             <button
                               type="button"
                               className="iconBtn"
@@ -3923,61 +3922,26 @@ declare global {
                     </div>
                     <div className="tbDivider" />
                     <div className="tbPages" role="group" aria-label="Page navigation">
-                      <div className="tbPageNav">
+                      <div className="tbPageTools">
+                        <label className="iconBtn" title="Upload pages">
+                          <Icon name="upload" />
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf,.pdf,.PDF"
+                            multiple
+                            style={{ display: "none" }}
+                            onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                          />
+                        </label>
                         <button
                           type="button"
-                          className="iconBtn nav"
-                          onClick={() => canGoPrevPage && setActivePageId(pages[activePageIndex - 1]?.id)}
-                          disabled={!canGoPrevPage}
-                          aria-label="Previous page"
-                        >
-                          <Icon name="chevLeft" />
-                        </button>
-                        <div className="pageSelect">
-                          <select
-                            className="pageSelectInput"
-                            value={activePageId}
-                            onChange={(event) => setActivePageId(event.target.value)}
-                            aria-label="Select page"
-                          >
-                            {pages.map((page, index) => (
-                              <option key={page.id} value={page.id}>
-                                {index + 1}/{pages.length}
-                              </option>
-                            ))}
-                          </select>
-                          <Icon name="chevDown" className="pageSelectChevron" />
-                        </div>
-                        <button
-                          type="button"
-                          className="iconBtn nav"
+                          className="iconBtn"
                           onClick={startPageNameEdit}
                           aria-label="Rename page"
                           title="Rename page"
                         >
                           <Icon name="pencil" />
                         </button>
-                        <button
-                          type="button"
-                          className="iconBtn nav"
-                          onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
-                          disabled={!canGoNextPage}
-                          aria-label="Next page"
-                        >
-                          <Icon name="chevRight" />
-                        </button>
-                      </div>
-                      <div className="tbPageTools">
-                        <label className="iconBtn" title="Upload pages">
-                          <Icon name="upload" />
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            multiple
-                            style={{ display: "none" }}
-                            onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                          />
-                        </label>
                         <button
                           type="button"
                           className="iconBtn"
@@ -4180,7 +4144,7 @@ declare global {
                       Upload Pages
                       <input
                         type="file"
-                        accept="image/*,application/pdf"
+                        accept="image/*,application/pdf,.pdf,.PDF"
                         multiple
                         style={{display:"none"}}
                         onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
