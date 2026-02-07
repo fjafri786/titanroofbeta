@@ -13,6 +13,36 @@ declare global {
   }
 }
 
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js";
+const PDFJS_WORKER_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
+let pdfJsLoadPromise: Promise<Window["pdfjsLib"]> | null = null;
+let pdfJsWorkerUrl: string | null = null;
+
+const loadPdfJs = () => {
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(pdfJsLoadPromise) return pdfJsLoadPromise;
+  pdfJsLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = PDFJS_CDN;
+    script.crossOrigin = "anonymous";
+    script.onload = () => resolve(window.pdfjsLib);
+    script.onerror = () => reject(new Error("Failed to load PDF.js"));
+    document.head.appendChild(script);
+  });
+  return pdfJsLoadPromise;
+};
+
+const ensurePdfWorker = async (pdfjsLib: Window["pdfjsLib"]) => {
+  if(!pdfjsLib?.GlobalWorkerOptions || pdfjsLib.GlobalWorkerOptions.workerSrc) return;
+  if(!pdfJsWorkerUrl){
+    const response = await fetch(PDFJS_WORKER_CDN);
+    const workerText = await response.text();
+    const blob = new Blob([workerText], { type: "text/javascript" });
+    pdfJsWorkerUrl = URL.createObjectURL(blob);
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfJsWorkerUrl;
+};
+
       const SIZES = ["1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.25", "1.5", "1.75", "2", "2.5", "3+"];
       const CARDINAL_DIRS = ["N", "S", "E", "W"];
       const WIND_DIRS = ["N", "S", "E", "W", "Ridge", "Hip", "Valley"];
@@ -211,13 +241,21 @@ declare global {
       };
 
       async function renderPdfBufferToPages(buffer, baseName = "PDF"){
-        const pdfjsLib = window.pdfjsLib;
+        let pdfjsLib;
+        try {
+          pdfjsLib = await loadPdfJs();
+        } catch (err) {
+          console.warn("PDF support is not available.", err);
+          return [];
+        }
         if(!pdfjsLib?.getDocument){
           console.warn("PDF support is not available.");
           return [];
         }
-        if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
-          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
+        try {
+          await ensurePdfWorker(pdfjsLib);
+        } catch (err) {
+          console.warn("Failed to configure PDF worker.", err);
         }
         let doc = null;
         try{
@@ -2809,11 +2847,11 @@ declare global {
         };
 
         const toolDefs = [
-          { key:"ts", label:"Test Square", icon:"ts", cls:"ts" },
-          { key:"apt", label:"Appurtenance", icon:"apt", cls:"apt" },
-          { key:"ds", label:"Downspout", icon:"ds", cls:"ds" },
-          { key:"wind", label:"Wind", icon:"wind", cls:"wind" },
-          { key:"obs", label:"Observation", icon:"obs", cls:"obs" },
+          { key:"ts", label:"Test Square", shortLabel:"TS", icon:"ts", cls:"ts" },
+          { key:"apt", label:"Appurtenance", shortLabel:"APT", icon:"apt", cls:"apt" },
+          { key:"ds", label:"Downspout", shortLabel:"DS", icon:"ds", cls:"ds" },
+          { key:"wind", label:"Wind", shortLabel:"W", icon:"wind", cls:"wind" },
+          { key:"obs", label:"Observation", shortLabel:"OBS", icon:"obs", cls:"obs" },
         ];
 
         const handleToolSelect = (key) => {
@@ -3741,7 +3779,6 @@ declare global {
                   Prev
                 </button>
                 <div className="pageNavSelect">
-                  <div className="pageNavStatus">{`Page ${activePageIndex + 1} of ${pages.length}`}</div>
                   <select
                     className="pageNavSelectInput"
                     value={activePageId}
@@ -3817,14 +3854,14 @@ declare global {
                                 key={t.key}
                                 className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                 type="button"
-                              onClick={() => handleToolSelect(t.key)}
-                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                              aria-label={t.label}
-                            >
-                              <Icon name={t.icon} />
-                            </button>
-                          );
-                        })}
+                                onClick={() => handleToolSelect(t.key)}
+                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                                aria-label={t.label}
+                              >
+                                <Icon name={t.icon} />
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                       {mobileToolbarSection === "zoom" && (
@@ -3894,13 +3931,13 @@ declare global {
                             return (
                               <button
                                 key={t.key}
-                                className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
+                                className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
                                 type="button"
-                              onClick={() => handleToolSelect(t.key)}
-                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                              aria-label={t.label}
-                            >
-                                <Icon name={t.icon} />
+                                onClick={() => handleToolSelect(t.key)}
+                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                                aria-label={t.label}
+                              >
+                                <span className="toolText">{t.shortLabel}</span>
                               </button>
                             );
                           })}
