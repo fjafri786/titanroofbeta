@@ -3281,6 +3281,9 @@ const loadPdfJs = () => {
             pages={pages.map(page => ({ id: page.id, name: page.name }))}
             activePageId={activePageId}
             onPageChange={setActivePageId}
+            onAddPage={insertBlankPageAfter}
+            onEditPage={startPageNameEdit}
+            onRotatePage={rotateActivePage}
             onEdit={() => { setHdrEditOpen(v => !v); }}
             onSave={() => saveState("manual")}
             onSaveAs={exportTrp}
@@ -3847,33 +3850,6 @@ const loadPdfJs = () => {
                                 onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
                               />
                             </label>
-                            <button
-                              type="button"
-                              className="iconBtn"
-                              onClick={startPageNameEdit}
-                              aria-label="Rename page"
-                              title="Rename page"
-                            >
-                              <Icon name="pencil" />
-                            </button>
-                            <button
-                              type="button"
-                              className="iconBtn"
-                              onClick={insertBlankPageAfter}
-                              aria-label="Add blank page after"
-                              title="Add blank page after"
-                            >
-                              <Icon name="plus" />
-                            </button>
-                            <button
-                              type="button"
-                              className="iconBtn"
-                              onClick={rotateActivePage}
-                              aria-label="Rotate page"
-                              title="Rotate page"
-                            >
-                              <Icon name="rotate" />
-                            </button>
                           </div>
                         </div>
                       )}
@@ -3927,33 +3903,6 @@ const loadPdfJs = () => {
                             onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
                           />
                         </label>
-                        <button
-                          type="button"
-                          className="iconBtn"
-                          onClick={startPageNameEdit}
-                          aria-label="Rename page"
-                          title="Rename page"
-                        >
-                          <Icon name="pencil" />
-                        </button>
-                        <button
-                          type="button"
-                          className="iconBtn"
-                          onClick={insertBlankPageAfter}
-                          aria-label="Add blank page after"
-                          title="Add blank page after"
-                        >
-                          <Icon name="plus" />
-                        </button>
-                        <button
-                          type="button"
-                          className="iconBtn"
-                          onClick={rotateActivePage}
-                          aria-label="Rotate page"
-                          title="Rotate page"
-                        >
-                          <Icon name="rotate" />
-                        </button>
                       </div>
                     </div>
                     <div className="tbDivider" />
