@@ -189,6 +189,20 @@ declare global {
         dataUrl,
         type
       });
+      const dataUrlToArrayBuffer = (dataUrl) => {
+        if(!dataUrl || typeof dataUrl !== "string") return null;
+        const commaIndex = dataUrl.indexOf(",");
+        if(commaIndex === -1) return null;
+        const header = dataUrl.slice(0, commaIndex);
+        const payload = dataUrl.slice(commaIndex + 1);
+        const isBase64 = header.includes(";base64");
+        const binary = isBase64 ? atob(payload) : decodeURIComponent(payload);
+        const bytes = new Uint8Array(binary.length);
+        for(let i = 0; i < binary.length; i++){
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      };
       const isPdfFile = (file) => {
         if(!file) return false;
         const type = (file.type || "").toLowerCase();
@@ -205,34 +219,41 @@ declare global {
         if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc){
           pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
         }
-        const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
-        const pages = [];
-        for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
-          const page = await doc.getPage(pageNum);
-          const viewport = page.getViewport({ scale: 2 });
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d");
-          if(!ctx) continue;
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          const dataUrl = canvas.toDataURL("image/png");
-          pages.push({
-            background: buildImageObj(dataUrl, `${baseName.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
-            aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
-          });
+        let doc = null;
+        try{
+          doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+          const pages = [];
+          for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
+            const page = await doc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 2 });
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext("2d");
+            if(!ctx) continue;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const dataUrl = canvas.toDataURL("image/png");
+            pages.push({
+              background: buildImageObj(dataUrl, `${baseName.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
+              aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
+            });
+          }
+          return pages;
+        } catch (err) {
+          console.warn("Failed to render PDF.", err);
+          return [];
+        } finally {
+          if(doc?.cleanup) doc.cleanup();
+          if(doc?.destroy) doc.destroy();
         }
-        if(doc.cleanup) doc.cleanup();
-        if(doc.destroy) doc.destroy();
-        return pages;
       }
       async function renderPdfToPages(file){
         const buffer = await file.arrayBuffer();
         return renderPdfBufferToPages(buffer, file.name || "PDF");
       }
       async function renderPdfDataUrlToPages(dataUrl, name = "PDF"){
-        const response = await fetch(dataUrl);
-        const buffer = await response.arrayBuffer();
+        const buffer = dataUrlToArrayBuffer(dataUrl);
+        if(!buffer) return [];
         return renderPdfBufferToPages(buffer, name);
       }
 
@@ -267,6 +288,21 @@ declare global {
         }
         if(name === "chevRight"){
           return (<svg {...common}><path d="M9 18l6-6-6-6"/></svg>);
+        }
+        if(name === "ts"){
+          return (<svg {...common}><rect x="6" y="6" width="12" height="12" rx="2"/></svg>);
+        }
+        if(name === "apt"){
+          return (<svg {...common}><circle cx="12" cy="12" r="6"/></svg>);
+        }
+        if(name === "ds"){
+          return (<svg {...common}><path d="M12 5v10"/><path d="M9 12l3 3 3-3"/></svg>);
+        }
+        if(name === "wind"){
+          return (<svg {...common}><path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 14h14a3 3 0 1 1-3 3"/></svg>);
+        }
+        if(name === "obs"){
+          return (<svg {...common}><path d="M12 21s6-6 6-10a6 6 0 1 0-12 0c0 4 6 10 6 10z"/><circle cx="12" cy="11" r="2.5"/></svg>);
         }
         if(name === "panel"){
           return (
@@ -1734,27 +1770,18 @@ declare global {
 
         const buildPagesFromFile = async (file, pageIndexBase) => {
           if(isPdfFile(file)){
-            try {
-              const renderedPages = await renderPdfToPages(file);
-              if(renderedPages.length){
-                return renderedPages.map((entry, idx) => buildPageEntry({
-                  name: renderedPages.length > 1
-                    ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
-                    : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
-                  background: entry.background,
-                  aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
-                }));
-              }
-            } catch (err) {
-              console.warn("PDF render failed, preserving PDF file.", err);
+            const renderedPages = await renderPdfToPages(file);
+            if(!renderedPages.length){
+              console.warn("PDF render returned no pages.");
+              return [];
             }
-            const background = await fileToObj(file);
-            if(!background) return [];
-            return [buildPageEntry({
-              name: file.name ? file.name.replace(/\.[^/.]+$/, "") : `Page ${pageIndexBase + 1}`,
-              background: { ...background, type: "application/pdf" },
-              aspectRatio: LETTER_ASPECT_RATIO
-            })];
+            return renderedPages.map((entry, idx) => buildPageEntry({
+              name: renderedPages.length > 1
+                ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
+              background: entry.background,
+              aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
+            }));
           }
           const background = await fileToObj(file);
           return [buildPageEntry({
@@ -1862,7 +1889,22 @@ declare global {
               if(!dataUrl) continue;
               pdfRasterizingRef.current.add(page.id);
               const renderedPages = await renderPdfDataUrlToPages(dataUrl, background.name || page.name || "PDF");
-              if(!isActive || !renderedPages.length) continue;
+              if(!isActive) continue;
+              if(!renderedPages.length){
+                setPages(prev => {
+                  const next = [...prev];
+                  const targetIndex = next.findIndex(p => p.id === page.id);
+                  if(targetIndex === -1) return prev;
+                  const target = next[targetIndex];
+                  next.splice(targetIndex, 1, {
+                    ...target,
+                    background: null,
+                    map: { ...target.map, enabled: false }
+                  });
+                  return next;
+                });
+                continue;
+              }
               setPages(prev => {
                 const next = [...prev];
                 const targetIndex = next.findIndex(p => p.id === page.id);
@@ -2767,11 +2809,11 @@ declare global {
         };
 
         const toolDefs = [
-          { key:"ts", label:"Test Square", code:"TS", cls:"ts" },
-          { key:"apt", label:"Appurtenance", code:"APT", cls:"apt" },
-          { key:"ds", label:"Downspout", code:"DS", cls:"ds" },
-          { key:"wind", label:"Wind", code:"W", cls:"wind" },
-          { key:"obs", label:"Observation", code:"OBS", cls:"obs" },
+          { key:"ts", label:"Test Square", icon:"ts", cls:"ts" },
+          { key:"apt", label:"Appurtenance", icon:"apt", cls:"apt" },
+          { key:"ds", label:"Downspout", icon:"ds", cls:"ds" },
+          { key:"wind", label:"Wind", icon:"wind", cls:"wind" },
+          { key:"obs", label:"Observation", icon:"obs", cls:"obs" },
         ];
 
         const handleToolSelect = (key) => {
@@ -3741,14 +3783,14 @@ declare global {
                                 key={t.key}
                                 className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                 type="button"
-                                onClick={() => handleToolSelect(t.key)}
-                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                                aria-label={t.label}
-                              >
-                                <span className="toolText">{t.code}</span>
-                              </button>
-                            );
-                          })}
+                              onClick={() => handleToolSelect(t.key)}
+                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                              aria-label={t.label}
+                            >
+                              <Icon name={t.icon} />
+                            </button>
+                          );
+                        })}
                         </div>
                       )}
                       {mobileToolbarSection === "zoom" && (
@@ -3762,7 +3804,6 @@ declare global {
                           <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
                             <Icon name="fit" />
                           </button>
-                          <div className="zReadout">{Math.round(view.scale*100)}%</div>
                         </div>
                       )}
                       {mobileToolbarSection === "pages" && (
@@ -3795,23 +3836,20 @@ declare global {
                             <button
                               type="button"
                               className="iconBtn nav"
+                              onClick={startPageNameEdit}
+                              aria-label="Rename page"
+                              title="Rename page"
+                            >
+                              <Icon name="pencil" />
+                            </button>
+                            <button
+                              type="button"
+                              className="iconBtn nav"
                               onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
                               disabled={!canGoNextPage}
                               aria-label="Next page"
                             >
                               <Icon name="chevRight" />
-                            </button>
-                          </div>
-                          <div className="pageMeta">
-                            <button
-                              type="button"
-                              className="pageName"
-                              onClick={startPageNameEdit}
-                              title="Rename page"
-                              aria-haspopup="dialog"
-                            >
-                              <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                              <Icon name="pencil" />
                             </button>
                           </div>
                           <div className="tbPageTools">
@@ -3859,20 +3897,15 @@ declare global {
                                 key={t.key}
                                 className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                 type="button"
-                                onClick={() => handleToolSelect(t.key)}
-                                title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                                aria-label={t.label}
-                              >
-                                <span className="toolText">{t.code}</span>
+                              onClick={() => handleToolSelect(t.key)}
+                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                              aria-label={t.label}
+                            >
+                                <Icon name={t.icon} />
                               </button>
                             );
                           })}
                       </div>
-                      {tool === "obs" && !obsPaletteOpen && (
-                        <div className="tbMiniHint" aria-live="polite">
-                          Choose an OBS tool
-                        </div>
-                      )}
                     </div>
                     <div className="tbDivider" />
                     <div className="tbZoom">
@@ -3886,7 +3919,6 @@ declare global {
                         <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
                           <Icon name="fit" />
                         </button>
-                        <div className="zReadout">{Math.round(view.scale*100)}%</div>
                       </div>
                     </div>
                     <div className="tbDivider" />
@@ -3919,23 +3951,20 @@ declare global {
                         <button
                           type="button"
                           className="iconBtn nav"
+                          onClick={startPageNameEdit}
+                          aria-label="Rename page"
+                          title="Rename page"
+                        >
+                          <Icon name="pencil" />
+                        </button>
+                        <button
+                          type="button"
+                          className="iconBtn nav"
                           onClick={() => canGoNextPage && setActivePageId(pages[activePageIndex + 1]?.id)}
                           disabled={!canGoNextPage}
                           aria-label="Next page"
                         >
                           <Icon name="chevRight" />
-                        </button>
-                      </div>
-                      <div className="pageMeta">
-                        <button
-                          type="button"
-                          className="pageName"
-                          onClick={startPageNameEdit}
-                          title="Rename page"
-                          aria-haspopup="dialog"
-                        >
-                          <span>{activePage?.name || `Page ${activePageIndex + 1}`}</span>
-                          <Icon name="pencil" />
                         </button>
                       </div>
                       <div className="tbPageTools">
