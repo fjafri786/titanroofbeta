@@ -612,6 +612,10 @@
         color: var(--toolColor);
         touch-action: manipulation;
       }
+      .toolBtn svg{
+        width:18px;
+        height:18px;
+      }
       .toolBtn .toolText{
         font-size:11px;
         font-weight:1200;
