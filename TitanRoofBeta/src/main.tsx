@@ -5338,6 +5338,42 @@ const loadPdfJs = () => {
                   </div>
 
                   <div className="mobileMenuSection">
+                    <div className="mobileMenuSectionTitle">Pages</div>
+                    <div className="mobileMenuField">
+                      <div className="mobileMenuLabel">Active page</div>
+                      <div className="mobileMenuSelect">
+                        <select
+                          className="mobileMenuSelectInput"
+                          value={activePageId}
+                          onChange={(event) => handleMobileAction(() => setActivePageId(event.target.value))}
+                          aria-label="Select page"
+                        >
+                          {pages.map((page, index) => {
+                            const label = page.name?.trim();
+                            return (
+                              <option key={page.id} value={page.id}>
+                                {label ? `Page ${index + 1} • ${label}` : `Page ${index + 1}`}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <Icon name="chevDown" className="mobileMenuSelectIcon" />
+                      </div>
+                    </div>
+                    <div className="mobileMenuGrid">
+                      <button className="btn" type="button" onClick={() => handleMobileAction(insertBlankPageAfter)}>
+                        New Page
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(startPageNameEdit)}>
+                        Rename
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(rotateActivePage)}>
+                        Rotate
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mobileMenuSection">
                     <div className="mobileMenuSectionTitle">Inspection Tools</div>
                     <div className="mobileMenuGrid">
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => setHdrEditOpen(true))}>
