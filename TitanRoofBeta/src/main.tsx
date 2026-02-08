@@ -3645,7 +3645,7 @@ const loadPdfJs = () => {
             <div className="saveToast" role="status">Saved {saveNotice}</div>
           )}
           {viewMode === "diagram" ? (
-          <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "")}>
+          <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "") + (toolbarCollapsed ? " toolbarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
               {!toolbarCollapsed && (
@@ -3739,40 +3739,6 @@ const loadPdfJs = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="tbTools" role="group" aria-label="Tools">
-                        {toolDefs.map(t => {
-                          const isActive = tool === t.key;
-                          const isObs = t.key === "obs";
-                          return (
-                            <button
-                              key={t.key}
-                              ref={isObs ? obsButtonRef : undefined}
-                              className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
-                              type="button"
-                              onClick={() => handleToolSelect(t.key)}
-                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
-                              aria-label={t.label}
-                            >
-                              <span className="toolText">{t.shortLabel}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="tbDivider" />
-                      <div className="tbZoom">
-                        <div className="tbZoomRow">
-                          <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
-                            <Icon name="minus" />
-                          </button>
-                          <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
-                            <Icon name="plus" />
-                          </button>
-                          <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
-                            <Icon name="fit" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="tbDivider" />
                       <div className="tbPages" role="group" aria-label="Page navigation">
                         <div className="tbPageNav">
                           <span className="pageIndex">
@@ -3817,6 +3783,40 @@ const loadPdfJs = () => {
                               />
                             </label>
                           </div>
+                        </div>
+                      </div>
+                      <div className="tbDivider" />
+                      <div className="tbTools" role="group" aria-label="Tools">
+                        {toolDefs.map(t => {
+                          const isActive = tool === t.key;
+                          const isObs = t.key === "obs";
+                          return (
+                            <button
+                              key={t.key}
+                              ref={isObs ? obsButtonRef : undefined}
+                              className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
+                              type="button"
+                              onClick={() => handleToolSelect(t.key)}
+                              title={t.key==="ts" ? "Drag to draw a test square" : t.label}
+                              aria-label={t.label}
+                            >
+                              <span className="toolText">{t.shortLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="tbDivider" />
+                      <div className="tbZoom">
+                        <div className="tbZoomRow">
+                          <button className="iconBtn zoom" onClick={zoomOut} aria-label="Zoom out">
+                            <Icon name="minus" />
+                          </button>
+                          <button className="iconBtn zoom" onClick={zoomIn} aria-label="Zoom in">
+                            <Icon name="plus" />
+                          </button>
+                          <button className="iconBtn zoom" onClick={zoomFit} aria-label="Zoom to fit">
+                            <Icon name="fit" />
+                          </button>
                         </div>
                       </div>
                     </>
