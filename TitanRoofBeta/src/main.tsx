@@ -644,6 +644,7 @@ const loadPdfJs = () => {
         const [dashDragging, setDashDragging] = useState(false);
         const pagesRef = useRef(pages);
         const dashRef = useRef(null);
+        const dashLauncherRef = useRef(null);
         const dashDragRef = useRef(null);
         const dashInitialized = useRef(false);
         const [dashSectionsOpen, setDashSectionsOpen] = useState({ summary: true, indicators: true });
@@ -1197,15 +1198,14 @@ const loadPdfJs = () => {
         }, [obsPaletteOpen, viewportSize.w, viewportSize.h]);
 
         const clampDashPos = useCallback((pos) => {
-          const zoneRect = canvasRef.current?.getBoundingClientRect();
           const dashRect = dashRef.current?.getBoundingClientRect();
           if(!dashRect) return pos;
           const padding = 12;
           const bounds = {
-            left: zoneRect ? Math.max(zoneRect.left, 0) : 0,
-            top: zoneRect ? Math.max(zoneRect.top, 0) : 0,
-            right: zoneRect ? Math.min(zoneRect.right, window.innerWidth) : window.innerWidth,
-            bottom: zoneRect ? Math.min(zoneRect.bottom, window.innerHeight) : window.innerHeight
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
           };
           return {
             x: clamp(pos.x, bounds.left + padding, bounds.right - dashRect.width - padding),
@@ -1217,19 +1217,22 @@ const loadPdfJs = () => {
           if(!dashOpen) return;
           if(!dashRef.current) return;
           if(!dashInitialized.current){
-            const zoneRect = canvasRef.current?.getBoundingClientRect();
+            const launcherRect = dashLauncherRef.current?.getBoundingClientRect();
             const dashRect = dashRef.current?.getBoundingClientRect();
             if(dashRect){
               const padding = 12;
               const bounds = {
-                left: zoneRect ? Math.max(zoneRect.left, 0) : 0,
-                top: zoneRect ? Math.max(zoneRect.top, 0) : 0,
-                right: zoneRect ? Math.min(zoneRect.right, window.innerWidth) : window.innerWidth,
-                bottom: zoneRect ? Math.min(zoneRect.bottom, window.innerHeight) : window.innerHeight
+                left: 0,
+                top: 0,
+                right: window.innerWidth,
+                bottom: window.innerHeight
               };
+              const anchorX = launcherRect ? launcherRect.left : bounds.left + padding;
+              const anchorY = launcherRect ? launcherRect.top - dashRect.height - padding : bounds.bottom - dashRect.height - padding;
               const candidates = [
-                { x: bounds.right - dashRect.width - padding, y: bounds.bottom - dashRect.height - padding },
+                { x: anchorX, y: anchorY },
                 { x: bounds.left + padding, y: bounds.bottom - dashRect.height - padding },
+                { x: bounds.right - dashRect.width - padding, y: bounds.bottom - dashRect.height - padding },
                 { x: bounds.right - dashRect.width - padding, y: bounds.top + padding },
                 { x: bounds.left + padding, y: bounds.top + padding }
               ];
@@ -2547,7 +2550,7 @@ const loadPdfJs = () => {
               />
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+                {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
               </text>
 
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
@@ -2580,7 +2583,7 @@ const loadPdfJs = () => {
               />
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " • LOCKED" : ""}
+                {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
               </text>
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
               <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
@@ -4012,6 +4015,7 @@ const loadPdfJs = () => {
                   className="dashLauncherBtn"
                   type="button"
                   onClick={toggleDashboard}
+                  ref={dashLauncherRef}
                   aria-label="Toggle dashboard"
                   title="Dashboard"
                 >
