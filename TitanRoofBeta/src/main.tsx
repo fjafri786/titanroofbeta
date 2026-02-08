@@ -2498,8 +2498,10 @@ const loadPdfJs = () => {
         const mapPreviewUrl = useMemo(() => {
           if(!activePage?.map?.address) return "";
           const address = encodeURIComponent(activePage.map.address);
-          const mapType = activePage.map.type === "satellite" ? "k" : "m";
-          return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&t=${mapType}&output=embed`;
+          const isSatellite = activePage.map.type === "satellite";
+          const mapType = isSatellite ? "k" : "m";
+          const mapTypeParams = isSatellite ? "maptype=satellite&layer=c&tilt=0" : "maptype=roadmap&tilt=0";
+          return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&t=${mapType}&${mapTypeParams}&output=embed`;
         }, [activePage?.map?.address, activePage?.map?.zoom, activePage?.map?.type]);
         const mapUrl = useMemo(() => (
           activePage?.map?.enabled ? mapPreviewUrl : ""
@@ -3336,7 +3338,6 @@ const loadPdfJs = () => {
                           onChange={(e)=>updateActivePageMap({ zoom: clamp(parseInt(e.target.value, 10) || 18, 18, 21) })}
                           aria-label={`Map zoom level ${mapZoom}`}
                         />
-                        <div className="mapZoomValue">Zoom {mapZoom}</div>
                       </div>
                     </div>
                     <div style={{flex:"0 0 160px"}}>
