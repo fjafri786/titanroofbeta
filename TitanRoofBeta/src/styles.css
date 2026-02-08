@@ -94,10 +94,11 @@
       .propertiesCenter{
         display:flex;
         align-items:center;
-        justify-content:center;
+        justify-content:flex-end;
         gap:14px;
-        flex:1 1 0;
+        flex:0 1 auto;
         align-self:center;
+        margin-left:auto;
       }
       .propertiesRight{
         display:flex;
@@ -433,6 +434,7 @@
         align-items:center;
         gap:6px;
         flex-wrap:wrap;
+        margin-left:18px;
         padding:0;
         border-radius:0;
         background: transparent;
@@ -494,6 +496,7 @@
         display:flex;
         align-items:center;
         gap:8px;
+        margin-left:8px;
         padding:0;
         border-radius:0;
         background: transparent;
