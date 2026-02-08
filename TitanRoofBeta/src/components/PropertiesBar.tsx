@@ -17,6 +17,8 @@ interface PropertiesBarProps {
   onSaveAs: () => void;
   onOpen: () => void;
   onExport: () => void;
+  toolbarCollapsed: boolean;
+  onToolbarToggle: () => void;
   isMobile: boolean;
   mobileMenuOpen: boolean;
   onMobileMenuToggle: () => void;
@@ -39,6 +41,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onSaveAs,
   onOpen,
   onExport,
+  toolbarCollapsed,
+  onToolbarToggle,
   isMobile,
   mobileMenuOpen,
   onMobileMenuToggle,
@@ -168,6 +172,49 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
           )}
         </div>
       </div>
+      {!isMobile && (
+        <div className="propertiesCenter">
+          <div className="propertiesActions">
+            <div className="hdrPill" role="group" aria-label="Save options">
+              <button className="hdrPillBtn" type="button" onClick={onSave}>
+                Save
+              </button>
+              <button className="hdrPillBtn" type="button" onClick={onSaveAs}>
+                Save As
+              </button>
+            </div>
+            <button className="hdrBtn" type="button" onClick={onOpen}>
+              Open
+            </button>
+            <button className="hdrBtn" type="button" onClick={onExport}>
+              Export
+            </button>
+          </div>
+          <div className="modeToggle" role="tablist" aria-label="View mode">
+            <button
+              type="button"
+              className={viewMode === "diagram" ? "active" : ""}
+              onClick={() => onViewModeChange("diagram")}
+            >
+              Diagram
+            </button>
+            <button
+              type="button"
+              className={viewMode === "photos" ? "active" : ""}
+              onClick={() => onViewModeChange("photos")}
+            >
+              Photos
+            </button>
+            <button
+              type="button"
+              className={viewMode === "report" ? "active" : ""}
+              onClick={() => onViewModeChange("report")}
+            >
+              Report
+            </button>
+          </div>
+        </div>
+      )}
       <div className="propertiesRight">
         {isMobile ? (
           <button
@@ -194,47 +241,26 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             Menu
           </button>
         ) : (
-          <div className="propertiesActions">
-            <div className="hdrPill" role="group" aria-label="Save options">
-              <button className="hdrPillBtn" type="button" onClick={onSave}>
-                Save
-              </button>
-              <button className="hdrPillBtn" type="button" onClick={onSaveAs}>
-                Save As
-              </button>
-            </div>
-            <button className="hdrBtn" type="button" onClick={onOpen}>
-              Open
-            </button>
-            <button className="hdrBtn" type="button" onClick={onExport}>
-              Export
-            </button>
-          </div>
-        )}
-        {!isMobile && (
-          <div className="modeToggle" role="tablist" aria-label="View mode">
-            <button
-              type="button"
-              className={viewMode === "diagram" ? "active" : ""}
-              onClick={() => onViewModeChange("diagram")}
+          <button
+            className="hdrBtn iconOnly collapseHdrBtn"
+            type="button"
+            onClick={onToolbarToggle}
+            aria-label={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
+            title={toolbarCollapsed ? "Expand toolbar" : "Collapse toolbar"}
+          >
+            <svg
+              className="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              Diagram
-            </button>
-            <button
-              type="button"
-              className={viewMode === "photos" ? "active" : ""}
-              onClick={() => onViewModeChange("photos")}
-            >
-              Photos
-            </button>
-            <button
-              type="button"
-              className={viewMode === "report" ? "active" : ""}
-              onClick={() => onViewModeChange("report")}
-            >
-              Report
-            </button>
-          </div>
+              {toolbarCollapsed ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
+            </svg>
+          </button>
         )}
       </div>
     </div>
