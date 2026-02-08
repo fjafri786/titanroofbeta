@@ -2495,12 +2495,15 @@ const loadPdfJs = () => {
         }, [roof]);
 
         const activeBackground = activePage?.background || null;
-        const mapUrl = useMemo(() => {
-          if(!activePage?.map?.enabled || !activePage?.map?.address) return "";
+        const mapPreviewUrl = useMemo(() => {
+          if(!activePage?.map?.address) return "";
           const address = encodeURIComponent(activePage.map.address);
           const mapType = activePage.map.type === "satellite" ? "k" : "m";
           return `https://maps.google.com/maps?q=${address}&z=${activePage.map.zoom || 18}&t=${mapType}&output=embed`;
-        }, [activePage?.map?.address, activePage?.map?.enabled, activePage?.map?.zoom, activePage?.map?.type]);
+        }, [activePage?.map?.address, activePage?.map?.zoom, activePage?.map?.type]);
+        const mapUrl = useMemo(() => (
+          activePage?.map?.enabled ? mapPreviewUrl : ""
+        ), [activePage?.map?.enabled, mapPreviewUrl]);
         const hasBackground = Boolean(activeBackground?.url || mapUrl);
 
         const sheetMetrics = useMemo(() => {
@@ -3132,7 +3135,7 @@ const loadPdfJs = () => {
             name: `Page ${pages.length + 1}`,
             background: null,
             aspectRatio: activePage?.aspectRatio || DEFAULT_ASPECT_RATIO,
-            rotation: activePage?.rotation || 0
+            rotation: 0
           });
           setPages(prev => {
             const next = [...prev];
@@ -3323,64 +3326,61 @@ const loadPdfJs = () => {
                       />
                     </div>
                     <div style={{flex:"0 0 190px"}}>
-                      <div className="mapZoomControls">
-                        <button
-                          type="button"
-                          className="iconBtn zoom"
-                          aria-label="Zoom out map"
-                          onClick={() => updateActivePageMap({ zoom: clamp(mapZoom - 1, 14, 21) })}
-                        >
-                          <Icon name="minus" />
-                        </button>
+                      <div className="mapZoomSlider">
                         <input
-                          className="inp mapZoomInput"
-                          type="number"
-                          min="14"
+                          type="range"
+                          min="18"
                           max="21"
+                          step="1"
                           value={mapZoom}
-                          onChange={(e)=>updateActivePageMap({ zoom: clamp(parseInt(e.target.value, 10) || 18, 14, 21) })}
-                          aria-label="Map zoom level"
+                          onChange={(e)=>updateActivePageMap({ zoom: clamp(parseInt(e.target.value, 10) || 18, 18, 21) })}
+                          aria-label={`Map zoom level ${mapZoom}`}
                         />
-                        <button
-                          type="button"
-                          className="iconBtn zoom"
-                          aria-label="Zoom in map"
-                          onClick={() => updateActivePageMap({ zoom: clamp(mapZoom + 1, 14, 21) })}
-                        >
-                          <Icon name="plus" />
-                        </button>
+                        <div className="mapZoomValue">Zoom {mapZoom}</div>
                       </div>
-                      <div className="tiny" style={{marginTop:4}}>Zoom level (14–21). 21 = closest.</div>
                     </div>
                     <div style={{flex:"0 0 160px"}}>
+                      <div className="lbl" style={{marginBottom:4}}>View</div>
                       <select
                         className="inp"
                         value={activePage?.map?.type || "map"}
                         onChange={(e)=>updateActivePageMap({ type: e.target.value })}
                         aria-label="Map style"
                       >
-                        <option value="map">Map</option>
-                        <option value="satellite">Satellite</option>
+                        <option value="map">Plan (Map)</option>
+                        <option value="satellite">Aerial (Satellite)</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="mapPreview">
+                    {mapPreviewUrl ? (
+                      <>
+                        <div className="mapPreviewFrame">
+                          <iframe title="Google Maps preview" src={mapPreviewUrl} loading="lazy" />
+                        </div>
+                        <div className="tiny">Preview updates as you edit address, zoom, or view.</div>
+                      </>
+                    ) : (
+                      <div className="mapPreviewEmpty">Enter an address to preview the map before loading.</div>
+                    )}
                   </div>
                   <div className="row" style={{marginTop:10}}>
                     <button
                       className="btn btnPrimary"
                       type="button"
                       onClick={() => updateActivePage({ background: null, map: { ...activePage?.map, enabled: true } })}
+                      disabled={!mapPreviewUrl}
                     >
-                      Use Google Maps
+                      Load Map to Canvas
                     </button>
                     <button
                       className="btn"
                       type="button"
                       onClick={() => updateActivePageMap({ enabled: false })}
                     >
-                      Disable Map
+                      Remove Map
                     </button>
                   </div>
-                  <div className="tiny" style={{marginTop:6}}>Adjust zoom, then enable to set the background.</div>
                 </div>
               )}
             </div>
