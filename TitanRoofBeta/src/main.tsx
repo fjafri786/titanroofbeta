@@ -1187,13 +1187,10 @@ const loadPdfJs = () => {
           if(!rect) return;
           const offset = 8;
           let left = rect.left + rect.width / 2;
-          let top = rect.top - offset;
+          let top = rect.bottom + offset;
           const paletteRect = obsPaletteRef.current?.getBoundingClientRect();
           if(paletteRect){
             left = clamp(left - paletteRect.width / 2, 10, window.innerWidth - paletteRect.width - 10);
-            const aboveTop = rect.top - paletteRect.height - offset;
-            const belowTop = rect.bottom + offset;
-            top = aboveTop < 10 ? belowTop : aboveTop;
             top = clamp(top, 10, window.innerHeight - paletteRect.height - 10);
           }
           setObsPalettePos({ left, top });
@@ -3189,7 +3186,7 @@ const loadPdfJs = () => {
             <div className="rowTop" style={{marginBottom:10}}>
               <div style={{flex:1}}>
                 <div className="lbl">Residence / Property</div>
-                <input className="inp" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
+                <input className="inp headerInput" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
               </div>
               <div style={{flex:1}}>
                 <div className="lbl">Front Faces</div>
@@ -3777,17 +3774,49 @@ const loadPdfJs = () => {
                       </div>
                       <div className="tbDivider" />
                       <div className="tbPages" role="group" aria-label="Page navigation">
-                        <div className="tbPageTools">
-                          <label className="iconBtn" title="Upload pages">
-                            <Icon name="upload" />
-                            <input
-                              type="file"
-                              accept="image/*,application/pdf,.pdf,.PDF"
-                              multiple
-                              style={{ display: "none" }}
-                              onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
-                            />
-                          </label>
+                        <div className="tbPageNav">
+                          <span className="pageIndex">
+                            Page {activePageIndex + 1} of {pages.length}
+                          </span>
+                          <div className="pageSelect">
+                            <select
+                              className="pageSelectInput"
+                              value={activePageId}
+                              onChange={(event) => setActivePageId(event.target.value)}
+                              aria-label="Select page"
+                            >
+                              {pages.map((page, index) => {
+                                const label = page.name?.trim();
+                                return (
+                                  <option key={page.id} value={page.id}>
+                                    {label ? `Page ${index + 1} • ${label}` : `Page ${index + 1}`}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <Icon name="chevDown" className="pageSelectChevron" />
+                          </div>
+                          <div className="tbPageTools">
+                            <button className="iconBtn nav" type="button" onClick={insertBlankPageAfter} title="Add Page">
+                              <Icon name="plus" />
+                            </button>
+                            <button className="iconBtn nav" type="button" onClick={startPageNameEdit} title="Edit Page">
+                              <Icon name="pencil" />
+                            </button>
+                            <button className="iconBtn nav" type="button" onClick={rotateActivePage} title="Rotate Page">
+                              <Icon name="rotate" />
+                            </button>
+                            <label className="iconBtn nav" title="Upload pages">
+                              <Icon name="upload" />
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf,.pdf,.PDF"
+                                multiple
+                                style={{ display: "none" }}
+                                onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                              />
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </>

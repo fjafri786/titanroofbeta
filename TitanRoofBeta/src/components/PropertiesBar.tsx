@@ -85,112 +85,26 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                 Page {activePageIndex + 1} of {pages.length}
               </span>
             </div>
-          ) : (
-            <div className="propertiesPage">
-              <span className="propertiesPageLabel">
-                Page {activePageIndex + 1} of {pages.length}
-              </span>
-              <div className="propertiesPageSelect">
-                <select
-                  className="propertiesPageInput"
-                  value={activePageId}
-                  onChange={(event) => onPageChange(event.target.value)}
-                  aria-label="Select page"
-                >
-                  {pages.map((page, index) => {
-                    const label = page.name?.trim();
-                    return (
-                      <option key={page.id} value={page.id}>
-                        {label ? `Page ${index + 1} • ${label}` : `Page ${index + 1}`}
-                      </option>
-                    );
-                  })}
-                </select>
-                <svg
-                  className="propertiesPageChevron"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </div>
-              <div
-                className="dividerV"
-                style={{ margin: "0 8px", width: 1, height: 16, background: "#ccc" }}
-                aria-hidden="true"
-              />
-              <button className="hdrBtn iconOnly" type="button" onClick={onAddPage} title="Add Page">
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </button>
-              <button className="hdrBtn iconOnly" type="button" onClick={onEditPage} title="Edit Page">
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-              <button className="hdrBtn iconOnly" type="button" onClick={onRotatePage} title="Rotate Page">
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              </button>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
       {!isMobile && (
         <div className="propertiesCenter">
           <div className="propertiesActions">
-            <div className="hdrPill" role="group" aria-label="Save options">
-              <button className="hdrPillBtn" type="button" onClick={onSave}>
-                Save
-              </button>
-              <button className="hdrPillBtn" type="button" onClick={onSaveAs}>
-                Save As
-              </button>
-            </div>
-            <button className="hdrBtn" type="button" onClick={onOpen}>
+            <button className="hdrBtn ghost" type="button" onClick={onSave}>
+              Save
+            </button>
+            <button className="hdrBtn ghost" type="button" onClick={onSaveAs}>
+              Save As
+            </button>
+            <button className="hdrBtn ghost" type="button" onClick={onOpen}>
               Open
             </button>
-            <button className="hdrBtn" type="button" onClick={onExport}>
+            <button className="hdrBtn ghost" type="button" onClick={onExport}>
               Export
             </button>
           </div>
-          <div className="modeToggle" role="tablist" aria-label="View mode">
+          <div className="modeToggle" role="tablist" aria-label="View mode" data-active={viewMode}>
             <button
               type="button"
               className={viewMode === "diagram" ? "active" : ""}
