@@ -79,6 +79,7 @@
         color: #fff;
         box-shadow: 0 12px 22px rgba(2,6,23,0.16);
         gap: 16px;
+        flex-wrap: nowrap;
         pointer-events: auto;
       }
       .propertiesLeft{
@@ -87,8 +88,16 @@
         justify-content:flex-start;
         gap:12px;
         min-width:0;
-        flex:1;
+        flex:1 1 0;
         flex-wrap:nowrap;
+      }
+      .propertiesCenter{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:14px;
+        flex:1 1 0;
+        align-self:center;
       }
       .propertiesRight{
         display:flex;
@@ -96,7 +105,7 @@
         justify-content:flex-end;
         min-width:0;
         gap:10px 12px;
-        flex-wrap:wrap;
+        flex-wrap:nowrap;
       }
       .propertiesInfo{
         min-width:0;
@@ -381,7 +390,7 @@
 
       /* ========= TOOLBAR ========= */
       .toolbar{
-        --toolbar-control-size: 36px;
+        --toolbar-control-size: 40px;
         position: fixed;
         top: calc(var(--topbar-height) + var(--propsbar-height));
         left: 0;
@@ -661,9 +670,11 @@
         touch-action: manipulation;
       }
       .toolBtn.textLabel{
-        padding:0 12px;
-        min-width:56px;
-        border-radius:14px;
+        padding:0;
+        min-width: var(--toolbar-control-size);
+        width: var(--toolbar-control-size);
+        height: var(--toolbar-control-size);
+        border-radius:50%;
       }
       .toolbar.vertical .toolBtn.textLabel{
         width:100%;
