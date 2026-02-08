@@ -289,6 +289,9 @@
         min-height: 100dvh;
         animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
+      .app.toolbarCollapsed{
+        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
+      }
       .app.sidebarCollapsed{
         grid-template-columns: 1fr 56px;
       }
