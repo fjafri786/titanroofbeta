@@ -4245,25 +4245,11 @@ const loadPdfJs = () => {
                         {/* Clean heading with pencil -> input + check */}
                         <div className="headingRow" style={{marginBottom:10}}>
                           {!nameEditing ? (
-                            <>
-                              <h2 className="heading">{activeItem.name}</h2>
-                              <div className="editPill" onClick={startNameEdit} title="Edit name">
-                                <Icon name="pencil" />
-                              </div>
-                            </>
+                            <h2 className="heading">{activeItem.name}</h2>
                           ) : (
-                            <>
-                              <input className="inp" value={nameDraft} onChange={(e)=>setNameDraft(e.target.value)} />
-                              <div className="editPill" onClick={commitNameEdit} title="Save name">
-                                <Icon name="check" />
-                              </div>
-                            </>
+                            <input className="inp" value={nameDraft} onChange={(e)=>setNameDraft(e.target.value)} />
                           )}
-                        </div>
-
-                        <div style={{marginBottom:12}}>
-                          <div className="lbl">Item Lock</div>
-                          <div className="row">
+                          <div className="headingActions">
                             <button
                               className={"iconBtn lockToggle" + (activeItem.data.locked ? " active" : "")}
                               type="button"
@@ -4273,9 +4259,15 @@ const loadPdfJs = () => {
                             >
                               <Icon name={activeItem.data.locked ? "lock" : "unlock"} />
                             </button>
-                            <span className="lockStatus">
-                              {activeItem.data.locked ? "Locked" : "Unlocked"}
-                            </span>
+                            {!nameEditing ? (
+                              <div className="editPill" onClick={startNameEdit} title="Edit name">
+                                <Icon name="pencil" />
+                              </div>
+                            ) : (
+                              <div className="editPill" onClick={commitNameEdit} title="Save name">
+                                <Icon name="check" />
+                              </div>
+                            )}
                           </div>
                         </div>
 
