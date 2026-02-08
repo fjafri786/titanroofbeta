@@ -2378,6 +2378,17 @@
         justify-content:space-between;
         gap:10px;
       }
+      .headingActions{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex:0 0 auto;
+      }
+      .headingActions .lockToggle{
+        width:36px;
+        height:36px;
+        border-radius:12px;
+      }
       .heading{
         font-size:18px;
         font-weight:1300;
