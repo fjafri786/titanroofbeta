@@ -64,8 +64,16 @@ const loadPdfJs = () => {
         { code: "DMR", label: "Mismatched Repairs" },
         { code: "DIF", label: "Improper Flashing" },
         { code: "DII", label: "Improper Installation" },
-        { code: "ShP", label: "Premium Shingles" }
+        { code: "ShP", label: "Premium Shingles" },
+        { code: "OTHER", label: "Other" }
       ];
+      const OBS_AREAS = [
+        { key: "roof", label: "Roof" },
+        { key: "ext", label: "Exterior" },
+        { key: "int", label: "Interior" }
+      ];
+
+      const DASHBOARD_PHOTO_LIMIT = 18;
 
       const SHEET_BASE_WIDTH = 1024;
       const DEFAULT_ASPECT_RATIO = 1024 / 720;
@@ -1204,21 +1212,27 @@ const loadPdfJs = () => {
           setObsPalettePos({ left, top });
         }, [obsPaletteOpen, viewportSize.w, viewportSize.h]);
 
+        const dashBounds = useCallback(() => {
+          const styles = getComputedStyle(document.documentElement);
+          const topbarHeight = parseFloat(styles.getPropertyValue("--topbar-height")) || 0;
+          const propsbarHeight = parseFloat(styles.getPropertyValue("--propsbar-height")) || 0;
+          return {
+            left: 0,
+            top: topbarHeight + propsbarHeight,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+          };
+        }, []);
         const clampDashPos = useCallback((pos) => {
           const dashRect = dashRef.current?.getBoundingClientRect();
           if(!dashRect) return pos;
           const padding = 12;
-          const bounds = {
-            left: 0,
-            top: 0,
-            right: window.innerWidth,
-            bottom: window.innerHeight
-          };
+          const bounds = dashBounds();
           return {
             x: clamp(pos.x, bounds.left + padding, bounds.right - dashRect.width - padding),
             y: clamp(pos.y, bounds.top + padding, bounds.bottom - dashRect.height - padding)
           };
-        }, []);
+        }, [dashBounds]);
 
         const ensureDashPosition = useCallback(() => {
           if(!dashOpen) return;
@@ -1228,12 +1242,7 @@ const loadPdfJs = () => {
             const dashRect = dashRef.current?.getBoundingClientRect();
             if(dashRect){
               const padding = 12;
-              const bounds = {
-                left: 0,
-                top: 0,
-                right: window.innerWidth,
-                bottom: window.innerHeight
-              };
+              const bounds = dashBounds();
               const anchorX = launcherRect ? launcherRect.left : bounds.left + padding;
               const anchorY = launcherRect ? launcherRect.top - dashRect.height - padding : bounds.bottom - dashRect.height - padding;
               const candidates = [
@@ -1256,7 +1265,7 @@ const loadPdfJs = () => {
             return;
           }
           setDashPos(prev => clampDashPos(prev));
-        }, [dashOpen, clampDashPos]);
+        }, [dashOpen, clampDashPos, dashBounds]);
 
         useEffect(() => {
           if(!dashOpen) return;
@@ -1565,19 +1574,19 @@ const loadPdfJs = () => {
             if(wind.data.creasedPhoto?.url){
               windPhotos.push({
                 photo: wind.data.creasedPhoto,
-                label: `${wind.name} • Creased`
+                label: windCaption("creased", wind.data.dir)
               });
             }
             if(wind.data.tornMissingPhoto?.url){
               windPhotos.push({
                 photo: wind.data.tornMissingPhoto,
-                label: `${wind.name} • Torn/Missing`
+                label: windCaption("torn", wind.data.dir)
               });
             }
             if(wind.data.overviewPhoto?.url){
               windPhotos.push({
                 photo: wind.data.overviewPhoto,
-                label: `${wind.name} • Overview`
+                label: windCaption("overview", wind.data.dir)
               });
             }
           });
@@ -1590,7 +1599,8 @@ const loadPdfJs = () => {
             maxBruiseItem,
             totalCreased,
             totalTornMissing,
-            windPhotos
+            windPhotos,
+            windPhotoOverflow: Math.max(0, windPhotos.length - DASHBOARD_PHOTO_LIMIT)
           };
         }, [dashFocusDir, pageItems]);
 
@@ -1708,6 +1718,9 @@ const loadPdfJs = () => {
             base.name = `OBS-${counts.current.obs++}`;
             base.data = {
               code: "DDM",
+              otherLabel: "",
+              dir: "",
+              area: "",
               locked: false,
               caption: "",
               photo: null,
@@ -2966,9 +2979,65 @@ const loadPdfJs = () => {
           if(!note?.trim()) return sentence;
           return `${sentence} Note: ${normalizeNote(note)}`;
         };
-        const testSquareName = (name) => {
-          if(!name?.trim()) return "test square";
-          return name.toLowerCase().includes("test square") ? name : `${name} test square`;
+        const dirLabel = (dir) => {
+          if(!dir) return "";
+          const normalized = dir.toString().trim();
+          if(!normalized) return "";
+          const map = { N: "north", S: "south", E: "east", W: "west" };
+          return map[normalized] || normalized.toLowerCase();
+        };
+        const testSquareLabel = (dir) => {
+          const direction = dirLabel(dir);
+          return direction ? `${direction} test square` : "test square";
+        };
+        const windLocationLabel = (dir) => {
+          if(dir === "Ridge") return "ridge cap";
+          if(dir === "Hip") return "hip";
+          if(dir === "Valley") return "valley";
+          const direction = dirLabel(dir);
+          return direction ? `${direction} roof slope` : "roof slope";
+        };
+        const windCaption = (kind, dir) => {
+          const location = windLocationLabel(dir);
+          if(kind === "overview") return `Overview of the ${location}`;
+          if(kind === "creased"){
+            if(dir === "Ridge") return "Creased ridge cap shingle";
+            if(dir === "Hip") return "Creased hip shingle";
+            if(dir === "Valley") return "Creased shingle at the valley";
+            return `Creased shingle at the ${location}`;
+          }
+          if(kind === "torn"){
+            if(dir === "Ridge") return "Torn or missing ridge cap shingle";
+            if(dir === "Hip") return "Torn or missing hip shingle";
+            if(dir === "Valley") return "Torn or missing shingle at the valley";
+            return `Torn or missing shingle at the ${location}`;
+          }
+          return `Wind observation at the ${location}`;
+        };
+        const observationLabel = (code, otherText) => {
+          if(code === "OTHER") return otherText?.trim() || "Other observation";
+          return OBS_CODES.find(c => c.code === code)?.label || code || "Observation";
+        };
+        const sentenceCase = (value) => {
+          if(!value) return value;
+          return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+        };
+        const observationLocation = (dir, area) => {
+          const direction = dirLabel(dir);
+          const areaKey = area?.trim();
+          if(direction && areaKey === "roof") return `at the ${direction} roof slope`;
+          if(direction && areaKey === "ext") return `at the ${direction} exterior side of the property`;
+          if(direction && areaKey === "int") return `at the ${direction} interior side of the property`;
+          if(direction) return `at the ${direction} side of the property`;
+          if(areaKey === "roof") return "on the roof";
+          if(areaKey === "ext") return "at the exterior";
+          if(areaKey === "int") return "at the interior";
+          return "";
+        };
+        const observationCaption = (obs) => {
+          const base = sentenceCase(observationLabel(obs.data?.code, obs.data?.otherLabel));
+          const location = observationLocation(obs.data?.dir, obs.data?.area);
+          return location ? `${base} ${location}` : base;
         };
         const damageEntryDescription = (entry) => {
           const mode = entry.mode === "both"
@@ -2998,14 +3067,16 @@ const loadPdfJs = () => {
 
         const collectTsPhotos = (ts) => {
           const photos = [];
+          const tsLabel = testSquareLabel(ts.data.dir);
           if(ts.data.overviewPhoto?.url){
-            photos.push({ url: ts.data.overviewPhoto.url, caption: photoCaption("Test square overview", ts.data.overviewPhoto) });
+            photos.push({ url: ts.data.overviewPhoto.url, caption: photoCaption(`Overview of the ${tsLabel}`, ts.data.overviewPhoto) });
           }
           (ts.data.bruises || []).forEach((b, idx) => {
-            if(b.photo?.url) photos.push({ url: b.photo.url, caption: photoCaption(`Bruise ${idx + 1} • ${b.size}"`, b.photo) });
+            if(b.photo?.url) photos.push({ url: b.photo.url, caption: photoCaption(`Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`, b.photo) });
           });
           (ts.data.conditions || []).forEach((c, idx) => {
-            if(c.photo?.url) photos.push({ url: c.photo.url, caption: photoCaption(`Condition ${idx + 1} • ${c.code}`, c.photo) });
+            const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
+            if(c.photo?.url) photos.push({ url: c.photo.url, caption: photoCaption(`Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`, c.photo) });
           });
           return photos;
         };
@@ -3146,10 +3217,11 @@ const loadPdfJs = () => {
           items.forEach(it => {
             const note = it.data?.caption?.trim();
             if(it.type === "ts"){
-              const tsLabel = testSquareName(it.name);
+              const tsLabel = testSquareLabel(it.data.dir);
               if(it.data.overviewPhoto?.url){
                 pushEntry("ts", "overview", {
                   id: `${it.id}-overview`,
+                  itemId: it.id,
                   url: it.data.overviewPhoto.url,
                   caption: composeCaption(`Overview of the ${tsLabel}`, note),
                   note
@@ -3159,6 +3231,7 @@ const loadPdfJs = () => {
                 if(!b.photo?.url) return;
                 pushEntry("ts", "bruise", {
                   id: `${it.id}-bruise-${idx}`,
+                  itemId: it.id,
                   url: b.photo.url,
                   caption: composeCaption(`Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`, note),
                   note
@@ -3166,10 +3239,12 @@ const loadPdfJs = () => {
               });
               (it.data.conditions || []).forEach((c, idx) => {
                 if(!c.photo?.url) return;
+                const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
                 pushEntry("ts", "condition", {
                   id: `${it.id}-condition-${idx}`,
+                  itemId: it.id,
                   url: c.photo.url,
-                  caption: composeCaption(`Condition ${idx + 1} (${c.code}) on the ${tsLabel}`, note),
+                  caption: composeCaption(`Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`, note),
                   note
                 });
               });
@@ -3179,6 +3254,7 @@ const loadPdfJs = () => {
               if(it.data.overviewPhoto?.url){
                 pushEntry(it.type, "overview", {
                   id: `${it.id}-overview`,
+                  itemId: it.id,
                   url: it.data.overviewPhoto.url,
                   caption: composeCaption(`Overview of ${componentLabel}`, note),
                   note
@@ -3187,6 +3263,7 @@ const loadPdfJs = () => {
               if(it.data.detailPhoto?.url){
                 pushEntry(it.type, "detail", {
                   id: `${it.id}-detail`,
+                  itemId: it.id,
                   url: it.data.detailPhoto.url,
                   caption: composeCaption(`Detail view of ${componentLabel}`, note),
                   note
@@ -3196,6 +3273,7 @@ const loadPdfJs = () => {
                 if(!entry.photo?.url) return;
                 pushEntry(it.type, "damage", {
                   id: `${it.id}-damage-${idx}`,
+                  itemId: it.id,
                   url: entry.photo.url,
                   caption: composeCaption(`${damageEntryDescription(entry)} on ${componentLabel}`, note),
                   note
@@ -3203,28 +3281,30 @@ const loadPdfJs = () => {
               });
             }
             if(it.type === "wind"){
-              const windLabel = it.name?.trim() || "wind observation";
               if(it.data.overviewPhoto?.url){
                 pushEntry("wind", "overview", {
                   id: `${it.id}-overview`,
+                  itemId: it.id,
                   url: it.data.overviewPhoto.url,
-                  caption: composeCaption(`Overview of ${windLabel}`, note),
+                  caption: composeCaption(windCaption("overview", it.data.dir), note),
                   note
                 });
               }
               if(it.data.creasedPhoto?.url){
                 pushEntry("wind", "creased", {
                   id: `${it.id}-creased`,
+                  itemId: it.id,
                   url: it.data.creasedPhoto.url,
-                  caption: composeCaption(`Creased shingle at ${windLabel}`, note),
+                  caption: composeCaption(windCaption("creased", it.data.dir), note),
                   note
                 });
               }
               if(it.data.tornMissingPhoto?.url){
                 pushEntry("wind", "torn", {
                   id: `${it.id}-torn`,
+                  itemId: it.id,
                   url: it.data.tornMissingPhoto.url,
-                  caption: composeCaption(`Torn or missing shingle at ${windLabel}`, note),
+                  caption: composeCaption(windCaption("torn", it.data.dir), note),
                   note
                 });
               }
@@ -3232,8 +3312,9 @@ const loadPdfJs = () => {
             if(it.type === "obs" && it.data.photo?.url){
               pushEntry("obs", "obs", {
                 id: `${it.id}-photo`,
+                itemId: it.id,
                 url: it.data.photo.url,
-                caption: composeCaption(`Observation: ${it.data.code}`, note),
+                caption: composeCaption(observationCaption(it), note),
                 note
               });
             }
@@ -3653,8 +3734,14 @@ const loadPdfJs = () => {
           (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
           0
         );
+        const selectItemFromPhoto = (entry) => {
+          if(!entry?.itemId) return;
+          setSelectedId(entry.itemId);
+          setPanelView("props");
+        };
         const openPhotoLightbox = (entry) => {
           if(!entry?.url) return;
+          selectItemFromPhoto(entry);
           setPhotoLightbox(entry);
         };
         const showResetView = Math.abs(view.tx) > sheetWidth / 2
@@ -4395,14 +4482,28 @@ const loadPdfJs = () => {
                             </div>
                           </div>
                           {dashFocusData.windPhotos.length ? (
-                            <div className="dashPhotoGrid">
-                              {dashFocusData.windPhotos.map((entry, idx) => (
-                                <div className="dashPhotoCard" key={`wind-photo-${idx}`}>
-                                  <img className="dashPhotoImg" src={entry.photo.url} alt={entry.label} />
-                                  <div className="dashPhotoCaption">{entry.label}</div>
-                                </div>
-                              ))}
-                            </div>
+                            <>
+                              <div className="dashPhotoGrid">
+                                {dashFocusData.windPhotos.slice(0, DASHBOARD_PHOTO_LIMIT).map((entry, idx) => (
+                                  <div className="dashPhotoCard" key={`wind-photo-${idx}`}>
+                                    <img className="dashPhotoImg" src={entry.photo.url} alt={entry.label} />
+                                    <div className="dashPhotoCaption">{entry.label}</div>
+                                  </div>
+                                ))}
+                              </div>
+                              {dashFocusData.windPhotoOverflow > 0 && (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => {
+                                    setViewMode("photos");
+                                    closeDashboard();
+                                  }}
+                                >
+                                  …more ({dashFocusData.windPhotoOverflow})
+                                </button>
+                              )}
+                            </>
                           ) : (
                             <div className="dashFocusEmpty">No wind photos for this direction.</div>
                           )}
@@ -4501,7 +4602,7 @@ const loadPdfJs = () => {
 
                                 {type==="obs" && (
                                   <span>
-                                    {item.data.code} • {item.data.kind === "arrow" ? "arrow" : (item.data.points?.length ? "area" : "pin")}
+                                    {observationLabel(item.data.code, item.data.otherLabel)} • {item.data.kind === "arrow" ? "arrow" : (item.data.points?.length ? "area" : "pin")}
                                   </span>
                                 )}
                                 {type==="wind" && (
@@ -4927,6 +5028,48 @@ const loadPdfJs = () => {
                               )}
                             </div>
 
+                            {activeItem.data.code === "OTHER" && (
+                              <div style={{marginBottom:10}}>
+                                <div className="lbl">Other Description</div>
+                                <input
+                                  className="inp"
+                                  value={activeItem.data.otherLabel}
+                                  onChange={(e)=>updateItemData("otherLabel", e.target.value)}
+                                  placeholder="e.g., Missing siding"
+                                />
+                              </div>
+                            )}
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Direction (optional)</div>
+                              <div className="radioGrid">
+                                {CARDINAL_DIRS.map(d => (
+                                  <div
+                                    key={d}
+                                    className={"radio " + (activeItem.data.dir === d ? "active" : "")}
+                                    onClick={() => updateItemData("dir", activeItem.data.dir === d ? "" : d)}
+                                  >
+                                    {d}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Area (optional)</div>
+                              <div className="radioGrid">
+                                {OBS_AREAS.map(area => (
+                                  <div
+                                    key={area.key}
+                                    className={"radio " + (activeItem.data.area === area.key ? "active" : "")}
+                                    onClick={() => updateItemData("area", activeItem.data.area === area.key ? "" : area.key)}
+                                  >
+                                    {area.label}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
                             {activeItem.data.kind === "arrow" && (
                               <>
                                 <div style={{marginBottom:10}}>
@@ -4934,7 +5077,7 @@ const loadPdfJs = () => {
                                   <div className="row">
                                     <input
                                       className="inp"
-                                      style={{flex:1}}
+                                      style={{flex:"1 1 260px"}}
                                       value={activeItem.data.label}
                                       onChange={(e)=>updateItemData("label", e.target.value)}
                                       placeholder="e.g., Front entry, garage impact"
@@ -6132,7 +6275,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.creasedPhoto}
                               alt="Creased wind photo"
-                              caption={photoCaption(w.data.caption || "Creased photo", w.data.creasedPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("creased", w.data.dir), w.data.caption), w.data.creasedPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
@@ -6140,7 +6283,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.tornMissingPhoto}
                               alt="Torn or missing wind photo"
-                              caption={photoCaption(w.data.caption || "Torn/missing photo", w.data.tornMissingPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("torn", w.data.dir), w.data.caption), w.data.tornMissingPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
@@ -6148,7 +6291,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.overviewPhoto}
                               alt="Wind overview"
-                              caption={photoCaption(w.data.caption || "Overview photo", w.data.overviewPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("overview", w.data.dir), w.data.caption), w.data.overviewPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
@@ -6232,13 +6375,13 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
-                      <div style={{fontWeight:1200}}>{obs.name} • {obs.data.code}</div>
+                      <div style={{fontWeight:1200}}>{obs.name} • {observationLabel(obs.data.code, obs.data.otherLabel)}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
                       {obs.data.photo?.url ? (
                         <PrintPhoto
                           photo={obs.data.photo}
                           alt="Observation"
-                          caption={photoCaption(obs.data.caption || "Observation photo", obs.data.photo)}
+                          caption={photoCaption(composeCaption(observationCaption(obs), obs.data.caption), obs.data.photo)}
                           style={{marginTop:8}}
                         />
                       ) : (
