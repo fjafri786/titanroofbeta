@@ -658,6 +658,10 @@ const loadPdfJs = () => {
 
         const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
         const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
+        const dashVisibleItems = useMemo(() => {
+          if(!dashFocusDir) return pageItems;
+          return pageItems.filter(item => item.data?.dir === dashFocusDir);
+        }, [dashFocusDir, pageItems]);
         const activeItem = items.find(i => i.id === selectedId);
         const activePageIndex = useMemo(() => pages.findIndex(page => page.id === activePageId), [pages, activePageId]);
         const mapZoom = activePage?.map?.zoom || 18;
@@ -1282,6 +1286,7 @@ const loadPdfJs = () => {
         const closeDashboard = () => {
           setDashClosing(true);
           setDashAnimatingIn(false);
+          setDashFocusDir(null);
           window.setTimeout(() => {
             setDashOpen(false);
             setDashClosing(false);
@@ -1538,6 +1543,10 @@ const loadPdfJs = () => {
           let maxBruise = null;
           let maxBruiseSize = 0;
           let maxBruiseItem = null;
+          let totalCreased = 0;
+          let totalTornMissing = 0;
+          const windPhotos = [];
+
           tsItems.forEach(ts => {
             (ts.data.bruises || []).forEach(b => {
               const size = parseSize(b.size);
@@ -1548,7 +1557,40 @@ const loadPdfJs = () => {
               }
             });
           });
-          return { tsItems, windItems, maxBruise, maxBruiseSize, maxBruiseItem };
+
+          windItems.forEach(wind => {
+            totalCreased += wind.data.creasedCount || 0;
+            totalTornMissing += wind.data.tornMissingCount || 0;
+            if(wind.data.creasedPhoto?.url){
+              windPhotos.push({
+                photo: wind.data.creasedPhoto,
+                label: `${wind.name} • Creased`
+              });
+            }
+            if(wind.data.tornMissingPhoto?.url){
+              windPhotos.push({
+                photo: wind.data.tornMissingPhoto,
+                label: `${wind.name} • Torn/Missing`
+              });
+            }
+            if(wind.data.overviewPhoto?.url){
+              windPhotos.push({
+                photo: wind.data.overviewPhoto,
+                label: `${wind.name} • Overview`
+              });
+            }
+          });
+
+          return {
+            tsItems,
+            windItems,
+            maxBruise,
+            maxBruiseSize,
+            maxBruiseItem,
+            totalCreased,
+            totalTornMissing,
+            windPhotos
+          };
         }, [dashFocusDir, pageItems]);
 
         const completeness = useMemo(() => {
@@ -4004,9 +4046,9 @@ const loadPdfJs = () => {
                       </defs>
 
                       <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
-                      {pageItems.filter(i => i.type === "ts").map(renderTS)}
-                      {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsArea)}
-                      {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrow)}
+                      {dashVisibleItems.filter(i => i.type === "ts").map(renderTS)}
+                      {dashVisibleItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsArea)}
+                      {dashVisibleItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrow)}
 
                       {drag && drag.mode === "ts-draw" && (
                         <rect
@@ -4045,7 +4087,7 @@ const loadPdfJs = () => {
                       )}
                     </svg>
 
-                    {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
+                    {dashVisibleItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                       const isSel = selectedId === i.id;
                       const m = markerMeta(i);
                       return (
@@ -4152,156 +4194,154 @@ const loadPdfJs = () => {
                       <Icon name="chevDown" />
                     </button>
                   </div>
-                  <div className="dashCompact">
-                    <div className="dashCompactSection summary">
-                      <button
-                        className="dashSectionToggle"
-                        type="button"
-                        onClick={() => setDashSectionsOpen(prev => ({ ...prev, summary: !prev.summary }))}
-                        aria-expanded={dashSectionsOpen.summary}
-                      >
-                        <span className="dashCompactTitle">Damage Summary</span>
-                        <Icon name={dashSectionsOpen.summary ? "chevUp" : "chevDown"} />
-                      </button>
-                      {dashSectionsOpen.summary && (
-                        <div className="dashSummaryGrid">
-                        {WIND_DIRS.map(dir => {
-                          const d = dashboard[dir];
-                          return (
+                  <div className={`dashCompact${dashFocusDir ? " focusMode" : ""}`}>
+                    {!dashFocusDir && (
+                      <>
+                        <div className="dashCompactSection summary">
+                          <button
+                            className="dashSectionToggle"
+                            type="button"
+                            onClick={() => setDashSectionsOpen(prev => ({ ...prev, summary: !prev.summary }))}
+                            aria-expanded={dashSectionsOpen.summary}
+                          >
+                            <span className="dashCompactTitle">Damage Summary</span>
+                            <Icon name={dashSectionsOpen.summary ? "chevUp" : "chevDown"} />
+                          </button>
+                          {dashSectionsOpen.summary && (
+                            <div className="dashSummaryGrid">
+                            {WIND_DIRS.map(dir => {
+                              const d = dashboard[dir];
+                              return (
+                                <button
+                                  type="button"
+                                  className={`dashSummaryCard${dashFocusDir === dir ? " active" : ""}`}
+                                  key={`summary-${dir}`}
+                                  onClick={() => setDashFocusDir(dir)}
+                                >
+                                  <div className="dashDir">{dir}</div>
+                                  <div className="dashStatRow">
+                                    <span>Hits</span>
+                                    <strong className={d.tsHits ? "dashAlert" : "dashMuted"}>{d.tsHits}</strong>
+                                  </div>
+                                  <div className="dashStatRow">
+                                    <span>Max Hail</span>
+                                    <strong className="dashOk">{d.tsMaxHail ? `${d.tsMaxHail}"` : "—"}</strong>
+                                  </div>
+                                  <div className="dashStatRow">
+                                    <span>Wind</span>
+                                    <strong className={d.wind.creased || d.wind.torn_missing ? "dashWind" : "dashMuted"}>
+                                      {d.wind.creased}/{d.wind.torn_missing}
+                                    </strong>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          )}
+                        </div>
+                        <div className="dashCompactSection indicators">
+                          <button
+                            className="dashSectionToggle"
+                            type="button"
+                            onClick={() => setDashSectionsOpen(prev => ({ ...prev, indicators: !prev.indicators }))}
+                            aria-expanded={dashSectionsOpen.indicators}
+                          >
+                            <span className="dashCompactTitle">Indicators by Direction</span>
+                            <Icon name={dashSectionsOpen.indicators ? "chevUp" : "chevDown"} />
+                          </button>
+                          {dashSectionsOpen.indicators && (
+                            <div className="dashIndicatorsGrid">
+                            {CARDINAL_DIRS.map(dir => {
+                              const d = dashboard[dir];
+                              return (
+                                <button
+                                  type="button"
+                                  className="dashIndicatorCard"
+                                  key={`indicator-${dir}`}
+                                  onClick={() => setDashFocusDir(dir)}
+                                >
+                                  <div className="dashDir">{dir}</div>
+                                  <div className="dashStatRow">
+                                    <span>APT Max</span>
+                                    <strong className={d.aptMax ? "dashDark" : "dashMuted"}>{d.aptMax ? `${d.aptMax}"` : "—"}</strong>
+                                  </div>
+                                  <div className="dashStatRow">
+                                    <span>DS Max</span>
+                                    <strong className={d.dsMax ? "dashBlue" : "dashMuted"}>{d.dsMax ? `${d.dsMax}"` : "—"}</strong>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {dashFocusData && (
+                      <div className="dashFocusView">
+                        <div className="dashFocusHeader">
+                          <button className="dashBackBtn" type="button" onClick={() => setDashFocusDir(null)}>
+                            <Icon name="back" /> Back
+                          </button>
+                          <div>
+                            <div className="dashFocusTitle">{dashFocusDir}</div>
+                            <div className="dashFocusSubtitle">Direction detail view.</div>
+                          </div>
+                        </div>
+                        <div className="dashFocusSection hail">
+                          <div className="dashSectionLabel">Hail</div>
+                          {dashFocusData.maxBruise ? (
                             <button
+                              className="dashFocusItem"
                               type="button"
-                              className={`dashSummaryCard${dashFocusDir === dir ? " active" : ""}`}
-                              key={`summary-${dir}`}
-                              onClick={() => setDashFocusDir(dir)}
+                              onClick={() => dashFocusData.maxBruiseItem && selectItemFromList(dashFocusData.maxBruiseItem.id)}
                             >
-                              <div className="dashDir">{dir}</div>
-                              <div className="dashStatRow">
-                                <span>Hits</span>
-                                <strong className={d.tsHits ? "dashAlert" : "dashMuted"}>{d.tsHits}</strong>
-                              </div>
-                              <div className="dashStatRow">
-                                <span>Max Hail</span>
-                                <strong className="dashOk">{d.tsMaxHail ? `${d.tsMaxHail}"` : "—"}</strong>
-                              </div>
-                              <div className="dashStatRow">
-                                <span>Wind</span>
-                                <strong className={d.wind.creased || d.wind.torn_missing ? "dashWind" : "dashMuted"}>
-                                  {d.wind.creased}/{d.wind.torn_missing}
-                                </strong>
+                              {dashFocusData.maxBruise.photo?.url ? (
+                                <img
+                                  className="dashThumb"
+                                  src={dashFocusData.maxBruise.photo.url}
+                                  alt="Largest hail size"
+                                />
+                              ) : (
+                                <div className="dashThumb placeholder">No photo</div>
+                              )}
+                              <div className="dashFocusMeta">
+                                <div className="dashFocusPrimary">
+                                  {dashFocusData.maxBruise.size ? `${dashFocusData.maxBruise.size}"` : "—"}
+                                </div>
+                                <div className="dashFocusSecondary">
+                                  {dashFocusData.maxBruiseItem?.name || "Test Square"} • Test squares: {dashFocusData.tsItems.length}
+                                </div>
                               </div>
                             </button>
-                          );
-                        })}
-                      </div>
-                      )}
-                    </div>
-                    <div className="dashCompactSection indicators">
-                      <button
-                        className="dashSectionToggle"
-                        type="button"
-                        onClick={() => setDashSectionsOpen(prev => ({ ...prev, indicators: !prev.indicators }))}
-                        aria-expanded={dashSectionsOpen.indicators}
-                      >
-                        <span className="dashCompactTitle">Indicators by Direction</span>
-                        <Icon name={dashSectionsOpen.indicators ? "chevUp" : "chevDown"} />
-                      </button>
-                      {dashSectionsOpen.indicators && (
-                        <div className="dashIndicatorsGrid">
-                        {CARDINAL_DIRS.map(dir => {
-                          const d = dashboard[dir];
-                          return (
-                            <div className="dashIndicatorCard" key={`indicator-${dir}`}>
-                              <div className="dashDir">{dir}</div>
-                              <div className="dashStatRow">
-                                <span>APT Max</span>
-                                <strong className={d.aptMax ? "dashDark" : "dashMuted"}>{d.aptMax ? `${d.aptMax}"` : "—"}</strong>
-                              </div>
-                              <div className="dashStatRow">
-                                <span>DS Max</span>
-                                <strong className={d.dsMax ? "dashBlue" : "dashMuted"}>{d.dsMax ? `${d.dsMax}"` : "—"}</strong>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      )}
-                    </div>
-                    {dashFocusData && (
-                      <div className="dashCompactSection focus">
-                        <div className="dashFocusHeader">
-                          <div>
-                            <div className="dashCompactTitle">Focus: {dashFocusDir}</div>
-                            <div className="dashFocusSubtitle">Click a card to highlight on the diagram.</div>
-                          </div>
-                          <button className="dashFocusClear" type="button" onClick={() => setDashFocusDir(null)}>
-                            Clear
-                          </button>
+                          ) : (
+                            <div className="dashFocusEmpty">No hail hits recorded for this direction.</div>
+                          )}
                         </div>
-                        <div className="dashFocusGrid">
-                          <div className="dashFocusCard">
-                            <div className="dashFocusCardTitle">Largest hail size</div>
-                            {dashFocusData.maxBruise ? (
-                              <button
-                                className="dashFocusItem"
-                                type="button"
-                                onClick={() => dashFocusData.maxBruiseItem && selectItemFromList(dashFocusData.maxBruiseItem.id)}
-                              >
-                                {dashFocusData.maxBruise.photo?.url ? (
-                                  <img
-                                    className="dashThumb"
-                                    src={dashFocusData.maxBruise.photo.url}
-                                    alt="Largest hail size"
-                                  />
-                                ) : (
-                                  <div className="dashThumb placeholder">No photo</div>
-                                )}
-                                <div className="dashFocusMeta">
-                                  <div className="dashFocusPrimary">
-                                    {dashFocusData.maxBruise.size ? `${dashFocusData.maxBruise.size}"` : "—"}
-                                  </div>
-                                  <div className="dashFocusSecondary">{dashFocusData.maxBruiseItem?.name || "Test Square"}</div>
+                        <div className="dashFocusSection wind">
+                          <div className="dashSectionLabel">Wind</div>
+                          <div className="dashWindTotals">
+                            <div className="dashWindTotalCard">
+                              <span>Total creased</span>
+                              <strong>{dashFocusData.totalCreased}</strong>
+                            </div>
+                            <div className="dashWindTotalCard">
+                              <span>Total torn/missing</span>
+                              <strong>{dashFocusData.totalTornMissing}</strong>
+                            </div>
+                          </div>
+                          {dashFocusData.windPhotos.length ? (
+                            <div className="dashPhotoGrid">
+                              {dashFocusData.windPhotos.map((entry, idx) => (
+                                <div className="dashPhotoCard" key={`wind-photo-${idx}`}>
+                                  <img className="dashPhotoImg" src={entry.photo.url} alt={entry.label} />
+                                  <div className="dashPhotoCaption">{entry.label}</div>
                                 </div>
-                              </button>
-                            ) : (
-                              <div className="dashFocusEmpty">No hail hits recorded for this direction.</div>
-                            )}
-                          </div>
-                          <div className="dashFocusCard">
-                            <div className="dashFocusCardTitle">Wind items</div>
-                            {dashFocusData.windItems.length ? (
-                              <div className="dashWindList">
-                                {dashFocusData.windItems.map(wind => (
-                                  <button
-                                    className="dashWindItem"
-                                    type="button"
-                                    key={wind.id}
-                                    onClick={() => selectItemFromList(wind.id)}
-                                  >
-                                    <div className="dashWindMeta">
-                                      <div className="dashWindName">{wind.name}</div>
-                                      <div className="dashWindCounts">
-                                        C{wind.data.creasedCount || 0} • T{wind.data.tornMissingCount || 0}
-                                      </div>
-                                    </div>
-                                    <div className="dashWindThumbs">
-                                      {wind.data.creasedPhoto?.url ? (
-                                        <img className="dashThumb" src={wind.data.creasedPhoto.url} alt="Creased wind photo" />
-                                      ) : (
-                                        <div className="dashThumb placeholder">No creased</div>
-                                      )}
-                                      {wind.data.tornMissingPhoto?.url ? (
-                                        <img className="dashThumb" src={wind.data.tornMissingPhoto.url} alt="Torn wind photo" />
-                                      ) : (
-                                        <div className="dashThumb placeholder">No torn</div>
-                                      )}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="dashFocusEmpty">No wind items for this direction.</div>
-                            )}
-                          </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="dashFocusEmpty">No wind photos for this direction.</div>
+                          )}
                         </div>
                       </div>
                     )}
