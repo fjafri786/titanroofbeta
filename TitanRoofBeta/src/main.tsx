@@ -1028,8 +1028,8 @@ const loadPdfJs = () => {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.2 Beta",
-            version: "4.2",
+            app: "TitanRoof 4.2.1 Beta",
+            version: "4.2.1",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -3163,6 +3163,8 @@ const loadPdfJs = () => {
           setMobileMenuOpen(false);
         };
 
+        const exportDisabled = true;
+
         const headerContent = (
           <PropertiesBar
             viewMode={viewMode}
@@ -3181,6 +3183,8 @@ const loadPdfJs = () => {
             onSaveAs={exportTrp}
             onOpen={() => trpInputRef.current?.click()}
             onExport={() => { saveState("manual"); setExportMode(true); }}
+            lastSavedAt={lastSavedAt}
+            exportDisabled={exportDisabled}
             toolbarCollapsed={toolbarCollapsed}
             onToolbarToggle={() => setToolbarCollapsed(prev => !prev)}
             isMobile={isMobile}
@@ -3604,7 +3608,7 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2" />
+          <TopBar label="TitanRoof Beta v4.2.1" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3622,7 +3626,7 @@ const loadPdfJs = () => {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.2 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.2.1 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -5359,10 +5363,11 @@ const loadPdfJs = () => {
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => trpInputRef.current?.click())}>
                         Open
                       </button>
-                      <button className="btn" type="button" onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
-                        Export
+                      <button className="btn" type="button" disabled={exportDisabled} onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
+                        {exportDisabled ? "Export (soon)" : "Export"}
                       </button>
                     </div>
+                    {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
                   </div>
 
                   <div className="mobileMenuSection">
@@ -5466,7 +5471,7 @@ const loadPdfJs = () => {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.2</div>
+                <div className="printTitleHero">Titan Roof Version 4.2.1</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
