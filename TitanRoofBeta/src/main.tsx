@@ -204,13 +204,19 @@ const loadPdfJs = () => {
       async function fileToObj(file){
         if(!file) return null;
         const dataUrl = await readFileAsDataUrl(file);
-        return { name: file.name, url: dataUrl, dataUrl, type: file.type };
+        return { name: file.name, url: dataUrl, dataUrl, type: file.type, caption: "" };
       }
       function reviveFileObj(obj){
         if(!obj) return null;
         const dataUrl = obj.dataUrl || obj.url;
         if(!dataUrl) return null;
-        return { name: obj.name || "image", url: dataUrl, dataUrl, type: obj.type };
+        return {
+          name: obj.name || "image",
+          url: dataUrl,
+          dataUrl,
+          type: obj.type,
+          caption: obj.caption || ""
+        };
       }
       function revokeFileObj(obj){
         if(obj?.url && obj.url.startsWith("blob:")) URL.revokeObjectURL(obj.url);
@@ -819,7 +825,12 @@ const loadPdfJs = () => {
           });
         }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
 
-        const serializeFile = (obj) => obj ? { name: obj.name, dataUrl: obj.dataUrl || obj.url, type: obj.type } : null;
+        const serializeFile = (obj) => obj ? {
+          name: obj.name,
+          dataUrl: obj.dataUrl || obj.url,
+          type: obj.type,
+          caption: obj.caption || ""
+        } : null;
         const serializeDamageEntries = (entries) => (entries || []).map(entry => ({
           ...entry,
           photo: serializeFile(entry.photo)
@@ -1032,12 +1043,18 @@ const loadPdfJs = () => {
 
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+          try{
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+          }catch(err){
+            console.warn("Failed to save project data", err);
+            return false;
+          }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
           setLastSavedAt({ source, time: timeString });
           if(source === "manual"){
             showSaveNotice(timeString);
           }
+          return true;
         }, [buildState, showSaveNotice]);
 
         const exportTrp = useCallback(() => {
@@ -3009,6 +3026,9 @@ const loadPdfJs = () => {
         }, [pageItems]);
 
         const photoCaption = (label, photo) => {
+          if(photo?.caption?.trim()){
+            return photo.caption.trim();
+          }
           if(photo?.name){
             return `${label} • ${photo.name}`;
           }
@@ -3024,6 +3044,12 @@ const loadPdfJs = () => {
           const sentence = ensurePeriod(base);
           if(!note?.trim()) return sentence;
           return `${sentence} Note: ${normalizeNote(note)}`;
+        };
+        const resolveCaption = (base, note, photo) => {
+          if(photo?.caption?.trim()){
+            return photo.caption.trim();
+          }
+          return composeCaption(base, note);
         };
         const dirLabel = (dir) => {
           if(!dir) return "";
@@ -3369,6 +3395,105 @@ const loadPdfJs = () => {
           });
         };
 
+        const updateExteriorPhotoCaption = (id, caption) => {
+          setExteriorPhotos(prev => prev.map(entry => (
+            entry.id === id
+              ? { ...entry, photo: entry.photo ? { ...entry.photo, caption } : entry.photo }
+              : entry
+          )));
+        };
+
+        const updateItemPhoto = (itemId, updater) => {
+          setItems(prev => prev.map(it => (
+            it.id === itemId ? updater(it) : it
+          )));
+        };
+
+        const updateItemPhotoCaption = (source, caption) => {
+          updateItemPhoto(source.itemId, (it) => {
+            const data = { ...it.data };
+            const updateDirect = (field) => {
+              if(!data[field]) return;
+              data[field] = { ...data[field], caption };
+            };
+            const updateArrayEntry = (field) => {
+              const list = Array.isArray(data[field]) ? [...data[field]] : null;
+              if(!list || list[source.index] == null) return;
+              const entry = list[source.index];
+              if(!entry?.photo) return;
+              list[source.index] = { ...entry, photo: { ...entry.photo, caption } };
+              data[field] = list;
+            };
+
+            if(["overviewPhoto", "detailPhoto", "creasedPhoto", "tornMissingPhoto", "photo"].includes(source.field)){
+              updateDirect(source.field);
+            } else if(source.field === "bruise"){
+              updateArrayEntry("bruises");
+            } else if(source.field === "condition"){
+              updateArrayEntry("conditions");
+            } else if(source.field === "damage"){
+              updateArrayEntry("damageEntries");
+            }
+
+            return { ...it, data };
+          });
+        };
+
+        const removeItemPhoto = (source) => {
+          updateItemPhoto(source.itemId, (it) => {
+            const data = { ...it.data };
+            const removeDirect = (field) => {
+              if(data[field]) revokeFileObj(data[field]);
+              data[field] = null;
+            };
+            const removeArrayEntry = (field) => {
+              const list = Array.isArray(data[field]) ? [...data[field]] : null;
+              if(!list || list[source.index] == null) return;
+              const entry = list[source.index];
+              if(entry?.photo) revokeFileObj(entry.photo);
+              list[source.index] = { ...entry, photo: null };
+              data[field] = list;
+            };
+
+            if(["overviewPhoto", "detailPhoto", "creasedPhoto", "tornMissingPhoto", "photo"].includes(source.field)){
+              removeDirect(source.field);
+            } else if(source.field === "bruise"){
+              removeArrayEntry("bruises");
+            } else if(source.field === "condition"){
+              removeArrayEntry("conditions");
+            } else if(source.field === "damage"){
+              removeArrayEntry("damageEntries");
+            }
+            return { ...it, data };
+          });
+        };
+
+        const [photoCaptionEdit, setPhotoCaptionEdit] = useState(null);
+        const startPhotoCaptionEdit = (entry, fallbackCaption) => {
+          setPhotoCaptionEdit({
+            id: entry.editKey || entry.id,
+            draft: entry.photo?.caption?.trim() || fallbackCaption || ""
+          });
+        };
+        const cancelPhotoCaptionEdit = () => setPhotoCaptionEdit(null);
+        const commitPhotoCaptionEdit = (entry) => {
+          const draft = photoCaptionEdit?.draft?.trim() || "";
+          if(entry.source){
+            updateItemPhotoCaption(entry.source, draft);
+          }
+          setPhotoCaptionEdit(null);
+        };
+        const commitExteriorCaptionEdit = (entry) => {
+          const draft = photoCaptionEdit?.draft?.trim() || "";
+          updateExteriorPhotoCaption(entry.id, draft);
+          setPhotoCaptionEdit(null);
+        };
+        const deletePhotoEntry = (entry) => {
+          if(entry.source){
+            removeItemPhoto(entry.source);
+          }
+        };
+
         const roofPhotoSections = useMemo(() => {
           const sections = [
             {
@@ -3421,7 +3546,7 @@ const loadPdfJs = () => {
             const section = findSection(sectionKey);
             if(!section) return;
             const group = section.groups.find(g => g.key === groupKey);
-            if(group) group.entries.push(entry);
+            if(group) group.entries.push({ ...entry, editKey: entry.editKey || `roof-${entry.id}` });
           };
 
           items.forEach(it => {
@@ -3433,8 +3558,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-overview`,
                   itemId: it.id,
                   url: it.data.overviewPhoto.url,
-                  caption: composeCaption(`Overview of the ${tsLabel}`, note),
-                  note
+                  photo: it.data.overviewPhoto,
+                  caption: resolveCaption(`Overview of the ${tsLabel}`, note, it.data.overviewPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "overviewPhoto" }
                 });
               }
               (it.data.bruises || []).forEach((b, idx) => {
@@ -3443,8 +3570,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-bruise-${idx}`,
                   itemId: it.id,
                   url: b.photo.url,
-                  caption: composeCaption(`Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`, note),
-                  note
+                  photo: b.photo,
+                  caption: resolveCaption(`Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`, note, b.photo),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "bruise", index: idx }
                 });
               });
               (it.data.conditions || []).forEach((c, idx) => {
@@ -3454,8 +3583,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-condition-${idx}`,
                   itemId: it.id,
                   url: c.photo.url,
-                  caption: composeCaption(`Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`, note),
-                  note
+                  photo: c.photo,
+                  caption: resolveCaption(`Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`, note, c.photo),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "condition", index: idx }
                 });
               });
             }
@@ -3466,8 +3597,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-overview`,
                   itemId: it.id,
                   url: it.data.overviewPhoto.url,
-                  caption: composeCaption(`Overview of the ${componentText}`, note),
-                  note
+                  photo: it.data.overviewPhoto,
+                  caption: resolveCaption(`Overview of the ${componentText}`, note, it.data.overviewPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "overviewPhoto" }
                 });
               }
               if(it.data.detailPhoto?.url){
@@ -3475,8 +3608,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-detail`,
                   itemId: it.id,
                   url: it.data.detailPhoto.url,
-                  caption: composeCaption(`Detail view of the ${componentText}`, note),
-                  note
+                  photo: it.data.detailPhoto,
+                  caption: resolveCaption(`Detail view of the ${componentText}`, note, it.data.detailPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "detailPhoto" }
                 });
               }
               (it.data.damageEntries || []).forEach((entry, idx) => {
@@ -3485,8 +3620,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-damage-${idx}`,
                   itemId: it.id,
                   url: entry.photo.url,
-                  caption: composeCaption(`${damageEntryDescription(entry)} on the ${componentText}`, note),
-                  note
+                  photo: entry.photo,
+                  caption: resolveCaption(`${damageEntryDescription(entry)} on the ${componentText}`, note, entry.photo),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "damage", index: idx }
                 });
               });
             }
@@ -3496,8 +3633,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-overview`,
                   itemId: it.id,
                   url: it.data.overviewPhoto.url,
-                  caption: composeCaption(windCaption("overview", it.data.dir), note),
-                  note
+                  photo: it.data.overviewPhoto,
+                  caption: resolveCaption(windCaption("overview", it.data.dir), note, it.data.overviewPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "overviewPhoto" }
                 });
               }
               if(it.data.creasedPhoto?.url){
@@ -3505,8 +3644,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-creased`,
                   itemId: it.id,
                   url: it.data.creasedPhoto.url,
-                  caption: composeCaption(windCaption("creased", it.data.dir), note),
-                  note
+                  photo: it.data.creasedPhoto,
+                  caption: resolveCaption(windCaption("creased", it.data.dir), note, it.data.creasedPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "creasedPhoto" }
                 });
               }
               if(it.data.tornMissingPhoto?.url){
@@ -3514,8 +3655,10 @@ const loadPdfJs = () => {
                   id: `${it.id}-torn`,
                   itemId: it.id,
                   url: it.data.tornMissingPhoto.url,
-                  caption: composeCaption(windCaption("torn", it.data.dir), note),
-                  note
+                  photo: it.data.tornMissingPhoto,
+                  caption: resolveCaption(windCaption("torn", it.data.dir), note, it.data.tornMissingPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "tornMissingPhoto" }
                 });
               }
             }
@@ -3524,8 +3667,10 @@ const loadPdfJs = () => {
                 id: `${it.id}-photo`,
                 itemId: it.id,
                 url: it.data.photo.url,
-                caption: composeCaption(observationCaption(it), note),
-                note
+                photo: it.data.photo,
+                caption: resolveCaption(observationCaption(it), note, it.data.photo),
+                note,
+                source: { type: it.type, itemId: it.id, field: "photo" }
               });
             }
           });
@@ -4019,6 +4164,43 @@ const loadPdfJs = () => {
                                         </button>
                                         <div className="photoMeta">
                                           <div className="photoCaption">{entry.caption}</div>
+                                          {photoCaptionEdit?.id === entry.editKey ? (
+                                            <div className="photoEdit">
+                                              <input
+                                                className="inp"
+                                                value={photoCaptionEdit?.draft || ""}
+                                                onChange={(e) => setPhotoCaptionEdit(prev => (
+                                                  prev ? { ...prev, draft: e.target.value } : prev
+                                                ))}
+                                                placeholder="Custom caption..."
+                                              />
+                                              <div className="photoEditActions">
+                                                <button className="btn btnPrimary" type="button" onClick={() => commitPhotoCaptionEdit(entry)}>
+                                                  Save
+                                                </button>
+                                                <button className="btn" type="button" onClick={cancelPhotoCaptionEdit}>
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="photoActions">
+                                              <button
+                                                className="photoActionBtn"
+                                                type="button"
+                                                onClick={() => startPhotoCaptionEdit(entry, entry.caption)}
+                                              >
+                                                Edit
+                                              </button>
+                                              <button
+                                                className="photoActionBtn danger"
+                                                type="button"
+                                                onClick={() => deletePhotoEntry(entry)}
+                                              >
+                                                Delete
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -4055,7 +4237,11 @@ const loadPdfJs = () => {
                     <div className="photoEmpty">None</div>
                   ) : (
                     <div className="exteriorGrid">
-                      {exteriorPhotos.map(entry => (
+                      {exteriorPhotos.map(entry => {
+                        const editKey = `exterior-${entry.id}`;
+                        const isEditing = photoCaptionEdit?.id === editKey;
+                        const defaultCaption = resolveCaption(`Exterior elevation: ${entry.orientation}`, entry.notes, entry.photo);
+                        return (
                         <div className="exteriorCard" key={entry.id}>
                           <div className="exteriorPreview">
                             {entry.photo?.url ? (
@@ -4064,7 +4250,7 @@ const loadPdfJs = () => {
                                 alt={entry.photo.name || "Exterior photo"}
                                 onClick={() => openPhotoLightbox({
                                   url: entry.photo.url,
-                                  caption: composeCaption(`Exterior elevation: ${entry.orientation}`, entry.notes)
+                                  caption: defaultCaption
                                 })}
                               />
                             ) : (
@@ -4100,12 +4286,48 @@ const loadPdfJs = () => {
                                 placeholder="Add exterior photo notes..."
                               />
                             </div>
+                            {isEditing && (
+                              <div className="photoEdit">
+                                <div className="lbl">Custom caption</div>
+                                <input
+                                  className="inp"
+                                  value={photoCaptionEdit?.draft || ""}
+                                  onChange={(e) => setPhotoCaptionEdit(prev => (
+                                    prev ? { ...prev, draft: e.target.value } : prev
+                                  ))}
+                                  placeholder="Custom caption..."
+                                />
+                              </div>
+                            )}
                             <div className="exteriorActions">
-                              <button className="btn btnDanger" type="button" onClick={() => removeExteriorPhoto(entry.id)}>Remove</button>
+                              {isEditing ? (
+                                <div className="photoEditActions">
+                                  <button className="btn btnPrimary" type="button" onClick={() => commitExteriorCaptionEdit(entry)}>
+                                    Save caption
+                                  </button>
+                                  <button className="btn" type="button" onClick={cancelPhotoCaptionEdit}>
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    className="btn"
+                                    type="button"
+                                    onClick={() => setPhotoCaptionEdit({ id: editKey, draft: entry.photo?.caption?.trim() || defaultCaption })}
+                                  >
+                                    Edit caption
+                                  </button>
+                                  <button className="btn btnDanger" type="button" onClick={() => removeExteriorPhoto(entry.id)}>
+                                    Delete
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )
                 )}

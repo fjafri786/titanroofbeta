@@ -2392,6 +2392,33 @@
         font-weight:1200;
         color:#0F172A;
       }
+      .photoActions{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+      .photoActionBtn{
+        border:none;
+        background:transparent;
+        color: var(--teal);
+        font-size:12px;
+        font-weight:1200;
+        cursor:pointer;
+        padding:0;
+      }
+      .photoActionBtn.danger{
+        color:#DC2626;
+      }
+      .photoEdit{
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+      }
+      .photoEditActions{
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      }
       .photoNote{
         font-size:11px;
         font-weight:1100;
