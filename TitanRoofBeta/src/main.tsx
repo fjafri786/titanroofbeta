@@ -69,8 +69,8 @@ const loadPdfJs = () => {
       ];
       const OBS_AREAS = [
         { key: "roof", label: "Roof" },
-        { key: "ext", label: "Exterior" },
-        { key: "int", label: "Interior" }
+        { key: "ext", label: "Ext" },
+        { key: "int", label: "Int" }
       ];
 
       const DASHBOARD_PHOTO_LIMIT = 18;
@@ -1216,13 +1216,14 @@ const loadPdfJs = () => {
           const styles = getComputedStyle(document.documentElement);
           const topbarHeight = parseFloat(styles.getPropertyValue("--topbar-height")) || 0;
           const propsbarHeight = parseFloat(styles.getPropertyValue("--propsbar-height")) || 0;
+          const toolbarHeight = parseFloat(styles.getPropertyValue("--toolbar-height")) || 0;
           return {
             left: 0,
-            top: topbarHeight + propsbarHeight,
+            top: topbarHeight + propsbarHeight + (toolbarCollapsed ? 0 : toolbarHeight),
             right: window.innerWidth,
             bottom: window.innerHeight
           };
-        }, []);
+        }, [toolbarCollapsed]);
         const clampDashPos = useCallback((pos) => {
           const dashRect = dashRef.current?.getBoundingClientRect();
           if(!dashRect) return pos;
@@ -1550,12 +1551,15 @@ const loadPdfJs = () => {
           if(!dashFocusDir) return null;
           const tsItems = pageItems.filter(item => item.type === "ts" && item.data.dir === dashFocusDir);
           const windItems = pageItems.filter(item => item.type === "wind" && item.data.dir === dashFocusDir);
+          const obsItems = pageItems.filter(item => item.type === "obs" && item.data.dir === dashFocusDir);
           let maxBruise = null;
           let maxBruiseSize = 0;
           let maxBruiseItem = null;
           let totalCreased = 0;
           let totalTornMissing = 0;
           const windPhotos = [];
+          const hailPhotos = [];
+          const obsPhotos = [];
 
           tsItems.forEach(ts => {
             (ts.data.bruises || []).forEach(b => {
@@ -1566,6 +1570,31 @@ const loadPdfJs = () => {
                 maxBruiseItem = ts;
               }
             });
+            const tsLabel = testSquareLabel(ts.data.dir);
+            if(ts.data.overviewPhoto?.url){
+              hailPhotos.push({
+                itemId: ts.id,
+                url: ts.data.overviewPhoto.url,
+                caption: `Overview of the ${tsLabel}`
+              });
+            }
+            (ts.data.bruises || []).forEach((b, idx) => {
+              if(!b.photo?.url) return;
+              hailPhotos.push({
+                itemId: ts.id,
+                url: b.photo.url,
+                caption: `Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`
+              });
+            });
+            (ts.data.conditions || []).forEach((c, idx) => {
+              if(!c.photo?.url) return;
+              const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
+              hailPhotos.push({
+                itemId: ts.id,
+                url: c.photo.url,
+                caption: `Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`
+              });
+            });
           });
 
           windItems.forEach(wind => {
@@ -1573,34 +1602,51 @@ const loadPdfJs = () => {
             totalTornMissing += wind.data.tornMissingCount || 0;
             if(wind.data.creasedPhoto?.url){
               windPhotos.push({
-                photo: wind.data.creasedPhoto,
-                label: windCaption("creased", wind.data.dir)
+                itemId: wind.id,
+                url: wind.data.creasedPhoto.url,
+                caption: windCaption("creased", wind.data.dir)
               });
             }
             if(wind.data.tornMissingPhoto?.url){
               windPhotos.push({
-                photo: wind.data.tornMissingPhoto,
-                label: windCaption("torn", wind.data.dir)
+                itemId: wind.id,
+                url: wind.data.tornMissingPhoto.url,
+                caption: windCaption("torn", wind.data.dir)
               });
             }
             if(wind.data.overviewPhoto?.url){
               windPhotos.push({
-                photo: wind.data.overviewPhoto,
-                label: windCaption("overview", wind.data.dir)
+                itemId: wind.id,
+                url: wind.data.overviewPhoto.url,
+                caption: windCaption("overview", wind.data.dir)
               });
             }
+          });
+
+          obsItems.forEach(obs => {
+            if(!obs.data.photo?.url) return;
+            obsPhotos.push({
+              itemId: obs.id,
+              url: obs.data.photo.url,
+              caption: observationCaption(obs)
+            });
           });
 
           return {
             tsItems,
             windItems,
+            obsItems,
             maxBruise,
             maxBruiseSize,
             maxBruiseItem,
             totalCreased,
             totalTornMissing,
             windPhotos,
-            windPhotoOverflow: Math.max(0, windPhotos.length - DASHBOARD_PHOTO_LIMIT)
+            hailPhotos,
+            obsPhotos,
+            windPhotoOverflow: Math.max(0, windPhotos.length - DASHBOARD_PHOTO_LIMIT),
+            hailPhotoOverflow: Math.max(0, hailPhotos.length - DASHBOARD_PHOTO_LIMIT),
+            obsPhotoOverflow: Math.max(0, obsPhotos.length - DASHBOARD_PHOTO_LIMIT)
           };
         }, [dashFocusDir, pageItems]);
 
@@ -2986,9 +3032,12 @@ const loadPdfJs = () => {
           const map = { N: "north", S: "south", E: "east", W: "west" };
           return map[normalized] || normalized.toLowerCase();
         };
+        const titleCase = (value) => value
+          ? value.toString().split(" ").map(word => word ? word[0].toUpperCase() + word.slice(1) : "").join(" ")
+          : "";
         const testSquareLabel = (dir) => {
           const direction = dirLabel(dir);
-          return direction ? `${direction} test square` : "test square";
+          return direction ? `${titleCase(direction)} Test Square` : "Test Square";
         };
         const windLocationLabel = (dir) => {
           if(dir === "Ridge") return "ridge cap";
@@ -3018,6 +3067,17 @@ const loadPdfJs = () => {
           if(code === "OTHER") return otherText?.trim() || "Other observation";
           return OBS_CODES.find(c => c.code === code)?.label || code || "Observation";
         };
+        const appurtenanceLabel = (type) => {
+          const label = APT_TYPES.find(entry => entry.code === type)?.label || "Appurtenance";
+          return label.toLowerCase();
+        };
+        const componentLabel = (item) => {
+          if(!item) return "component";
+          const direction = dirLabel(item.data?.dir);
+          const base = item.type === "apt" ? appurtenanceLabel(item.data?.type) : "downspout";
+          return direction ? `${direction} ${base}` : base;
+        };
+        const componentTitle = (item) => titleCase(componentLabel(item));
         const sentenceCase = (value) => {
           if(!value) return value;
           return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
@@ -3059,6 +3119,156 @@ const loadPdfJs = () => {
 
         const valueOrDash = (value) => value?.trim() ? value : "—";
         const joinList = (list) => (list && list.length ? list.join(", ") : "—");
+        const joinReadableList = (list) => {
+          if(!list || !list.length) return "";
+          if(list.length === 1) return list[0];
+          if(list.length === 2) return `${list[0]} and ${list[1]}`;
+          return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
+        };
+        const normalizeFacing = (value) => {
+          if(!value) return "";
+          return value.toString().trim().replace(/^(faced|facing)\s+/i, "").replace(/\.$/, "");
+        };
+        const formatRoofArea = (value) => {
+          if(!value?.trim()) return "";
+          const trimmed = value.trim();
+          const lower = trimmed.toLowerCase();
+          if(lower.includes("sf") || lower.includes("square")) return trimmed;
+          return `${trimmed} square feet (SF)`;
+        };
+        const descriptionParagraph = () => {
+          const projectName = (reportData.project.projectName || residenceName).trim();
+          const storyCount = reportData.description.stories?.trim();
+          const storyPhrase = storyCount ? `${storyCount}-story` : "";
+          const occupancy = reportData.description.occupancy?.trim().toLowerCase();
+          const structureParts = [storyPhrase, occupancy].filter(Boolean);
+          const structureDescriptor = structureParts.length ? structureParts.join(", ") : "structure";
+          const facing = normalizeFacing(reportData.project.orientation);
+          const locationParts = [reportData.project.address, reportData.project.city, reportData.project.state].filter(Boolean);
+          const location = locationParts.length ? locationParts.join(", ") : "";
+          const facingClause = facing && location
+            ? ` that faced ${facing} towards ${location}`
+            : facing
+              ? ` that faced ${facing}`
+              : location
+                ? ` that faced towards ${location}`
+                : "";
+          const descriptionSentences = [];
+          descriptionSentences.push(`The ${projectName || "residence"} residence comprised a ${structureDescriptor}${facingClause}.`);
+
+          if(reportData.description.framing && reportData.description.foundation){
+            descriptionSentences.push(`The ${reportData.description.framing.toLowerCase()}-framed structure was supported on a ${reportData.description.foundation.toLowerCase()} foundation.`);
+          }
+
+          if(reportData.description.exteriorFinishes.length){
+            descriptionSentences.push(`Exterior walls were clad with ${joinReadableList(reportData.description.exteriorFinishes.map(item => item.toLowerCase()))} on all elevations.`);
+          }
+
+          if(reportData.description.trimComponents.length){
+            descriptionSentences.push(`Painted trim components were present around all elevations including ${joinReadableList(reportData.description.trimComponents.map(item => item.toLowerCase()))}.`);
+          }
+
+          if(reportData.description.windowType || reportData.description.windowScreens){
+            const windowType = reportData.description.windowType ? reportData.description.windowType.toLowerCase() : "windows";
+            const screens = reportData.description.windowScreens === "Yes"
+              ? "with screens"
+              : reportData.description.windowScreens === "No"
+                ? "without screens"
+                : reportData.description.windowScreens === "Mixed"
+                  ? "with some screens"
+                  : "";
+            const windowSentence = reportData.description.windowType
+              ? `${sentenceCase(windowType)} windows were installed${screens ? ` ${screens}` : ""}.`
+              : `Windows were installed${screens ? ` ${screens}` : ""}.`;
+            descriptionSentences.push(windowSentence);
+          }
+
+          if(reportData.description.garagePresent === "Yes"){
+            const bays = reportData.description.garageBays ? `${reportData.description.garageBays}-car ` : "";
+            const doorCount = reportData.description.garageDoors ? `${reportData.description.garageDoors} overhead garage door${reportData.description.garageDoors === "1" ? "" : "s"}` : "";
+            const doorMaterial = reportData.description.garageDoorMaterial ? ` with ${reportData.description.garageDoorMaterial.toLowerCase()} panels` : "";
+            const elevation = reportData.description.garageElevation ? ` opened to the ${reportData.description.garageElevation.toLowerCase()}` : "";
+            const garageSentence = `A ${bays}garage${doorCount ? ` with ${doorCount}${doorMaterial}` : ""}${elevation}.`;
+            descriptionSentences.push(garageSentence);
+          }
+
+          if(reportData.description.fencingPresent === "Yes"){
+            const fenceType = reportData.description.fenceType ? reportData.description.fenceType.toLowerCase() : "fencing";
+            const fenceLocations = reportData.description.fenceLocations.length
+              ? ` along the ${joinReadableList(reportData.description.fenceLocations.map(item => item.toLowerCase()))} areas`
+              : "";
+            descriptionSentences.push(`Fencing consisted of ${fenceType}${fenceLocations}.`);
+          }
+
+          if(reportData.description.terrain){
+            const terrain = reportData.description.terrain.toLowerCase();
+            const terrainPhrase = terrain === "flat" ? "relatively flat" : terrain;
+            descriptionSentences.push(`Land surrounding the property was ${terrainPhrase}.`);
+          }
+
+          if(reportData.description.vegetation){
+            descriptionSentences.push(`Vegetation was present around the ${reportData.description.vegetation.toLowerCase()}.`);
+          }
+
+          const roofSentences = [];
+          if(reportData.description.roofGeometry || reportData.description.roofCovering){
+            const geometry = reportData.description.roofGeometry ? reportData.description.roofGeometry.toLowerCase() : "roof";
+            const covering = reportData.description.roofCovering ? reportData.description.roofCovering.toLowerCase() : "";
+            roofSentences.push(covering
+              ? `The ${geometry} framed roof was surfaced with ${covering}.`
+              : `The ${geometry} framed roof was present.`
+            );
+          }
+
+          if(reportData.description.shingleLength || reportData.description.shingleExposure){
+            const length = reportData.description.shingleLength ? reportData.description.shingleLength.replace("width", "length") : "standard length";
+            const exposure = reportData.description.shingleExposure ? reportData.description.shingleExposure.replace("exposure", "exposure") : "";
+            roofSentences.push(`Roof shingles measured ${length}${exposure ? ` with ${exposure} of exposure` : ""}.`);
+          }
+
+          if(reportData.description.ridgeWidth || reportData.description.ridgeExposure){
+            const ridgeWidth = reportData.description.ridgeWidth ? reportData.description.ridgeWidth : "standard width";
+            const ridgeExposure = reportData.description.ridgeExposure ? reportData.description.ridgeExposure : "";
+            roofSentences.push(`Ridge shingles were ${ridgeWidth} wide${ridgeExposure ? ` and were installed with ${ridgeExposure} of exposure` : ""}.`);
+          }
+
+          if(reportData.description.roofSlopes){
+            roofSentences.push(`Roof sections were sloped ${reportData.description.roofSlopes} (rise to run).`);
+          }
+
+          if(reportData.description.guttersPresent || reportData.description.downspoutsPresent){
+            const guttersValue = reportData.description.guttersPresent?.toLowerCase();
+            const downspoutsValue = reportData.description.downspoutsPresent?.toLowerCase();
+            const gutters = guttersValue
+              ? `Gutters were ${guttersValue === "yes" ? "installed" : guttersValue === "no" ? "not present" : guttersValue}.`
+              : "";
+            const downspouts = downspoutsValue
+              ? `Downspouts were ${downspoutsValue === "yes" ? "installed" : downspoutsValue === "no" ? "not present" : downspoutsValue}.`
+              : "";
+            roofSentences.push([gutters, downspouts].filter(Boolean).join(" "));
+          }
+
+          if(reportData.description.roofAppurtenances.length){
+            roofSentences.push(`Roof appurtenances included ${joinReadableList(reportData.description.roofAppurtenances.map(item => item.toLowerCase()))}.`);
+          }
+
+          const eagleViewSentences = [];
+          if(reportData.description.eagleView === "Yes"){
+            eagleViewSentences.push("We obtained a report for the roof geometry, based on aerial photogrammetry, from EagleView that contains estimates of the roof dimensions.");
+            if(reportData.description.roofArea){
+              eagleViewSentences.push(`The EagleView calculated roof area of the residence was ${formatRoofArea(reportData.description.roofArea)}.`);
+            }
+            if(reportData.description.attachmentLetter){
+              eagleViewSentences.push(`Refer to Attachment ${reportData.description.attachmentLetter} – EagleView.`);
+            }
+          }
+
+          return [
+            descriptionSentences.filter(Boolean).join(" "),
+            roofSentences.filter(Boolean).join(" "),
+            eagleViewSentences.filter(Boolean).join(" ")
+          ].filter(Boolean).join("\n\n");
+        };
         const formatAddressLine = (project) => {
           const parts = [project.address, project.city, project.state, project.zip].filter(Boolean);
           return parts.length ? parts.join(", ") : "—";
@@ -3250,13 +3460,13 @@ const loadPdfJs = () => {
               });
             }
             if(it.type === "apt" || it.type === "ds"){
-              const componentLabel = it.name?.trim() || (it.type === "apt" ? "appurtenance" : "downspout");
+              const componentText = componentLabel(it);
               if(it.data.overviewPhoto?.url){
                 pushEntry(it.type, "overview", {
                   id: `${it.id}-overview`,
                   itemId: it.id,
                   url: it.data.overviewPhoto.url,
-                  caption: composeCaption(`Overview of ${componentLabel}`, note),
+                  caption: composeCaption(`Overview of the ${componentText}`, note),
                   note
                 });
               }
@@ -3265,7 +3475,7 @@ const loadPdfJs = () => {
                   id: `${it.id}-detail`,
                   itemId: it.id,
                   url: it.data.detailPhoto.url,
-                  caption: composeCaption(`Detail view of ${componentLabel}`, note),
+                  caption: composeCaption(`Detail view of the ${componentText}`, note),
                   note
                 });
               }
@@ -3275,7 +3485,7 @@ const loadPdfJs = () => {
                   id: `${it.id}-damage-${idx}`,
                   itemId: it.id,
                   url: entry.photo.url,
-                  caption: composeCaption(`${damageEntryDescription(entry)} on ${componentLabel}`, note),
+                  caption: composeCaption(`${damageEntryDescription(entry)} on the ${componentText}`, note),
                   note
                 });
               });
@@ -3727,7 +3937,8 @@ const loadPdfJs = () => {
           `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
           `Wind Observations (${pageItems.filter(i => i.type === "wind").length})`,
           `Appurtenances + Downspouts (${pageItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
-          `Observations (${pageItems.filter(i => i.type === "obs").length})`
+          `Observations (${pageItems.filter(i => i.type === "obs").length})`,
+          "Report Notes (Description)"
         ];
 
         const roofPhotoCount = roofPhotoSections.reduce(
@@ -3736,12 +3947,20 @@ const loadPdfJs = () => {
         );
         const selectItemFromPhoto = (entry) => {
           if(!entry?.itemId) return;
+          const item = items.find(i => i.id === entry.itemId);
+          if(item?.pageId && item.pageId !== activePageId){
+            setActivePageId(item.pageId);
+          }
           setSelectedId(entry.itemId);
           setPanelView("props");
+          if(isMobile) setMobilePanelOpen(true);
         };
         const openPhotoLightbox = (entry) => {
           if(!entry?.url) return;
           selectItemFromPhoto(entry);
+          if(viewMode !== "diagram"){
+            setViewMode("diagram");
+          }
           setPhotoLightbox(entry);
         };
         const showResetView = Math.abs(view.tx) > sheetWidth / 2
@@ -4461,13 +4680,42 @@ const loadPdfJs = () => {
                                   {dashFocusData.maxBruise.size ? `${dashFocusData.maxBruise.size}"` : "—"}
                                 </div>
                                 <div className="dashFocusSecondary">
-                                  {dashFocusData.maxBruiseItem?.name || "Test Square"} • Test squares: {dashFocusData.tsItems.length}
+                                  {(dashFocusData.maxBruiseItem ? testSquareLabel(dashFocusData.maxBruiseItem.data?.dir) : "Test Square")} • Test squares: {dashFocusData.tsItems.length}
                                 </div>
                               </div>
                             </button>
                           ) : (
                             <div className="dashFocusEmpty">No hail hits recorded for this direction.</div>
                           )}
+                          {dashFocusData.hailPhotos.length ? (
+                            <>
+                              <div className="dashPhotoGrid">
+                                {dashFocusData.hailPhotos.slice(0, DASHBOARD_PHOTO_LIMIT).map((entry, idx) => (
+                                  <button
+                                    className="dashPhotoCard"
+                                    type="button"
+                                    key={`hail-photo-${idx}`}
+                                    onClick={() => openPhotoLightbox(entry)}
+                                  >
+                                    <img className="dashPhotoImg" src={entry.url} alt={entry.caption} />
+                                    <div className="dashPhotoCaption">{entry.caption}</div>
+                                  </button>
+                                ))}
+                              </div>
+                              {dashFocusData.hailPhotoOverflow > 0 && (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => {
+                                    setViewMode("photos");
+                                    closeDashboard();
+                                  }}
+                                >
+                                  …more ({dashFocusData.hailPhotoOverflow})
+                                </button>
+                              )}
+                            </>
+                          ) : null}
                         </div>
                         <div className="dashFocusSection wind">
                           <div className="dashSectionLabel">Wind</div>
@@ -4485,10 +4733,15 @@ const loadPdfJs = () => {
                             <>
                               <div className="dashPhotoGrid">
                                 {dashFocusData.windPhotos.slice(0, DASHBOARD_PHOTO_LIMIT).map((entry, idx) => (
-                                  <div className="dashPhotoCard" key={`wind-photo-${idx}`}>
-                                    <img className="dashPhotoImg" src={entry.photo.url} alt={entry.label} />
-                                    <div className="dashPhotoCaption">{entry.label}</div>
-                                  </div>
+                                  <button
+                                    className="dashPhotoCard"
+                                    type="button"
+                                    key={`wind-photo-${idx}`}
+                                    onClick={() => openPhotoLightbox(entry)}
+                                  >
+                                    <img className="dashPhotoImg" src={entry.url} alt={entry.caption} />
+                                    <div className="dashPhotoCaption">{entry.caption}</div>
+                                  </button>
                                 ))}
                               </div>
                               {dashFocusData.windPhotoOverflow > 0 && (
@@ -4506,6 +4759,40 @@ const loadPdfJs = () => {
                             </>
                           ) : (
                             <div className="dashFocusEmpty">No wind photos for this direction.</div>
+                          )}
+                        </div>
+                        <div className="dashFocusSection obs">
+                          <div className="dashSectionLabel">Observations</div>
+                          {dashFocusData.obsPhotos.length ? (
+                            <>
+                              <div className="dashPhotoGrid">
+                                {dashFocusData.obsPhotos.slice(0, DASHBOARD_PHOTO_LIMIT).map((entry, idx) => (
+                                  <button
+                                    className="dashPhotoCard"
+                                    type="button"
+                                    key={`obs-photo-${idx}`}
+                                    onClick={() => openPhotoLightbox(entry)}
+                                  >
+                                    <img className="dashPhotoImg" src={entry.url} alt={entry.caption} />
+                                    <div className="dashPhotoCaption">{entry.caption}</div>
+                                  </button>
+                                ))}
+                              </div>
+                              {dashFocusData.obsPhotoOverflow > 0 && (
+                                <button
+                                  className="btn"
+                                  type="button"
+                                  onClick={() => {
+                                    setViewMode("photos");
+                                    closeDashboard();
+                                  }}
+                                >
+                                  …more ({dashFocusData.obsPhotoOverflow})
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <div className="dashFocusEmpty">No observation photos for this direction.</div>
                           )}
                         </div>
                       </div>
@@ -5082,7 +5369,7 @@ const loadPdfJs = () => {
                                       onChange={(e)=>updateItemData("label", e.target.value)}
                                       placeholder="e.g., Front entry, garage impact"
                                     />
-                                    <div className="segToggle">
+                                    <div className="segToggle compact">
                                       <button
                                         className={`segBtn${(activeItem.data.arrowLabelPosition || "end") === "start" ? " active" : ""}`}
                                         type="button"
@@ -6226,7 +6513,7 @@ const loadPdfJs = () => {
                     const tsPhotos = collectTsPhotos(ts);
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
-                        <div style={{fontWeight:1200}}>{ts.name} • {ts.data.dir}</div>
+                        <div style={{fontWeight:1200}}>{testSquareLabel(ts.data.dir)}</div>
                         <div className="tiny">Hits: {(ts.data.bruises||[]).length} • Conditions: {(ts.data.conditions||[]).length}</div>
                         {tsPhotos.map((p, idx) => (
                           <PrintPhoto
@@ -6267,7 +6554,7 @@ const loadPdfJs = () => {
                 <div className="printGrid" style={{marginTop:10}}>
                   {pageItems.filter(i => i.type === "wind").map(w => (
                     <div className="printCard" key={`wind-${w.id}`}>
-                      <div style={{fontWeight:1200}}>{w.name} • {w.data.dir}</div>
+                      <div style={{fontWeight:1200}}>{titleCase(windLocationLabel(w.data.dir))}</div>
                       <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
                       {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (
                         <>
@@ -6332,7 +6619,7 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "apt" || i.type === "ds").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
-                      <div style={{fontWeight:1200}}>{it.name} • {it.type === "apt" ? "Appurtenance" : "Downspout"} • {it.data.dir}</div>
+                      <div style={{fontWeight:1200}}>{componentTitle(it)}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
                       {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (
                         (it.data.damageEntries || []).map((entry, idx) => (
@@ -6353,7 +6640,7 @@ const loadPdfJs = () => {
                         <PrintPhoto
                           photo={it.data.detailPhoto}
                           alt="Detail"
-                          caption={photoCaption(it.data.caption || "Detail photo", it.data.detailPhoto)}
+                          caption={photoCaption(it.data.caption || `Detail view of the ${componentLabel(it)}`, it.data.detailPhoto)}
                           style={{marginTop:8}}
                         />
                       )}
@@ -6361,7 +6648,7 @@ const loadPdfJs = () => {
                         <PrintPhoto
                           photo={it.data.overviewPhoto}
                           alt="Overview"
-                          caption={photoCaption("Overview photo", it.data.overviewPhoto)}
+                          caption={photoCaption(`Overview of the ${componentLabel(it)}`, it.data.overviewPhoto)}
                           style={{marginTop:8}}
                         />
                       )}
@@ -6375,7 +6662,7 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
-                      <div style={{fontWeight:1200}}>{obs.name} • {observationLabel(obs.data.code, obs.data.otherLabel)}</div>
+                      <div style={{fontWeight:1200}}>{observationCaption(obs)}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
                       {obs.data.photo?.url ? (
                         <PrintPhoto
@@ -6390,6 +6677,14 @@ const loadPdfJs = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Report Notes</h3>
+                <div className="printBlock" style={{marginTop:8, fontWeight:1200}}>Description</div>
+                <div className="printBlock">{formatBlock(descriptionParagraph())}</div>
               </div>
             </div>
           </div>
