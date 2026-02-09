@@ -2285,6 +2285,26 @@
         cursor:pointer;
         text-align:left;
       }
+      .photoGroupHeader.ts{
+        border-left:5px solid rgba(220,38,38,0.9);
+        background: linear-gradient(90deg, rgba(254,226,226,0.7), rgba(255,255,255,0.9));
+      }
+      .photoGroupHeader.apt{
+        border-left:5px solid rgba(17,24,39,0.85);
+        background: linear-gradient(90deg, rgba(226,232,240,0.7), rgba(255,255,255,0.9));
+      }
+      .photoGroupHeader.ds{
+        border-left:5px solid rgba(37,99,235,0.85);
+        background: linear-gradient(90deg, rgba(219,234,254,0.7), rgba(255,255,255,0.9));
+      }
+      .photoGroupHeader.wind{
+        border-left:5px solid rgba(22,163,74,0.85);
+        background: linear-gradient(90deg, rgba(220,252,231,0.7), rgba(255,255,255,0.9));
+      }
+      .photoGroupHeader.obs{
+        border-left:5px solid rgba(147,51,234,0.85);
+        background: linear-gradient(90deg, rgba(237,233,254,0.7), rgba(255,255,255,0.9));
+      }
       .photoGroupBody{
         display:flex;
         flex-direction:column;
@@ -2331,20 +2351,23 @@
         overflow:visible;
       }
       .photoThumb{
-        background:#E2E8F0;
+        border:none;
+        padding:0;
+        background:#F1F5F9;
         display:flex;
         align-items:center;
         justify-content:center;
         width:100%;
-        aspect-ratio: 2 / 3;
+        aspect-ratio: 4 / 3;
         overflow:hidden;
-        border-radius:0;
+        border-radius:12px;
         box-shadow: 0 8px 16px rgba(15,23,42,0.18);
+        cursor: zoom-in;
       }
       .photoThumb img{
         width:100%;
         height:100%;
-        object-fit:contain;
+        object-fit:cover;
       }
       .photoMeta{
         padding:10px;
@@ -2391,9 +2414,10 @@
         width:100%;
         height:160px;
         border-radius:0;
-        object-fit:contain;
+        object-fit:cover;
         background:#E2E8F0;
         box-shadow: 0 8px 16px rgba(15,23,42,0.18);
+        cursor: zoom-in;
       }
       .photoPlaceholder{
         display:flex;
@@ -2406,6 +2430,58 @@
         font-size:12px;
         font-weight:1100;
         box-shadow: 0 8px 16px rgba(15,23,42,0.18);
+      }
+      .photoLightbox{
+        position:fixed;
+        inset:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background: rgba(15,23,42,0.78);
+        padding:32px;
+        z-index:220;
+      }
+      .photoLightboxContent{
+        position:relative;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        gap:12px;
+        max-width:min(1100px, 100%);
+        max-height:calc(100vh - 80px);
+      }
+      .photoLightboxContent img{
+        max-width:100%;
+        max-height:calc(100vh - 180px);
+        object-fit:contain;
+        border-radius:14px;
+        box-shadow: 0 18px 30px rgba(2,6,23,0.35);
+        background:#0F172A;
+      }
+      .photoLightboxCaption{
+        font-size:13px;
+        font-weight:1100;
+        color:#F8FAFC;
+        text-align:center;
+        padding:10px 14px;
+        border-radius:12px;
+        background: rgba(15,23,42,0.65);
+        max-width: min(900px, 100%);
+      }
+      .photoLightboxClose{
+        position:absolute;
+        top:-10px;
+        right:-10px;
+        width:32px;
+        height:32px;
+        border-radius:999px;
+        border:none;
+        background: rgba(15,23,42,0.82);
+        color:#fff;
+        font-size:16px;
+        font-weight:1200;
+        cursor:pointer;
+        box-shadow: 0 8px 16px rgba(2,6,23,0.35);
       }
       .exteriorFields{
         display:flex;

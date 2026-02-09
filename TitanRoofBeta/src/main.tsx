@@ -655,6 +655,7 @@ const loadPdfJs = () => {
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
         const [dashFocusDir, setDashFocusDir] = useState(null);
         const [photoSectionsOpen, setPhotoSectionsOpen] = useState({});
+        const [photoLightbox, setPhotoLightbox] = useState(null);
 
         const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
         const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
@@ -2954,6 +2955,29 @@ const loadPdfJs = () => {
           }
           return label;
         };
+        const ensurePeriod = (text) => {
+          const trimmed = text?.trim();
+          if(!trimmed) return "";
+          return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+        };
+        const normalizeNote = (note) => note?.trim()?.replace(/^note:\s*/i, "");
+        const composeCaption = (base, note) => {
+          const sentence = ensurePeriod(base);
+          if(!note?.trim()) return sentence;
+          return `${sentence} Note: ${normalizeNote(note)}`;
+        };
+        const testSquareName = (name) => {
+          if(!name?.trim()) return "test square";
+          return name.toLowerCase().includes("test square") ? name : `${name} test square`;
+        };
+        const damageEntryDescription = (entry) => {
+          const mode = entry.mode === "both"
+            ? "spatter and dent"
+            : entry.mode === "spatter"
+              ? "spatter"
+              : "dent";
+          return `${mode} damage (${entry.size}")`;
+        };
 
         const damageEntryLabel = (entry, idx) => {
           const base = entry.mode === "both"
@@ -3122,11 +3146,12 @@ const loadPdfJs = () => {
           items.forEach(it => {
             const note = it.data?.caption?.trim();
             if(it.type === "ts"){
+              const tsLabel = testSquareName(it.name);
               if(it.data.overviewPhoto?.url){
                 pushEntry("ts", "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
-                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  caption: composeCaption(`Overview of the ${tsLabel}`, note),
                   note
                 });
               }
@@ -3135,7 +3160,7 @@ const loadPdfJs = () => {
                 pushEntry("ts", "bruise", {
                   id: `${it.id}-bruise-${idx}`,
                   url: b.photo.url,
-                  caption: photoCaption(`${it.name} bruise ${idx + 1} • ${b.size}"`, b.photo),
+                  caption: composeCaption(`Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`, note),
                   note
                 });
               });
@@ -3144,17 +3169,18 @@ const loadPdfJs = () => {
                 pushEntry("ts", "condition", {
                   id: `${it.id}-condition-${idx}`,
                   url: c.photo.url,
-                  caption: photoCaption(`${it.name} condition ${idx + 1} • ${c.code}`, c.photo),
+                  caption: composeCaption(`Condition ${idx + 1} (${c.code}) on the ${tsLabel}`, note),
                   note
                 });
               });
             }
             if(it.type === "apt" || it.type === "ds"){
+              const componentLabel = it.name?.trim() || (it.type === "apt" ? "appurtenance" : "downspout");
               if(it.data.overviewPhoto?.url){
                 pushEntry(it.type, "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
-                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  caption: composeCaption(`Overview of ${componentLabel}`, note),
                   note
                 });
               }
@@ -3162,7 +3188,7 @@ const loadPdfJs = () => {
                 pushEntry(it.type, "detail", {
                   id: `${it.id}-detail`,
                   url: it.data.detailPhoto.url,
-                  caption: photoCaption(`${it.name} detail`, it.data.detailPhoto),
+                  caption: composeCaption(`Detail view of ${componentLabel}`, note),
                   note
                 });
               }
@@ -3171,17 +3197,18 @@ const loadPdfJs = () => {
                 pushEntry(it.type, "damage", {
                   id: `${it.id}-damage-${idx}`,
                   url: entry.photo.url,
-                  caption: photoCaption(`${it.name} ${damageEntryLabel(entry, idx)}`, entry.photo),
+                  caption: composeCaption(`${damageEntryDescription(entry)} on ${componentLabel}`, note),
                   note
                 });
               });
             }
             if(it.type === "wind"){
+              const windLabel = it.name?.trim() || "wind observation";
               if(it.data.overviewPhoto?.url){
                 pushEntry("wind", "overview", {
                   id: `${it.id}-overview`,
                   url: it.data.overviewPhoto.url,
-                  caption: photoCaption(`${it.name} overview`, it.data.overviewPhoto),
+                  caption: composeCaption(`Overview of ${windLabel}`, note),
                   note
                 });
               }
@@ -3189,7 +3216,7 @@ const loadPdfJs = () => {
                 pushEntry("wind", "creased", {
                   id: `${it.id}-creased`,
                   url: it.data.creasedPhoto.url,
-                  caption: photoCaption(`${it.name} creased`, it.data.creasedPhoto),
+                  caption: composeCaption(`Creased shingle at ${windLabel}`, note),
                   note
                 });
               }
@@ -3197,7 +3224,7 @@ const loadPdfJs = () => {
                 pushEntry("wind", "torn", {
                   id: `${it.id}-torn`,
                   url: it.data.tornMissingPhoto.url,
-                  caption: photoCaption(`${it.name} torn/missing`, it.data.tornMissingPhoto),
+                  caption: composeCaption(`Torn or missing shingle at ${windLabel}`, note),
                   note
                 });
               }
@@ -3206,7 +3233,7 @@ const loadPdfJs = () => {
               pushEntry("obs", "obs", {
                 id: `${it.id}-photo`,
                 url: it.data.photo.url,
-                caption: photoCaption(`${it.name} ${it.data.code}`, it.data.photo),
+                caption: composeCaption(`Observation: ${it.data.code}`, note),
                 note
               });
             }
@@ -3584,6 +3611,27 @@ const loadPdfJs = () => {
             </div>
           </div>
         );
+        const photoLightboxModal = photoLightbox && (
+          <div
+            className="photoLightbox"
+            onClick={(e)=>{ if(e.target === e.currentTarget) setPhotoLightbox(null); }}
+          >
+            <div className="photoLightboxContent" onClick={(e)=>e.stopPropagation()}>
+              <button
+                type="button"
+                className="photoLightboxClose"
+                onClick={() => setPhotoLightbox(null)}
+                aria-label="Close photo"
+              >
+                ✕
+              </button>
+              <img src={photoLightbox.url} alt={photoLightbox.caption || "Photo"} />
+              {photoLightbox.caption && (
+                <div className="photoLightboxCaption">{photoLightbox.caption}</div>
+              )}
+            </div>
+          </div>
+        );
 
         const exportIndexItems = [
           "Title Page",
@@ -3605,6 +3653,10 @@ const loadPdfJs = () => {
           (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
           0
         );
+        const openPhotoLightbox = (entry) => {
+          if(!entry?.url) return;
+          setPhotoLightbox(entry);
+        };
         const showResetView = Math.abs(view.tx) > sheetWidth / 2
           || Math.abs(view.ty) > sheetHeight / 2
           || view.scale < 0.6
@@ -3635,7 +3687,7 @@ const loadPdfJs = () => {
                       <div className="photoGroupSection" key={section.key}>
                         <button
                           type="button"
-                          className="photoGroupHeader"
+                          className={`photoGroupHeader ${section.key}`}
                           onClick={() => setPhotoSectionsOpen(prev => ({ ...prev, [section.key]: !isOpen }))}
                         >
                           <div className="photoGroupTitle">{section.title}</div>
@@ -3651,12 +3703,16 @@ const loadPdfJs = () => {
                                   <div className="photoGrid">
                                     {group.entries.map(entry => (
                                       <div className="photoCard" key={entry.id}>
-                                        <div className="photoThumb">
+                                        <button
+                                          type="button"
+                                          className="photoThumb"
+                                          onClick={() => openPhotoLightbox(entry)}
+                                          aria-label={`Open photo: ${entry.caption}`}
+                                        >
                                           <img src={entry.url} alt={entry.caption} />
-                                        </div>
+                                        </button>
                                         <div className="photoMeta">
                                           <div className="photoCaption">{entry.caption}</div>
-                                          {entry.note && <div className="photoNote">Note: {entry.note}</div>}
                                         </div>
                                       </div>
                                     ))}
@@ -3697,7 +3753,14 @@ const loadPdfJs = () => {
                         <div className="exteriorCard" key={entry.id}>
                           <div className="exteriorPreview">
                             {entry.photo?.url ? (
-                              <img src={entry.photo.url} alt={entry.photo.name || "Exterior photo"} />
+                              <img
+                                src={entry.photo.url}
+                                alt={entry.photo.name || "Exterior photo"}
+                                onClick={() => openPhotoLightbox({
+                                  url: entry.photo.url,
+                                  caption: composeCaption(`Exterior elevation: ${entry.orientation}`, entry.notes)
+                                })}
+                              />
                             ) : (
                               <div className="photoPlaceholder">No photo selected</div>
                             )}
@@ -3788,6 +3851,7 @@ const loadPdfJs = () => {
           )}
           {headerEditModal}
           {pageNameModal}
+          {photoLightboxModal}
           {saveNotice && (
             <div className="saveToast" role="status">Saved {saveNotice}</div>
           )}
