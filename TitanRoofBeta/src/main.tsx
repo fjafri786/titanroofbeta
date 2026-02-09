@@ -3064,6 +3064,194 @@ const loadPdfJs = () => {
           return parts.length ? parts.join(", ") : "—";
         };
         const formatBlock = (value) => value?.trim() ? value.trim() : "Not provided.";
+        const listWithAnd = (list, toLower = true) => {
+          if(!list?.length) return "";
+          const normalized = list.map(item => {
+            const trimmed = item?.trim();
+            if(!trimmed) return "";
+            return toLower ? trimmed.toLowerCase() : trimmed;
+          }).filter(Boolean);
+          if(!normalized.length) return "";
+          if(normalized.length === 1) return normalized[0];
+          if(normalized.length === 2) return `${normalized[0]} and ${normalized[1]}`;
+          return `${normalized.slice(0, -1).join(", ")}, and ${normalized[normalized.length - 1]}`;
+        };
+        const numberToWord = (value) => {
+          const num = Number.parseInt(value, 10);
+          if(Number.isNaN(num)) return value;
+          const map = {
+            1: "one",
+            2: "two",
+            3: "three",
+            4: "four",
+            5: "five"
+          };
+          return map[num] || value;
+        };
+        const storyDescriptor = (value) => {
+          const trimmed = value?.trim();
+          if(!trimmed) return "";
+          const num = Number.parseInt(trimmed, 10);
+          if(!Number.isNaN(num)){
+            const word = numberToWord(num);
+            return `${word}-story`;
+          }
+          return `${trimmed}-story`;
+        };
+        const framingDescriptor = (value) => {
+          const trimmed = value?.trim();
+          if(!trimmed) return "";
+          const lower = trimmed.toLowerCase();
+          if(lower === "masonry") return "masonry";
+          if(lower === "other") return "framed";
+          return `${lower}-framed`;
+        };
+        const foundationDescriptor = (value) => {
+          const trimmed = value?.trim();
+          if(!trimmed) return "";
+          const lower = trimmed.toLowerCase().replace("&", "and");
+          if(lower.includes("slab")) return "concrete slab";
+          return lower;
+        };
+        const describeGutters = (gutters, downspouts) => {
+          const g = gutters?.toLowerCase();
+          const d = downspouts?.toLowerCase();
+          if(!g && !d) return "";
+          if(g === "yes" && d === "yes") return "Gutters and downspouts were installed along the eaves.";
+          if(g === "yes" && d === "no") return "Gutters were installed along the eaves; downspouts were not observed.";
+          if(g === "no" && d === "yes") return "Downspouts were observed; no gutter system was present.";
+          if(g === "mixed" || d === "mixed") return "A partial gutter and downspout system was present.";
+          if(g === "yes") return "Gutters were installed along the eaves.";
+          if(g === "no") return "No gutter system was present.";
+          return "";
+        };
+        const buildReportNotesDescription = (data, name, faces) => {
+          const projectName = data.project.projectName?.trim() || name?.trim();
+          const propertyLabel = projectName ? `${projectName} residence` : "property";
+          const orientation = data.project.orientation?.trim()
+            || (faces ? `approximately ${faces.toLowerCase()}` : "");
+          const address = data.project.address?.trim();
+          const cityState = [data.project.city, data.project.state].filter(Boolean).join(", ");
+          const locationParts = [address, cityState].filter(Boolean);
+          const locationClause = locationParts.length ? locationParts.join(", ") : "";
+          const story = storyDescriptor(data.description.stories);
+          const occupancy = data.description.occupancy?.trim().toLowerCase();
+          const structureParts = [story, occupancy].filter(Boolean).join(", ");
+          const structureClause = structureParts ? ` ${structureParts}` : "";
+          const faceClause = orientation
+            ? ` that faced ${orientation}${locationClause ? ` towards ${locationClause}` : ""}`
+            : locationClause
+              ? ` located at ${locationClause}`
+              : "";
+          const sentence1 = `The ${propertyLabel} comprised a${structureClause} structure${faceClause}.`;
+
+          const framing = framingDescriptor(data.description.framing);
+          const foundation = foundationDescriptor(data.description.foundation);
+          const framingSentence = (framing && foundation)
+            ? `The ${framing} structure was supported on a ${foundation} foundation.`
+            : foundation
+              ? `The structure was supported on a ${foundation} foundation.`
+              : framing
+                ? `The structure was ${framing}.`
+                : "";
+          const exteriorFinishes = listWithAnd(data.description.exteriorFinishes);
+          const exteriorSentence = exteriorFinishes
+            ? `Exterior walls were clad with ${exteriorFinishes}.`
+            : "";
+          const trimComponents = listWithAnd(data.description.trimComponents);
+          const trimSentence = trimComponents
+            ? `Trim components included ${trimComponents}.`
+            : "";
+          const windowType = data.description.windowType?.trim().toLowerCase();
+          const screens = data.description.windowScreens?.trim().toLowerCase();
+          const windowSentence = windowType
+            ? `The property had ${windowType} windows${screens === "yes" ? " with screens" : screens === "mixed" ? ", some with screens" : ""}.`
+            : "";
+          const garagePresent = data.description.garagePresent?.trim().toLowerCase() === "yes";
+          const garageBays = data.description.garageBays?.trim();
+          const garageDoors = data.description.garageDoors?.trim();
+          const garageMaterial = data.description.garageDoorMaterial?.trim().toLowerCase();
+          const garageElevation = data.description.garageElevation?.trim().toLowerCase();
+          const garageLabel = garageBays ? `${numberToWord(garageBays)}-car` : "";
+          const garageDoorLabel = garageDoors ? `${garageDoors} overhead garage door${garageDoors === "1" ? "" : "s"}` : "overhead garage doors";
+          const garageMaterialClause = garageMaterial ? ` with ${garageMaterial} panels` : "";
+          const garageElevationClause = garageElevation ? ` opened to the ${garageElevation}` : "";
+          const garageSentence = garagePresent
+            ? `A${garageLabel ? ` ${garageLabel}` : ""} garage with ${garageDoorLabel}${garageMaterialClause}${garageElevationClause}.`
+            : "";
+          const fencingPresent = data.description.fencingPresent?.trim().toLowerCase() === "yes";
+          const fenceType = data.description.fenceType?.trim().toLowerCase();
+          const fenceLocations = listWithAnd(data.description.fenceLocations);
+          const fenceSentence = fencingPresent || fenceType || fenceLocations
+            ? `Fencing${fenceType ? ` (${fenceType})` : ""}${fenceLocations ? ` was present along the ${fenceLocations}` : " was present"}.`
+            : "";
+          const terrain = data.description.terrain?.trim().toLowerCase();
+          const terrainSentence = terrain ? `Land surrounding the property was ${terrain}.` : "";
+          const vegetation = data.description.vegetation?.trim().toLowerCase();
+          const vegetationSentence = vegetation ? `Vegetation was noted at the ${vegetation}.` : "";
+          const paragraph1 = [
+            sentence1,
+            framingSentence,
+            exteriorSentence,
+            trimSentence,
+            windowSentence,
+            garageSentence,
+            fenceSentence,
+            terrainSentence,
+            vegetationSentence
+          ].filter(Boolean).join(" ");
+
+          const roofGeometry = data.description.roofGeometry?.trim().toLowerCase();
+          const roofCovering = data.description.roofCovering?.trim();
+          const roofSentence = (roofGeometry || roofCovering)
+            ? `The ${roofGeometry || "roof"} was surfaced with ${roofCovering || "roof covering"}.`
+            : "";
+          const shingleLength = data.description.shingleLength?.trim();
+          const shingleExposure = data.description.shingleExposure?.trim();
+          const shingleSentence = shingleLength
+            ? `Roof shingles were ${shingleLength} in length${shingleExposure ? ` and secured with nails providing ${shingleExposure} of exposure` : ""}.`
+            : shingleExposure
+              ? `Roof shingles provided ${shingleExposure} of exposure.`
+              : "";
+          const ridgeWidth = data.description.ridgeWidth?.trim();
+          const ridgeExposure = data.description.ridgeExposure?.trim();
+          const ridgeSentence = ridgeWidth
+            ? `Ridge shingles were ${ridgeWidth} wide${ridgeExposure ? ` and were installed with ${ridgeExposure} of exposure` : ""}.`
+            : ridgeExposure
+              ? `Ridge shingles were installed with ${ridgeExposure} of exposure.`
+              : "";
+          const roofSlopes = data.description.roofSlopes?.trim();
+          const slopeSentence = roofSlopes ? `Roof sections were sloped ${roofSlopes}.` : "";
+          const guttersSentence = describeGutters(data.description.guttersPresent, data.description.downspoutsPresent);
+          const roofAppurtenances = listWithAnd(data.description.roofAppurtenances);
+          const appurtenanceSentence = roofAppurtenances
+            ? `Roof appurtenances included ${roofAppurtenances}.`
+            : "";
+          const paragraph2 = [
+            roofSentence,
+            shingleSentence,
+            ridgeSentence,
+            slopeSentence,
+            guttersSentence,
+            appurtenanceSentence
+          ].filter(Boolean).join(" ");
+
+          const eagleView = data.description.eagleView?.trim().toLowerCase() === "yes";
+          const roofArea = data.description.roofArea?.trim();
+          const attachmentLetter = data.description.attachmentLetter?.trim();
+          const eagleSentence = eagleView
+            ? "We obtained a report for the roof geometry, based on aerial photogrammetry, from EagleView that contains estimates of the roof dimensions."
+            : "";
+          const roofAreaSentence = roofArea
+            ? `The${eagleView ? " EagleView calculated" : ""} roof area of the residence was ${roofArea}.`
+            : "";
+          const attachmentSentence = attachmentLetter
+            ? `Refer to Attachment ${attachmentLetter} – EagleView.`
+            : "";
+          const paragraph3 = [eagleSentence, roofAreaSentence, attachmentSentence].filter(Boolean).join(" ");
+
+          return [paragraph1, paragraph2, paragraph3].filter(Boolean).join("\n\n");
+        };
 
         const collectTsPhotos = (ts) => {
           const photos = [];
@@ -3727,8 +3915,10 @@ const loadPdfJs = () => {
           `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
           `Wind Observations (${pageItems.filter(i => i.type === "wind").length})`,
           `Appurtenances + Downspouts (${pageItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
-          `Observations (${pageItems.filter(i => i.type === "obs").length})`
+          `Observations (${pageItems.filter(i => i.type === "obs").length})`,
+          "Report Notes"
         ];
+        const reportNotesDescription = buildReportNotesDescription(reportData, residenceName, frontFaces);
 
         const roofPhotoCount = roofPhotoSections.reduce(
           (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
@@ -6390,6 +6580,14 @@ const loadPdfJs = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Report Notes</h3>
+                <div className="lbl" style={{marginBottom:6}}>Description</div>
+                <div className="printBlock">{formatBlock(reportNotesDescription)}</div>
               </div>
             </div>
           </div>
