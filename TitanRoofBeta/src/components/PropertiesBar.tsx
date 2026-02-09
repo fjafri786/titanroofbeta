@@ -17,6 +17,8 @@ interface PropertiesBarProps {
   onSaveAs: () => void;
   onOpen: () => void;
   onExport: () => void;
+  lastSavedAt: { source: string; time: string } | null;
+  exportDisabled?: boolean;
   toolbarCollapsed: boolean;
   onToolbarToggle: () => void;
   isMobile: boolean;
@@ -41,6 +43,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onSaveAs,
   onOpen,
   onExport,
+  lastSavedAt,
+  exportDisabled = false,
   toolbarCollapsed,
   onToolbarToggle,
   isMobile,
@@ -100,9 +104,16 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             <button className="hdrBtn ghost" type="button" onClick={onOpen}>
               Open
             </button>
-            <button className="hdrBtn ghost" type="button" onClick={onExport}>
-              Export
+            <button
+              className="hdrBtn ghost"
+              type="button"
+              onClick={onExport}
+              disabled={exportDisabled}
+              title={exportDisabled ? "Export is coming soon." : "Export"}
+            >
+              {exportDisabled ? "Export (soon)" : "Export"}
             </button>
+            {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
           </div>
           <div className="modeToggle" role="tablist" aria-label="View mode" data-active={viewMode}>
             <button
