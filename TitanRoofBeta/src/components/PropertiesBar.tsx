@@ -109,9 +109,9 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
               type="button"
               onClick={onExport}
               disabled={exportDisabled}
-              title={exportDisabled ? "Export is coming soon." : "Export"}
+              title="Export"
             >
-              {exportDisabled ? "Export (soon)" : "Export"}
+              Export
             </button>
             {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
           </div>
