@@ -527,7 +527,7 @@ const loadPdfJs = () => {
         const [passwordError, setPasswordError] = useState("");
 
         // Drag states:
-        // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
+        // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'obs-arrow-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
         const [drag, setDrag] = useState(null);
 
         // counters
@@ -653,6 +653,7 @@ const loadPdfJs = () => {
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
         const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
+        const [dashFocusDir, setDashFocusDir] = useState(null);
         const [photoSectionsOpen, setPhotoSectionsOpen] = useState({});
 
         const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
@@ -911,6 +912,7 @@ const loadPdfJs = () => {
             data.kind = data.kind || (data.points?.length ? "area" : "pin");
             data.label = data.label || "";
             data.arrowType = data.arrowType || "triangle";
+            data.arrowLabelPosition = data.arrowLabelPosition || "end";
           }
           return { ...it, type: nextType, name: nextName, data, pageId: it.pageId || fallbackPageId };
         };
@@ -995,7 +997,7 @@ const loadPdfJs = () => {
           setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
         }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
 
-        const SAVE_NOTICE_MS = 12000;
+        const SAVE_NOTICE_MS = 180000;
         const saveNoticeTimeoutRef = useRef(null);
         const [saveNotice, setSaveNotice] = useState(null);
 
@@ -1028,8 +1030,8 @@ const loadPdfJs = () => {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.2.1 Beta",
-            version: "4.2.1",
+            app: "TitanRoof 4.2.2 Beta",
+            version: "4.2.2",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1529,6 +1531,26 @@ const loadPdfJs = () => {
           return stats;
         }, [pageItems]);
 
+        const dashFocusData = useMemo(() => {
+          if(!dashFocusDir) return null;
+          const tsItems = pageItems.filter(item => item.type === "ts" && item.data.dir === dashFocusDir);
+          const windItems = pageItems.filter(item => item.type === "wind" && item.data.dir === dashFocusDir);
+          let maxBruise = null;
+          let maxBruiseSize = 0;
+          let maxBruiseItem = null;
+          tsItems.forEach(ts => {
+            (ts.data.bruises || []).forEach(b => {
+              const size = parseSize(b.size);
+              if(size > maxBruiseSize){
+                maxBruiseSize = size;
+                maxBruise = b;
+                maxBruiseItem = ts;
+              }
+            });
+          });
+          return { tsItems, windItems, maxBruise, maxBruiseSize, maxBruiseItem };
+        }, [dashFocusDir, pageItems]);
+
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
             reportData.project.projectName &&
@@ -1649,7 +1671,8 @@ const loadPdfJs = () => {
               points: pos?.points || null,
               kind: options.kind || "pin",
               label: "",
-              arrowType: "triangle"
+              arrowType: "triangle",
+              arrowLabelPosition: "end"
             };
           }
 
@@ -2137,16 +2160,28 @@ const loadPdfJs = () => {
         // === HIT TEST ===
         const findHit = (norm) => {
           const sel = pageItems.find(i => i.id === selectedId && (
-            i.type === "ts" || (i.type === "obs" && i.data.kind === "area" && i.data.points?.length)
+            i.type === "ts"
+            || (i.type === "obs" && i.data.kind === "area" && i.data.points?.length)
+            || (i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2)
           ));
           if(sel && !sel.data.locked){
             const pts = sel.data.points || [];
             const rr = 0.016;
-            for(let idx=0; idx<pts.length; idx++){
-              const h = pts[idx];
-              const dist = Math.hypot(h.x - norm.x, h.y - norm.y);
-              if(dist < rr){
-                return { kind:"poly-handle", id: sel.id, pointIndex: idx };
+            if(sel.type === "obs" && sel.data.kind === "arrow" && pts.length === 2){
+              for(let idx=0; idx<pts.length; idx++){
+                const h = pts[idx];
+                const dist = Math.hypot(h.x - norm.x, h.y - norm.y);
+                if(dist < rr){
+                  return { kind:"arrow-handle", id: sel.id, pointIndex: idx };
+                }
+              }
+            } else {
+              for(let idx=0; idx<pts.length; idx++){
+                const h = pts[idx];
+                const dist = Math.hypot(h.x - norm.x, h.y - norm.y);
+                if(dist < rr){
+                  return { kind:"poly-handle", id: sel.id, pointIndex: idx };
+                }
               }
             }
           }
@@ -2225,6 +2260,10 @@ const loadPdfJs = () => {
                 setDrag({ mode:"obs-point", id: it.id, pointIndex: hit.pointIndex });
                 return;
               }
+            }
+            if(hit.kind === "arrow-handle" && !it.data.locked && it.type === "obs" && it.data.kind === "arrow"){
+              setDrag({ mode:"obs-arrow-point", id: it.id, pointIndex: hit.pointIndex });
+              return;
             }
 
             if(it.type === "ts" && !it.data.locked){
@@ -2388,6 +2427,16 @@ const loadPdfJs = () => {
               updateObsPoints(drag.id, pts);
             }
           }
+          if(drag.mode === "obs-arrow-point"){
+            e.preventDefault();
+            const it = items.find(x => x.id === drag.id);
+            if(!it) return;
+            const pts = (it.data.points||[]).map(p => ({...p}));
+            if(pts[drag.pointIndex]){
+              pts[drag.pointIndex] = { x: clamp(norm.x, 0, 1), y: clamp(norm.y, 0, 1) };
+              updateObsPoints(drag.id, pts);
+            }
+          }
         };
 
         const onPointerUp = (e) => {
@@ -2445,10 +2494,29 @@ const loadPdfJs = () => {
               setSelectedId(it.id);
               setPanelView("props");
             } else if(start){
-              const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
-              setItems(prev => [...prev, it]);
-              setSelectedId(it.id);
-              setPanelView("props");
+              if(obsTool === "poly"){
+                const size = 0.03;
+                const half = size / 2;
+                const x1 = clamp(start.x - half, 0, 1);
+                const y1 = clamp(start.y - half, 0, 1);
+                const x2 = clamp(start.x + half, 0, 1);
+                const y2 = clamp(start.y + half, 0, 1);
+                const points = [
+                  { x:x1, y:y1 },
+                  { x:x2, y:y1 },
+                  { x:x2, y:y2 },
+                  { x:x1, y:y2 }
+                ];
+                const it = createItem("obs", { points }, { kind: "area" });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              } else {
+                const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              }
             }
           }
 
@@ -2648,8 +2716,13 @@ const loadPdfJs = () => {
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
           };
           const labelOffset = 16;
-          const labelX = bx + Math.cos(angle) * labelOffset;
-          const labelY = by + Math.sin(angle) * labelOffset;
+          const labelPosition = obs.data.arrowLabelPosition || "end";
+          const isLabelStart = labelPosition === "start";
+          const labelAngle = isLabelStart ? angle + Math.PI : angle;
+          const labelAnchorX = isLabelStart ? ax : bx;
+          const labelAnchorY = isLabelStart ? ay : by;
+          const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
+          const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
           return (
             <g key={obs.id}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={isSel ? 3 : 2} />
@@ -2659,6 +2732,14 @@ const loadPdfJs = () => {
                 <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
                   {obs.data.label}
                 </text>
+              )}
+              {isSel && !obs.data.locked && (
+                <>
+                  <circle className="handleObs" cx={ax} cy={ay} r="7" />
+                  <circle className="handleObsDot" cx={ax} cy={ay} r="2.5" />
+                  <circle className="handleObs" cx={bx} cy={by} r="7" />
+                  <circle className="handleObsDot" cx={bx} cy={by} r="2.5" />
+                </>
               )}
             </g>
           );
@@ -2706,8 +2787,13 @@ const loadPdfJs = () => {
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
           };
           const labelOffset = 16;
-          const labelX = bx + Math.cos(angle) * labelOffset;
-          const labelY = by + Math.sin(angle) * labelOffset;
+          const labelPosition = obs.data.arrowLabelPosition || "end";
+          const isLabelStart = labelPosition === "start";
+          const labelAngle = isLabelStart ? angle + Math.PI : angle;
+          const labelAnchorX = isLabelStart ? ax : bx;
+          const labelAnchorY = isLabelStart ? ay : by;
+          const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
+          const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
           return (
             <g key={`print-${obs.id}`}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={2} />
@@ -2731,8 +2817,19 @@ const loadPdfJs = () => {
             return { bg:"var(--c-ds)", label: String(i.data.index || "?"), radius:"14px" };
           }
           if(i.type === "wind"){
-            const count = (i.data.creasedCount || 0) + (i.data.tornMissingCount || 0);
-            return { bg:"var(--c-wind)", label: count > 1 ? `W${count}` : "W", radius:"999px" };
+            const creased = i.data.creasedCount || 0;
+            const torn = i.data.tornMissingCount || 0;
+            const lines = [];
+            if(creased > 0 || (creased === 0 && torn === 0)) lines.push({ key: "c", text: `C${creased}` });
+            if(torn > 0) lines.push({ key: "t", text: `T${torn}` });
+            const windLabel = (
+              <div className={`windMarker${lines.length > 1 ? " dual" : " single"}`}>
+                {lines.map(line => (
+                  <div className="windMarkerLine" key={line.key}>{line.text}</div>
+                ))}
+              </div>
+            );
+            return { bg:"var(--c-wind)", label: windLabel, radius:"999px" };
           }
           if(i.type === "obs"){
             return { bg:"var(--c-obs)", label:(i.data.code||"OB").substring(0,2), radius:"999px" };
@@ -3163,7 +3260,7 @@ const loadPdfJs = () => {
           setMobileMenuOpen(false);
         };
 
-        const exportDisabled = true;
+        const exportDisabled = false;
 
         const headerContent = (
           <PropertiesBar
@@ -3608,7 +3705,7 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2.1" />
+          <TopBar label="TitanRoof Beta v4.2.2" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -3626,7 +3723,7 @@ const loadPdfJs = () => {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.2.1 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.2.2 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -3954,7 +4051,7 @@ const loadPdfJs = () => {
                       return (
                         <div
                           key={i.id}
-                          className="marker"
+                          className={`marker${i.type === "wind" ? " markerWind" : ""}`}
                           style={{
                             left: i.x * sheetWidth,
                             top: i.y * sheetHeight,
@@ -4071,7 +4168,12 @@ const loadPdfJs = () => {
                         {WIND_DIRS.map(dir => {
                           const d = dashboard[dir];
                           return (
-                            <div className="dashSummaryCard" key={`summary-${dir}`}>
+                            <button
+                              type="button"
+                              className={`dashSummaryCard${dashFocusDir === dir ? " active" : ""}`}
+                              key={`summary-${dir}`}
+                              onClick={() => setDashFocusDir(dir)}
+                            >
                               <div className="dashDir">{dir}</div>
                               <div className="dashStatRow">
                                 <span>Hits</span>
@@ -4087,7 +4189,7 @@ const loadPdfJs = () => {
                                   {d.wind.creased}/{d.wind.torn_missing}
                                 </strong>
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -4124,6 +4226,85 @@ const loadPdfJs = () => {
                       </div>
                       )}
                     </div>
+                    {dashFocusData && (
+                      <div className="dashCompactSection focus">
+                        <div className="dashFocusHeader">
+                          <div>
+                            <div className="dashCompactTitle">Focus: {dashFocusDir}</div>
+                            <div className="dashFocusSubtitle">Click a card to highlight on the diagram.</div>
+                          </div>
+                          <button className="dashFocusClear" type="button" onClick={() => setDashFocusDir(null)}>
+                            Clear
+                          </button>
+                        </div>
+                        <div className="dashFocusGrid">
+                          <div className="dashFocusCard">
+                            <div className="dashFocusCardTitle">Largest hail size</div>
+                            {dashFocusData.maxBruise ? (
+                              <button
+                                className="dashFocusItem"
+                                type="button"
+                                onClick={() => dashFocusData.maxBruiseItem && selectItemFromList(dashFocusData.maxBruiseItem.id)}
+                              >
+                                {dashFocusData.maxBruise.photo?.url ? (
+                                  <img
+                                    className="dashThumb"
+                                    src={dashFocusData.maxBruise.photo.url}
+                                    alt="Largest hail size"
+                                  />
+                                ) : (
+                                  <div className="dashThumb placeholder">No photo</div>
+                                )}
+                                <div className="dashFocusMeta">
+                                  <div className="dashFocusPrimary">
+                                    {dashFocusData.maxBruise.size ? `${dashFocusData.maxBruise.size}"` : "—"}
+                                  </div>
+                                  <div className="dashFocusSecondary">{dashFocusData.maxBruiseItem?.name || "Test Square"}</div>
+                                </div>
+                              </button>
+                            ) : (
+                              <div className="dashFocusEmpty">No hail hits recorded for this direction.</div>
+                            )}
+                          </div>
+                          <div className="dashFocusCard">
+                            <div className="dashFocusCardTitle">Wind items</div>
+                            {dashFocusData.windItems.length ? (
+                              <div className="dashWindList">
+                                {dashFocusData.windItems.map(wind => (
+                                  <button
+                                    className="dashWindItem"
+                                    type="button"
+                                    key={wind.id}
+                                    onClick={() => selectItemFromList(wind.id)}
+                                  >
+                                    <div className="dashWindMeta">
+                                      <div className="dashWindName">{wind.name}</div>
+                                      <div className="dashWindCounts">
+                                        C{wind.data.creasedCount || 0} • T{wind.data.tornMissingCount || 0}
+                                      </div>
+                                    </div>
+                                    <div className="dashWindThumbs">
+                                      {wind.data.creasedPhoto?.url ? (
+                                        <img className="dashThumb" src={wind.data.creasedPhoto.url} alt="Creased wind photo" />
+                                      ) : (
+                                        <div className="dashThumb placeholder">No creased</div>
+                                      )}
+                                      {wind.data.tornMissingPhoto?.url ? (
+                                        <img className="dashThumb" src={wind.data.tornMissingPhoto.url} alt="Torn wind photo" />
+                                      ) : (
+                                        <div className="dashThumb placeholder">No torn</div>
+                                      )}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="dashFocusEmpty">No wind items for this direction.</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -4646,12 +4827,31 @@ const loadPdfJs = () => {
                               <>
                                 <div style={{marginBottom:10}}>
                                   <div className="lbl">Arrow Label</div>
-                                  <input
-                                    className="inp"
-                                    value={activeItem.data.label}
-                                    onChange={(e)=>updateItemData("label", e.target.value)}
-                                    placeholder="e.g., Front entry, garage impact"
-                                  />
+                                  <div className="row">
+                                    <input
+                                      className="inp"
+                                      style={{flex:1}}
+                                      value={activeItem.data.label}
+                                      onChange={(e)=>updateItemData("label", e.target.value)}
+                                      placeholder="e.g., Front entry, garage impact"
+                                    />
+                                    <div className="segToggle">
+                                      <button
+                                        className={`segBtn${(activeItem.data.arrowLabelPosition || "end") === "start" ? " active" : ""}`}
+                                        type="button"
+                                        onClick={() => updateItemData("arrowLabelPosition", "start")}
+                                      >
+                                        Start
+                                      </button>
+                                      <button
+                                        className={`segBtn${(activeItem.data.arrowLabelPosition || "end") === "end" ? " active" : ""}`}
+                                        type="button"
+                                        onClick={() => updateItemData("arrowLabelPosition", "end")}
+                                      >
+                                        End
+                                      </button>
+                                    </div>
+                                  </div>
                                 </div>
                                 <div style={{marginBottom:10}}>
                                   <div className="lbl">Arrow End</div>
@@ -5364,7 +5564,7 @@ const loadPdfJs = () => {
                         Open
                       </button>
                       <button className="btn" type="button" disabled={exportDisabled} onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
-                        {exportDisabled ? "Export (soon)" : "Export"}
+                        Export
                       </button>
                     </div>
                     {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
@@ -5471,7 +5671,7 @@ const loadPdfJs = () => {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.2.1</div>
+                <div className="printTitleHero">Titan Roof Version 4.2.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
                 <div className="printMetaGrid">
@@ -5710,7 +5910,7 @@ const loadPdfJs = () => {
                     return (
                       <div
                         key={`print-marker-${i.id}`}
-                        className="marker"
+                        className={`marker${i.type === "wind" ? " markerWind" : ""}`}
                         style={{
                           left: `${i.x * 100}%`,
                           top: `${i.y * 100}%`,
