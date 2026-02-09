@@ -1727,11 +1727,15 @@
       }
       .segToggle{
         display:inline-flex;
-        width:120px;
+        width:auto;
         border-radius:10px;
         overflow:hidden;
         border:1px solid rgba(148,163,184,0.35);
         background: rgba(248,250,252,0.9);
+      }
+      .segToggle.compact{
+        width:140px;
+        flex:0 0 140px;
       }
       .segBtn{
         flex:1;
@@ -2094,6 +2098,12 @@
         display:flex;
         flex-direction:column;
         gap:6px;
+        border:0;
+        background: transparent;
+        padding:0;
+        text-align:left;
+        color: inherit;
+        cursor:pointer;
       }
       .dashPhotoImg{
         width:100%;
