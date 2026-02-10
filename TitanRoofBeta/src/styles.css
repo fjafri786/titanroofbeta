@@ -2150,7 +2150,7 @@
       .reportView{
         display:flex;
         flex-direction:column;
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height));
+        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
         height: 100vh;
         height: 100dvh;
         background: linear-gradient(180deg, rgba(14,165,233,0.12), rgba(139,92,246,0.14) 55%, rgba(245,247,251,1) 100%);
@@ -2229,7 +2229,7 @@
       .photosView{
         display:flex;
         flex-direction:column;
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height));
+        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
         height: 100vh;
         height: 100dvh;
         background: linear-gradient(180deg, rgba(14,165,233,0.08), rgba(59,130,246,0.08) 55%, rgba(245,247,251,1) 100%);

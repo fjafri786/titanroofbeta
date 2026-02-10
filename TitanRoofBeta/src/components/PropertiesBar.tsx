@@ -59,7 +59,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
       <div className="propertiesLeft">
         <div className="propertiesInfo">
           <div className="propertiesTitleRow">
-            <div className="propertiesTitle">{residenceName}</div>
+            <div className="propertiesTitle">{residenceName || "Project Name"}</div>
             {!isMobile && (
               <button
                 className="hdrBtn iconOnly editInline"

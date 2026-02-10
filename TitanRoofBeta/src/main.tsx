@@ -682,7 +682,7 @@ const loadPdfJs = () => {
 
         // Header data (Smith Residence / roof line / front faces)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
-        const [residenceName, setResidenceName] = useState("Enter Name");
+        const [residenceName, setResidenceName] = useState("");
         const [frontFaces, setFrontFaces] = useState("North"); // display "Primary facing direction: North"
         const [viewMode, setViewMode] = useState("diagram");
         const [reportTab, setReportTab] = useState("project");
@@ -753,6 +753,10 @@ const loadPdfJs = () => {
               [field]: value
             }
           }));
+        };
+        const updateProjectName = (value) => {
+          setResidenceName(value);
+          updateReportSection("project", "projectName", value);
         };
         const toggleReportList = (section, field, value) => {
           setReportData(prev => {
@@ -1051,7 +1055,8 @@ const loadPdfJs = () => {
 
         const applySnapshot = useCallback((parsed, source = "import") => {
           if(!parsed?.roof) return;
-          setResidenceName(parsed.residenceName || "Enter Name");
+          const restoredProjectName = parsed.residenceName || parsed.reportData?.project?.projectName || "";
+          setResidenceName(restoredProjectName);
           setFrontFaces(parsed.frontFaces || "North");
           setRoof(prev => ({
             ...prev,
@@ -3944,7 +3949,7 @@ const loadPdfJs = () => {
             <div className="rowTop" style={{marginBottom:10}}>
               <div style={{flex:1}}>
                 <div className="lbl">Residence / Property</div>
-                <input className="inp headerInput" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
+                <input className="inp headerInput" value={residenceName} onChange={(e)=>updateProjectName(e.target.value)} placeholder="Enter project name" />
               </div>
               <div style={{flex:1}}>
                 <div className="lbl">Primary Facing Direction</div>
@@ -3958,6 +3963,43 @@ const loadPdfJs = () => {
                   <option value="Southeast">Southeast</option>
                   <option value="Southwest">Southwest</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="reportCard" style={{marginBottom:10}}>
+              <div className="reportSectionTitle">Project Information</div>
+              <div className="reportGrid">
+                <div>
+                  <div className="lbl">Report / Claim / Job #</div>
+                  <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateReportSection("project", "reportNumber", e.target.value)} placeholder="Enter number" />
+                </div>
+                <div>
+                  <div className="lbl">Property Address</div>
+                  <input className="inp" value={reportData.project.address} onChange={(e)=>updateReportSection("project", "address", e.target.value)} placeholder="Street address" />
+                </div>
+                <div>
+                  <div className="lbl">City</div>
+                  <input className="inp" value={reportData.project.city} onChange={(e)=>updateReportSection("project", "city", e.target.value)} placeholder="City" />
+                </div>
+                <div>
+                  <div className="lbl">State</div>
+                  <input className="inp" value={reportData.project.state} onChange={(e)=>updateReportSection("project", "state", e.target.value)} />
+                </div>
+                <div>
+                  <div className="lbl">ZIP</div>
+                  <input className="inp" value={reportData.project.zip} onChange={(e)=>updateReportSection("project", "zip", e.target.value)} placeholder="Zip" />
+                </div>
+                <div>
+                  <div className="lbl">Inspection Date</div>
+                  <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
+                </div>
+                <div>
+                  <div className="lbl">General Orientation</div>
+                  <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
+                    <option value="">Select</option>
+                    {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -5818,7 +5860,7 @@ const loadPdfJs = () => {
                       </div>
                       <div>
                         <div className="lbl">Project Name</div>
-                        <input className="inp" value={reportData.project.projectName} onChange={(e)=>updateReportSection("project", "projectName", e.target.value)} placeholder="Morris residence" />
+                        <input className="inp" value={residenceName} onChange={(e)=>updateProjectName(e.target.value)} placeholder="Morris residence" />
                       </div>
                       <div>
                         <div className="lbl">Property Address</div>
