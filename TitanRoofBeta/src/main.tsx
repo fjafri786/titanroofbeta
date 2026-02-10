@@ -151,6 +151,125 @@ const loadPdfJs = () => {
           photos: []
         }
       }), {});
+      const buildReportDefaults = () => ({
+        project: {
+          reportNumber: "",
+          projectName: "",
+          address: "",
+          city: "",
+          state: "Texas",
+          zip: "",
+          inspectionDate: "",
+          startTime: "",
+          endTime: "",
+          orientation: "",
+          parties: []
+        },
+        description: {
+          occupancy: "",
+          stories: "",
+          framing: "",
+          foundation: "",
+          exteriorFinishes: [],
+          trimComponents: [],
+          windowType: "",
+          windowScreens: "",
+          garagePresent: "",
+          garageBays: "",
+          garageDoors: "",
+          garageDoorMaterial: "",
+          garageElevation: "",
+          terrain: "",
+          vegetation: "",
+          roofGeometry: "",
+          roofCovering: "",
+          shingleLength: "",
+          shingleExposure: "",
+          ridgeWidth: "",
+          ridgeExposure: "",
+          primarySlope: "",
+          additionalSlopes: [],
+          guttersPresent: "",
+          downspoutsPresent: "",
+          roofAppurtenances: [],
+          eagleView: "",
+          roofArea: "",
+          attachmentLetter: ""
+        },
+        background: {
+          dateOfLoss: "",
+          source: "",
+          concerns: [],
+          notes: "",
+          accessObtained: "",
+          limitations: []
+        },
+        writer: {
+          letterhead: "",
+          attention: "",
+          reference: "",
+          subject: "",
+          propertyAddress: "",
+          clientFile: "",
+          haagFile: "",
+          introduction: "",
+          narrative: "",
+          description: "",
+          background: "",
+          inspection: ""
+        },
+        inspection: {
+          performed: "",
+          components: buildInspectionDefaults()
+        }
+      });
+      const normalizeList = (value) => Array.isArray(value) ? value : [];
+      const normalizeParties = (parties) => normalizeList(parties).map(person => ({
+        id: person?.id || uid(),
+        name: person?.name || "",
+        role: person?.role || "",
+        company: person?.company || "",
+        contact: person?.contact || ""
+      }));
+      const normalizeReportData = (reportData) => {
+        const defaults = buildReportDefaults();
+        const source = reportData || {};
+        return {
+          ...defaults,
+          ...source,
+          project: {
+            ...defaults.project,
+            ...(source.project || {}),
+            parties: normalizeParties(source.project?.parties)
+          },
+          description: {
+            ...defaults.description,
+            ...(source.description || {}),
+            exteriorFinishes: normalizeList(source.description?.exteriorFinishes),
+            trimComponents: normalizeList(source.description?.trimComponents),
+            additionalSlopes: normalizeList(source.description?.additionalSlopes),
+            roofAppurtenances: normalizeList(source.description?.roofAppurtenances)
+          },
+          background: {
+            ...defaults.background,
+            ...(source.background || {}),
+            concerns: normalizeList(source.background?.concerns),
+            limitations: normalizeList(source.background?.limitations)
+          },
+          writer: {
+            ...defaults.writer,
+            ...(source.writer || {})
+          },
+          inspection: {
+            ...defaults.inspection,
+            ...(source.inspection || {}),
+            components: {
+              ...defaults.inspection.components,
+              ...(source.inspection?.components || {})
+            }
+          }
+        };
+      };
 
       function parseSize(s){
         if(!s) return 0;
@@ -551,78 +670,7 @@ const loadPdfJs = () => {
         const [viewMode, setViewMode] = useState("diagram");
         const [reportTab, setReportTab] = useState("project");
         const [diagramSource, setDiagramSource] = useState("upload");
-        const [reportData, setReportData] = useState({
-          project: {
-            reportNumber: "",
-            projectName: "",
-            address: "",
-            city: "",
-            state: "Texas",
-            zip: "",
-            inspectionDate: "",
-            startTime: "",
-            endTime: "",
-            orientation: "",
-            parties: []
-          },
-          description: {
-            occupancy: "",
-            stories: "",
-            framing: "",
-            foundation: "",
-            exteriorFinishes: [],
-            trimComponents: [],
-            windowType: "",
-            windowScreens: "",
-            garagePresent: "",
-            garageBays: "",
-            garageDoors: "",
-            garageDoorMaterial: "",
-            garageElevation: "",
-            terrain: "",
-            vegetation: "",
-            roofGeometry: "",
-            roofCovering: "",
-            shingleLength: "",
-            shingleExposure: "",
-            ridgeWidth: "",
-            ridgeExposure: "",
-            primarySlope: "",
-            additionalSlopes: [],
-            guttersPresent: "",
-            downspoutsPresent: "",
-            roofAppurtenances: [],
-            eagleView: "",
-            roofArea: "",
-            attachmentLetter: ""
-          },
-          background: {
-            dateOfLoss: "",
-            source: "",
-            concerns: [],
-            notes: "",
-            accessObtained: "",
-            limitations: []
-          },
-          writer: {
-            letterhead: "",
-            attention: "",
-            reference: "",
-            subject: "",
-            propertyAddress: "",
-            clientFile: "",
-            haagFile: "",
-            introduction: "",
-            narrative: "",
-            description: "",
-            background: "",
-            inspection: ""
-          },
-          inspection: {
-            performed: "",
-            components: buildInspectionDefaults()
-          }
-        });
+        const [reportData, setReportData] = useState(() => buildReportDefaults());
         const [exteriorPhotos, setExteriorPhotos] = useState([]);
 
         // Roof properties
@@ -979,18 +1027,7 @@ const loadPdfJs = () => {
           const fallbackPageId = parsed.activePageId || revivedPages[0]?.id;
           setActivePageId(fallbackPageId);
           if(parsed.reportData){
-            setReportData(prev => ({
-              ...prev,
-              ...parsed.reportData,
-              inspection: {
-                ...prev.inspection,
-                ...parsed.reportData.inspection,
-                components: {
-                  ...buildInspectionDefaults(),
-                  ...(parsed.reportData.inspection?.components || {})
-                }
-              }
-            }));
+            setReportData(normalizeReportData(parsed.reportData));
           }
           if(parsed.exteriorPhotos){
             setExteriorPhotos(reviveExteriorPhotos(parsed.exteriorPhotos));
@@ -1522,7 +1559,7 @@ const loadPdfJs = () => {
 
           pageItems.forEach(item => {
             if(item.type === "ts"){
-              const d = item.data.dir;
+              const d = item.data?.dir;
               if(!stats[d]) return;
               stats[d].tsHits += (item.data.bruises || []).length;
               (item.data.bruises||[]).forEach(b => {
@@ -1532,7 +1569,7 @@ const loadPdfJs = () => {
             }
 
             if(item.type === "wind"){
-              const d = item.data.dir;
+              const d = item.data?.dir;
               if(!stats[d]) return;
               stats[d].wind.creased += (item.data.creasedCount || 0);
               stats[d].wind.torn_missing += (item.data.tornMissingCount || 0);
@@ -1540,17 +1577,17 @@ const loadPdfJs = () => {
 
             // APT/DS hail size dashboard (secondary)
             if(item.type === "apt"){
-              const d = item.data.dir;
+              const d = item.data?.dir;
               if(!stats[d]) return;
-              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry.size));
+              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry?.size));
               const mx = sizes.length ? Math.max(...sizes) : 0;
               if(mx > stats[d].aptMax) stats[d].aptMax = mx;
             }
 
             if(item.type === "ds"){
-              const d = item.data.dir;
+              const d = item.data?.dir;
               if(!stats[d]) return;
-              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry.size));
+              const sizes = (item.data.damageEntries || []).map(entry => parseSize(entry?.size));
               const mx = sizes.length ? Math.max(...sizes) : 0;
               if(mx > stats[d].dsMax) stats[d].dsMax = mx;
             }
