@@ -40,7 +40,16 @@ const loadPdfJs = () => {
 
       const SIZES = ["1/8", "1/4", "3/8", "1/2", "3/4", "1", "1.25", "1.5", "1.75", "2", "2.5", "3+"];
       const CARDINAL_DIRS = ["N", "S", "E", "W"];
-      const WIND_DIRS = ["N", "S", "E", "W", "Ridge", "Hip", "Valley"];
+      const ROOF_WIND_DIRS = ["N", "S", "E", "W", "Ridge", "Hip", "Valley"];
+      const EXTERIOR_WIND_DIRS = ["N", "S", "E", "W"];
+      const WIND_SCOPES = [
+        { key: "roof", label: "Roof" },
+        { key: "exterior", label: "Exterior" }
+      ];
+      const WIND_COMPONENTS = {
+        roof: ["Shingles", "Ridge Cap", "Hip Cap", "Valley", "Flashing", "Other Roof Component"],
+        exterior: ["Siding", "Downspout", "Gutter", "Trim", "Fascia", "Soffit", "Window Screen", "Fence", "Other Exterior Component"]
+      };
       const DAMAGE_MODES = [
         { key: "spatter", label: "Spatter" },
         { key: "dent", label: "Dent" },
@@ -1056,6 +1065,7 @@ const loadPdfJs = () => {
             data.damageEntries = (it.data.damageEntries || []).map(entry => ({
               id: entry.id || uid(),
               mode: entry.mode || "spatter",
+              dir: entry.dir || "N",
               size: entry.size || "1/4",
               photo: reviveFileObj(entry.photo)
             }));
@@ -1065,6 +1075,7 @@ const loadPdfJs = () => {
                 legacyEntries.push({
                   id: uid(),
                   mode: "spatter",
+                  dir: it.data.dir || "N",
                   size: it.data.spatter.size || "1/4",
                   photo: reviveFileObj(it.data.spatter?.photo)
                 });
@@ -1073,6 +1084,7 @@ const loadPdfJs = () => {
                 legacyEntries.push({
                   id: uid(),
                   mode: "dent",
+                  dir: it.data.dir || "N",
                   size: it.data.dent.size || "1/4",
                   photo: reviveFileObj(it.data.dent?.photo)
                 });
@@ -1101,6 +1113,12 @@ const loadPdfJs = () => {
               }
             }
             data.caption = data.caption ?? it.data.caption ?? "";
+            data.scope = data.scope || "roof";
+            const fallbackRoofComponent = data.dir === "Ridge" ? "Ridge Cap" : data.dir === "Hip" ? "Hip Cap" : data.dir === "Valley" ? "Valley" : "Shingles";
+            data.component = data.component || fallbackRoofComponent;
+            if(data.scope === "exterior" && !EXTERIOR_WIND_DIRS.includes(data.dir)){
+              data.dir = "N";
+            }
             delete data.cond;
             delete data.count;
             delete data.photo;
@@ -1749,7 +1767,7 @@ const loadPdfJs = () => {
         // === DASHBOARD STATS ===
         const dashboard = useMemo(() => {
           const stats = {};
-          WIND_DIRS.forEach(d => {
+          ROOF_WIND_DIRS.forEach(d => {
             stats[d] = {
               tsHits: 0,
               tsMaxHail: 0,
@@ -1855,21 +1873,21 @@ const loadPdfJs = () => {
               windPhotos.push({
                 itemId: wind.id,
                 url: wind.data.creasedPhoto.url,
-                caption: windCaption("creased", wind.data.dir)
+                caption: windCaption("creased", wind.data)
               });
             }
             if(wind.data.tornMissingPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
                 url: wind.data.tornMissingPhoto.url,
-                caption: windCaption("torn", wind.data.dir)
+                caption: windCaption("torn", wind.data)
               });
             }
             if(wind.data.overviewPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
                 url: wind.data.overviewPhoto.url,
-                caption: windCaption("overview", wind.data.dir)
+                caption: windCaption("overview", wind.data)
               });
             }
           });
@@ -1919,34 +1937,109 @@ const loadPdfJs = () => {
           });
         }, [pageItems]);
 
-        const inspectionParagraphsForExport = useMemo(() => {
-          return INSPECTION_PARAGRAPH_ORDER
-            .map(paragraph => {
-              const data = reportData.inspection.paragraphs?.[paragraph.key];
-              return {
-                ...paragraph,
-                include: data?.include ?? !paragraph.optional,
-                text: (data?.text || "").trim()
-              };
-            })
-            .filter(paragraph => paragraph.include && paragraph.text);
-        }, [reportData.inspection.paragraphs]);
+        const inspectionGeneratedSections = useMemo(() => {
+          const localJoinReadableList = (list = []) => {
+            if(!list.length) return "";
+            if(list.length === 1) return list[0];
+            if(list.length === 2) return `${list[0]} and ${list[1]}`;
+            return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
+          };
+          const localDirLabel = (dir = "") => ({ N: "north", S: "south", E: "east", W: "west" }[dir] || String(dir || "").toLowerCase());
+          const localComponentLabel = (item, dir) => {
+            const base = item.type === "apt"
+              ? (APT_TYPES.find(entry => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase()
+              : "downspout";
+            const direction = localDirLabel(dir || item.data?.dir);
+            return direction ? `${direction} ${base}` : base;
+          };
 
-        const inspectionAutoSummary = useMemo(() => {
-          const windCount = (dashboardSummary.totalCreased || 0) + (dashboardSummary.totalTornMissing || 0);
-          const testSquareCount = dashboardSummary.tsItems.length || 0;
-          const parts = [
-            `Paragraph order is locked to the standard inspection flow (${inspectionParagraphsForExport.length} active section${inspectionParagraphsForExport.length === 1 ? "" : "s"}).`,
-            windCount
-              ? `Diagram-linked wind observations currently include ${windCount} mapped shingle condition${windCount === 1 ? "" : "s"}.`
-              : "No mapped wind-caused shingle conditions are currently counted from the diagram.",
-            testSquareCount
-              ? `${testSquareCount} test square${testSquareCount === 1 ? " is" : "s are"} available to support hail methodology language.`
-              : "No test squares are currently mapped; add at least one to support the test-square methodology paragraph.",
-            "Use this section to keep one idea per paragraph and let the roof diagram carry counts, density, and exact locations."
+          const byDir = { N: { creased: 0, torn: 0 }, S: { creased: 0, torn: 0 }, E: { creased: 0, torn: 0 }, W: { creased: 0, torn: 0 }, Ridge: { creased: 0, torn: 0 }, Hip: { creased: 0, torn: 0 }, Valley: { creased: 0, torn: 0 } };
+          const windByScope = { roof: [], exterior: [] };
+          const hailByType = { apt: [], ds: [] };
+
+          pageItems.forEach(item => {
+            if(item.type === "wind"){
+              const dir = item.data.dir || "N";
+              if(byDir[dir]){
+                byDir[dir].creased += item.data.creasedCount || 0;
+                byDir[dir].torn += item.data.tornMissingCount || 0;
+              }
+              windByScope[item.data.scope === "exterior" ? "exterior" : "roof"].push(item);
+            }
+            if(item.type === "apt" || item.type === "ds"){
+              const entries = (item.data.damageEntries || []).filter(entry => (entry.mode || "").trim());
+              if(entries.length) hailByType[item.type].push({ item, entries });
+            }
+          });
+
+          const cardinalSummary = ["N", "S", "E", "W"].map(dir => {
+            const d = byDir[dir];
+            if(!d) return "";
+            const bits = [];
+            if(d.creased) bits.push(`${d.creased} creased`);
+            if(d.torn) bits.push(`${d.torn} torn or missing`);
+            if(!bits.length) return "";
+            return `${bits.join(" and ")} shingles on ${dir.toLowerCase()}-facing slopes`;
+          }).filter(Boolean);
+
+          const roofWindText = windByScope.roof.length
+            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing components. Diagram entries indicate ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "mapped roof wind conditions."} Roof wind conditions were plotted on the roof diagram.`
+            : "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. No roof wind-caused conditions were mapped on the diagram.";
+
+          const exteriorWindText = windByScope.exterior.length
+            ? `Exterior wind observations were also mapped for ${windByScope.exterior.length} component${windByScope.exterior.length === 1 ? "" : "s"}, including ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
+            : "No detached, loose, missing, or displaced exterior components were mapped on the diagram.";
+
+          const hailEntries = ["apt", "ds"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
+            entries.map(entry => `${entry.mode === "both" ? "spatter and dent" : entry.mode} up to ${entry.size}" on ${localComponentLabel(item, entry.dir || item.data.dir)}`)
+          )));
+
+          const hailText = hailEntries.length
+            ? `We examined exterior and roof metal components for hail indicators. Diagram entries include ${localJoinReadableList(hailEntries)}.`
+            : "We examined exterior and roof metal components for hail indicators. No hail dents or spatter marks were mapped on appurtenances or downspouts.";
+
+          const tsCount = pageItems.filter(item => item.type === "ts").length;
+          const tsBruises = pageItems.reduce((count, item) => count + (item.type === "ts" ? (item.data.bruises || []).length : 0), 0);
+          const testSquaresText = tsCount
+            ? `We examined ${tsCount} test square${tsCount === 1 ? "" : "s"} across directional slopes. ${tsBruises ? `The diagram includes ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"} within the test squares.` : "No hail bruises or punctures were mapped within the test squares."}`
+            : "No test squares were mapped on the diagram.";
+
+          return [
+            {
+              key: "general",
+              label: "General",
+              sections: [
+                { key: "scope", title: "Scope", text: "We inspected the residence roof, exterior elevations, and surrounding property for evidence of hailstone impact and wind-related conditions. Representative photographs of observed conditions are attached to this report." },
+                { key: "roofGeneral", title: "Roof general", text: "Overall, roof coverings were in fair condition with respect to age and weathering. Scuffs and surface marring commonly found on roof coverings were observed at accessible locations." }
+              ]
+            },
+            {
+              key: "exterior",
+              label: "Exterior",
+              sections: [
+                { key: "exteriorWind", title: "Wind evaluation", text: exteriorWindText },
+                { key: "exteriorHail", title: "Hail indicators", text: hailText }
+              ]
+            },
+            {
+              key: "interior",
+              label: "Interior",
+              sections: [
+                { key: "interior", title: "Interior findings", text: reportData.inspection.paragraphs?.interior?.text?.trim() || "No interior observations were documented in the diagram for this export." },
+                { key: "windRoof", title: "Roof wind findings", text: roofWindText },
+                { key: "testSquares", title: "Test squares", text: testSquaresText }
+              ]
+            }
           ];
-          return parts.join(" ");
-        }, [dashboardSummary.totalCreased, dashboardSummary.totalTornMissing, dashboardSummary.tsItems.length, inspectionParagraphsForExport.length]);
+        }, [pageItems, reportData.inspection.paragraphs?.interior?.text]);
+
+        const inspectionParagraphsForExport = useMemo(() => (
+          inspectionGeneratedSections.flatMap(group => group.sections.map(section => ({
+            key: section.key,
+            include: true,
+            text: section.text
+          }))).filter(paragraph => paragraph.text)
+        ), [inspectionGeneratedSections]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -2021,6 +2114,8 @@ const loadPdfJs = () => {
           if(type === "wind"){
             base.name = `WIND-${counts.current.wind++}`;
             base.data = {
+              scope: "roof",
+              component: "Shingles",
               dir: "N",
               locked: false,
               creasedCount: 1,
@@ -2433,7 +2528,7 @@ const loadPdfJs = () => {
 
         // APT/DS spatter/dent entries
         const addDamageEntry = (mode = "spatter") => {
-          const entry = { id: uid(), mode, size: "1/4", photo: null };
+          const entry = { id: uid(), mode, dir: "N", size: "1/4", photo: null };
           setItems(prev => prev.map(i => {
             if(i.id !== selectedId) return i;
             return {
@@ -3266,9 +3361,9 @@ const loadPdfJs = () => {
           };
           items.forEach(it => {
             if(!(it.type === "apt" || it.type === "ds")) return;
-            const dir = it.data.dir;
-            if(!base[dir]) return;
             (it.data.damageEntries || []).forEach(entry => {
+              const dir = entry.dir || it.data.dir;
+              if(!base[dir]) return;
               const size = parseSize(entry.size);
               if(entry.mode === "spatter" || entry.mode === "both"){
                 if(size > base[dir][it.type].spatter) base[dir][it.type].spatter = size;
@@ -3321,29 +3416,24 @@ const loadPdfJs = () => {
           const direction = dirLabel(dir);
           return direction ? `${titleCase(direction)} Test Square` : "Test Square";
         };
-        const windLocationLabel = (dir) => {
-          if(dir === "Ridge") return "ridge cap";
-          if(dir === "Hip") return "hip";
-          if(dir === "Valley") return "valley";
+        const windLocationLabel = (dir, scope = "roof") => {
+          if(scope === "roof"){
+            if(dir === "Ridge") return "ridge area";
+            if(dir === "Hip") return "hip area";
+            if(dir === "Valley") return "valley area";
+            const direction = dirLabel(dir);
+            return direction ? `${direction} roof slope` : "roof area";
+          }
           const direction = dirLabel(dir);
-          return direction ? `${direction} roof slope` : "roof slope";
+          return direction ? `${direction} exterior elevation` : "exterior";
         };
-        const windCaption = (kind, dir) => {
-          const location = windLocationLabel(dir);
-          if(kind === "overview") return `Overview of the ${location}`;
-          if(kind === "creased"){
-            if(dir === "Ridge") return "Creased ridge cap shingle";
-            if(dir === "Hip") return "Creased hip shingle";
-            if(dir === "Valley") return "Creased shingle at the valley";
-            return `Creased shingle at the ${location}`;
-          }
-          if(kind === "torn"){
-            if(dir === "Ridge") return "Torn or missing ridge cap shingle";
-            if(dir === "Hip") return "Torn or missing hip shingle";
-            if(dir === "Valley") return "Torn or missing shingle at the valley";
-            return `Torn or missing shingle at the ${location}`;
-          }
-          return `Wind observation at the ${location}`;
+        const windCaption = (kind, windData = {}) => {
+          const location = windLocationLabel(windData.dir, windData.scope);
+          const component = (windData.component || (windData.scope === "exterior" ? "exterior component" : "shingles")).toLowerCase();
+          if(kind === "overview") return `Overview of ${component} at the ${location}`;
+          if(kind === "creased") return `Creased ${component} at the ${location}`;
+          if(kind === "torn") return `Torn, displaced, or missing ${component} at the ${location}`;
+          return `Wind observation of ${component} at the ${location}`;
         };
         const observationLabel = (code, otherText) => {
           if(code === "OTHER") return otherText?.trim() || "Other observation";
@@ -3906,7 +3996,7 @@ const loadPdfJs = () => {
                   itemId: it.id,
                   url: it.data.overviewPhoto.url,
                   photo: it.data.overviewPhoto,
-                  caption: resolveCaption(windCaption("overview", it.data.dir), note, it.data.overviewPhoto),
+                  caption: resolveCaption(windCaption("overview", it.data), note, it.data.overviewPhoto),
                   note,
                   source: { type: it.type, itemId: it.id, field: "overviewPhoto" }
                 });
@@ -3917,7 +4007,7 @@ const loadPdfJs = () => {
                   itemId: it.id,
                   url: it.data.creasedPhoto.url,
                   photo: it.data.creasedPhoto,
-                  caption: resolveCaption(windCaption("creased", it.data.dir), note, it.data.creasedPhoto),
+                  caption: resolveCaption(windCaption("creased", it.data), note, it.data.creasedPhoto),
                   note,
                   source: { type: it.type, itemId: it.id, field: "creasedPhoto" }
                 });
@@ -3928,7 +4018,7 @@ const loadPdfJs = () => {
                   itemId: it.id,
                   url: it.data.tornMissingPhoto.url,
                   photo: it.data.tornMissingPhoto,
-                  caption: resolveCaption(windCaption("torn", it.data.dir), note, it.data.tornMissingPhoto),
+                  caption: resolveCaption(windCaption("torn", it.data), note, it.data.tornMissingPhoto),
                   note,
                   source: { type: it.type, itemId: it.id, field: "tornMissingPhoto" }
                 });
@@ -5110,7 +5200,7 @@ const loadPdfJs = () => {
                           </button>
                           {dashSectionsOpen.summary && (
                             <div className="dashSummaryGrid">
-                            {WIND_DIRS.map(dir => {
+                            {ROOF_WIND_DIRS.map(dir => {
                               const d = dashboard[dir];
                               return (
                                 <button
@@ -5577,7 +5667,7 @@ const loadPdfJs = () => {
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Damage Side</div>
+                              <div className="lbl">Location Side</div>
                               <div className="radioGrid">
                                 {CARDINAL_DIRS.map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
@@ -5604,6 +5694,9 @@ const loadPdfJs = () => {
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                                    </select>
+                                    <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateDamageEntry(entry.id, { dir: e.target.value })}>
+                                      {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
                                     </select>
                                     <select className="inp" value={entry.size} onChange={(e)=>updateDamageEntry(entry.id, { size: e.target.value })}>
                                       {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
@@ -5648,7 +5741,7 @@ const loadPdfJs = () => {
                         {activeItem.type === "ds" && (
                           <>
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Damage Side</div>
+                              <div className="lbl">Location Side</div>
                               <div className="radioGrid">
                                 {CARDINAL_DIRS.map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
@@ -5698,6 +5791,9 @@ const loadPdfJs = () => {
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
                                     </select>
+                                    <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateDamageEntry(entry.id, { dir: e.target.value })}>
+                                      {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
                                     <select className="inp" value={entry.size} onChange={(e)=>updateDamageEntry(entry.id, { size: e.target.value })}>
                                       {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
                                     </select>
@@ -5741,9 +5837,44 @@ const loadPdfJs = () => {
                         {activeItem.type === "wind" && (
                           <>
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Slope Direction</div>
+                              <div className="lbl">Area</div>
+                              <div className="radioGrid">
+                                {WIND_SCOPES.map(scope => (
+                                  <div
+                                    key={scope.key}
+                                    className={"radio " + (activeItem.data.scope===scope.key ? "active":"")}
+                                    onClick={()=>{
+                                      const nextDir = scope.key === "exterior" && !EXTERIOR_WIND_DIRS.includes(activeItem.data.dir)
+                                        ? "N"
+                                        : activeItem.data.dir;
+                                      updateItemData("scope", scope.key);
+                                      updateItemData("component", WIND_COMPONENTS[scope.key][0]);
+                                      updateItemData("dir", nextDir || "N");
+                                    }}
+                                  >
+                                    {scope.label}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Impacted Component</div>
+                              <select
+                                className="inp"
+                                value={activeItem.data.component || (activeItem.data.scope === "exterior" ? "Siding" : "Shingles")}
+                                onChange={(e)=>updateItemData("component", e.target.value)}
+                              >
+                                {(WIND_COMPONENTS[activeItem.data.scope || "roof"] || WIND_COMPONENTS.roof).map(component => (
+                                  <option key={component} value={component}>{component}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Direction</div>
                               <div className="radioGrid wrap">
-                                {WIND_DIRS.map(d => (
+                                {(activeItem.data.scope === "exterior" ? EXTERIOR_WIND_DIRS : ROOF_WIND_DIRS).map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
                                 ))}
                               </div>
@@ -6395,43 +6526,34 @@ const loadPdfJs = () => {
               {reportTab === "inspection" && (
                 <>
                   <div className="reportCard">
-                    <div className="reportSectionTitle">Inspection Export Overview</div>
-                    <div className="sectionHint" style={{marginTop:0}}>
-                      One idea per paragraph. Keep wind separate from hail, keep exterior separate from roof, and let the diagram carry counts and density.
-                    </div>
-                    <div className="reportOverviewBox">{inspectionAutoSummary}</div>
-                  </div>
-
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Inspection Narrative Builder (Attachment Export)</div>
-                    <div className="sectionHint" style={{marginTop:0}}>
-                      Paragraph order is fixed to match your most common report structure. Optional sections can be toggled on when needed.
-                    </div>
+                    <div className="reportSectionTitle">Inspection Narrative (Diagram-Synced)</div>
                     <div className="inspectionParagraphList">
-                      {INSPECTION_PARAGRAPH_ORDER.map(paragraph => {
-                        const paragraphState = reportData.inspection.paragraphs?.[paragraph.key] || { include: !paragraph.optional, text: "" };
-                        return (
-                          <details className="inspectionParagraphCard" key={paragraph.key} open>
-                            <summary>
-                              <span>{paragraph.label}</span>
-                              <label className="inspectionIncludeToggle" onClick={(event) => event.preventDefault()}>
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(paragraphState.include)}
-                                  onChange={(e) => updateInspectionParagraph(paragraph.key, "include", e.target.checked)}
-                                />
-                                Include
-                              </label>
-                            </summary>
-                            <textarea
-                              className="inp"
-                              value={paragraphState.text || ""}
-                              onChange={(e) => updateInspectionParagraph(paragraph.key, "text", e.target.value)}
-                              placeholder="Edit paragraph language for export..."
-                            />
-                          </details>
-                        );
-                      })}
+                      {inspectionGeneratedSections.map(group => (
+                        <details className="inspectionParagraphCard" key={group.key} open>
+                          <summary>
+                            <span>{group.label}</span>
+                          </summary>
+                          <div className="inspectionParagraphList" style={{marginTop:10}}>
+                            {group.sections.map(section => (
+                              <details className="inspectionParagraphCard" key={section.key}>
+                                <summary>
+                                  <span>{section.title}</span>
+                                </summary>
+                                {section.key === "interior" ? (
+                                  <textarea
+                                    className="inp"
+                                    value={reportData.inspection.paragraphs?.interior?.text || ""}
+                                    onChange={(e) => updateInspectionParagraph("interior", "text", e.target.value)}
+                                    placeholder="Optional interior findings..."
+                                  />
+                                ) : (
+                                  <textarea className="inp" value={section.text} readOnly />
+                                )}
+                              </details>
+                            ))}
+                          </div>
+                        </details>
+                      ))}
                     </div>
                   </div>
                 </>
@@ -6840,7 +6962,7 @@ const loadPdfJs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {WIND_DIRS.map(dir => (
+                    {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`print-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
                         <td>{dashboard[dir].tsHits}</td>
@@ -6910,7 +7032,7 @@ const loadPdfJs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {WIND_DIRS.map(dir => (
+                    {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`wind-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
                         <td>{dashboard[dir].wind.creased}</td>
@@ -6930,7 +7052,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.creasedPhoto}
                               alt="Creased wind photo"
-                              caption={photoCaption(composeCaption(windCaption("creased", w.data.dir), w.data.caption), w.data.creasedPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("creased", w.data), w.data.caption), w.data.creasedPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
@@ -6938,7 +7060,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.tornMissingPhoto}
                               alt="Torn or missing wind photo"
-                              caption={photoCaption(composeCaption(windCaption("torn", w.data.dir), w.data.caption), w.data.tornMissingPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("torn", w.data), w.data.caption), w.data.tornMissingPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
@@ -6946,7 +7068,7 @@ const loadPdfJs = () => {
                             <PrintPhoto
                               photo={w.data.overviewPhoto}
                               alt="Wind overview"
-                              caption={photoCaption(composeCaption(windCaption("overview", w.data.dir), w.data.caption), w.data.overviewPhoto)}
+                              caption={photoCaption(composeCaption(windCaption("overview", w.data), w.data.caption), w.data.overviewPhoto)}
                               style={{marginTop:8}}
                             />
                           )}
