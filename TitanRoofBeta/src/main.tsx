@@ -295,6 +295,7 @@ const loadPdfJs = () => {
         },
         inspection: {
           performed: "",
+          roofCondition: "fair",
           components: buildInspectionDefaults(),
           paragraphs: buildInspectionParagraphDefaults()
         }
@@ -343,6 +344,7 @@ const loadPdfJs = () => {
           inspection: {
             ...defaults.inspection,
             ...(source.inspection || {}),
+            roofCondition: source.inspection?.roofCondition || defaults.inspection.roofCondition,
             components: {
               ...defaults.inspection.components,
               ...(source.inspection?.components || {})
@@ -1869,14 +1871,14 @@ const loadPdfJs = () => {
           windItems.forEach(wind => {
             totalCreased += wind.data.creasedCount || 0;
             totalTornMissing += wind.data.tornMissingCount || 0;
-            if(wind.data.creasedPhoto?.url){
+            if(wind.data.scope !== "exterior" && wind.data.creasedPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
                 url: wind.data.creasedPhoto.url,
                 caption: windCaption("creased", wind.data)
               });
             }
-            if(wind.data.tornMissingPhoto?.url){
+            if(wind.data.scope !== "exterior" && wind.data.tornMissingPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
                 url: wind.data.tornMissingPhoto.url,
@@ -1972,6 +1974,10 @@ const loadPdfJs = () => {
             }
           });
 
+          const selectedExteriorComponents = INSPECTION_COMPONENTS
+            .filter(comp => reportData.inspection.components?.[comp.key]?.none)
+            .map(comp => comp.label.toLowerCase());
+
           const cardinalSummary = ["N", "S", "E", "W"].map(dir => {
             const d = byDir[dir];
             if(!d) return "";
@@ -1983,12 +1989,16 @@ const loadPdfJs = () => {
           }).filter(Boolean);
 
           const roofWindText = windByScope.roof.length
-            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing components. Diagram entries indicate ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "mapped roof wind conditions."} Roof wind conditions were plotted on the roof diagram.`
+            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. Diagram entries indicate ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "mapped roof wind conditions."} Roof wind conditions were plotted on the roof diagram.`
             : "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. No roof wind-caused conditions were mapped on the diagram.";
 
+          const exteriorScopeText = selectedExteriorComponents.length
+            ? localJoinReadableList(selectedExteriorComponents)
+            : "fascia, trim, siding, downspouts, and other exterior components";
+
           const exteriorWindText = windByScope.exterior.length
-            ? `Exterior wind observations were also mapped for ${windByScope.exterior.length} component${windByScope.exterior.length === 1 ? "" : "s"}, including ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
-            : "No detached, loose, missing, or displaced exterior components were mapped on the diagram.";
+            ? `We inspected the exterior elevations including ${exteriorScopeText}. Exterior wind observations were mapped for ${windByScope.exterior.length} component${windByScope.exterior.length === 1 ? "" : "s"}, including ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
+            : `We inspected the exterior elevations including ${exteriorScopeText}. We found no detached, loose, missing, or displaced exterior components.`;
 
           const hailEntries = ["apt", "ds"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
             entries.map(entry => `${entry.mode === "both" ? "spatter and dent" : entry.mode} up to ${entry.size}" on ${localComponentLabel(item, entry.dir || item.data.dir)}`)
@@ -2004,13 +2014,19 @@ const loadPdfJs = () => {
             ? `We examined ${tsCount} test square${tsCount === 1 ? "" : "s"} across directional slopes. ${tsBruises ? `The diagram includes ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"} within the test squares.` : "No hail bruises or punctures were mapped within the test squares."}`
             : "No test squares were mapped on the diagram.";
 
+          const roofCondition = reportData.inspection?.roofCondition || "fair";
+          const roofGeneralText = `We found the roof shingles to be in ${roofCondition} condition with respect to weathering. Scuff marks and surface marring commonly found on asphalt shingles were generally found along ridges, hips, and easily accessible areas.`;
+
+          const scopeName = reportData.project.projectName?.trim() || residenceName?.trim() || "residence";
+          const scopeText = `We inspected the ${scopeName} property exterior and roof components, and documented observed conditions paying particular attention to evidence of hailstone impact and wind-related conditions. Photographs of representative conditions are attached to this report.`;
+
           return [
             {
               key: "general",
               label: "General",
               sections: [
-                { key: "scope", title: "Scope", text: "We inspected the residence roof, exterior elevations, and surrounding property for evidence of hailstone impact and wind-related conditions. Representative photographs of observed conditions are attached to this report." },
-                { key: "roofGeneral", title: "Roof general", text: "Overall, roof coverings were in fair condition with respect to age and weathering. Scuffs and surface marring commonly found on roof coverings were observed at accessible locations." }
+                { key: "scope", title: "Scope", text: scopeText },
+                { key: "roofGeneral", title: "Roof general", text: roofGeneralText }
               ]
             },
             {
@@ -2023,7 +2039,7 @@ const loadPdfJs = () => {
             },
             {
               key: "interior",
-              label: "Interior",
+              label: "Interior and Roof",
               sections: [
                 { key: "interior", title: "Interior findings", text: reportData.inspection.paragraphs?.interior?.text?.trim() || "No interior observations were documented in the diagram for this export." },
                 { key: "windRoof", title: "Roof wind findings", text: roofWindText },
@@ -2031,15 +2047,18 @@ const loadPdfJs = () => {
               ]
             }
           ];
-        }, [pageItems, reportData.inspection.paragraphs?.interior?.text]);
+        }, [pageItems, reportData.inspection, reportData.project.projectName, residenceName]);
 
         const inspectionParagraphsForExport = useMemo(() => (
-          inspectionGeneratedSections.flatMap(group => group.sections.map(section => ({
-            key: section.key,
-            include: true,
-            text: section.text
-          }))).filter(paragraph => paragraph.text)
-        ), [inspectionGeneratedSections]);
+          inspectionGeneratedSections.flatMap(group => group.sections.map(section => {
+            const configured = reportData.inspection.paragraphs?.[section.key];
+            return {
+              key: section.key,
+              include: configured?.include ?? true,
+              text: configured?.text?.trim() ? configured.text : section.text
+            };
+          })).filter(paragraph => paragraph.include && paragraph.text)
+        ), [inspectionGeneratedSections, reportData.inspection.paragraphs]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -3287,6 +3306,9 @@ const loadPdfJs = () => {
             return { bg:"var(--c-ds)", label: String(i.data.index || "?"), radius:"14px" };
           }
           if(i.type === "wind"){
+            if(i.data.scope === "exterior"){
+              return { bg:"var(--c-wind)", label: "W", radius:"999px" };
+            }
             const creased = i.data.creasedCount || 0;
             const torn = i.data.tornMissingCount || 0;
             const lines = [];
@@ -5844,12 +5866,19 @@ const loadPdfJs = () => {
                                     key={scope.key}
                                     className={"radio " + (activeItem.data.scope===scope.key ? "active":"")}
                                     onClick={()=>{
-                                      const nextDir = scope.key === "exterior" && !EXTERIOR_WIND_DIRS.includes(activeItem.data.dir)
+                                      const isExterior = scope.key === "exterior";
+                                      const nextDir = isExterior && !EXTERIOR_WIND_DIRS.includes(activeItem.data.dir)
                                         ? "N"
                                         : activeItem.data.dir;
                                       updateItemData("scope", scope.key);
                                       updateItemData("component", WIND_COMPONENTS[scope.key][0]);
                                       updateItemData("dir", nextDir || "N");
+                                      if(isExterior){
+                                        updateItemData("creasedCount", 0);
+                                        updateItemData("tornMissingCount", 0);
+                                        updateItemData("creasedPhoto", null);
+                                        updateItemData("tornMissingPhoto", null);
+                                      }
                                     }}
                                   >
                                     {scope.label}
@@ -5880,71 +5909,75 @@ const loadPdfJs = () => {
                               </div>
                             </div>
 
-                            <div style={{marginBottom:10}}>
-                              <div className="lbl">Creased Count</div>
-                              <div className="row">
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("creasedCount", Math.max(0, (activeItem.data.creasedCount || 0) - 1))}
-                                >
-                                  −
-                                </button>
-                                <input
-                                  className="inp"
-                                  type="number"
-                                  min="0"
-                                  value={activeItem.data.creasedCount || 0}
-                                  onChange={(e)=>updateItemData("creasedCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                                />
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("creasedCount", (activeItem.data.creasedCount || 0) + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
+                            {activeItem.data.scope !== "exterior" && (
+                              <>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Creased Count</div>
+                                  <div className="row">
+                                    <button
+                                      className="btn"
+                                      style={{flex:"0 0 auto"}}
+                                      onClick={()=>updateItemData("creasedCount", Math.max(0, (activeItem.data.creasedCount || 0) - 1))}
+                                    >
+                                      −
+                                    </button>
+                                    <input
+                                      className="inp"
+                                      type="number"
+                                      min="0"
+                                      value={activeItem.data.creasedCount || 0}
+                                      onChange={(e)=>updateItemData("creasedCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                    />
+                                    <button
+                                      className="btn"
+                                      style={{flex:"0 0 auto"}}
+                                      onClick={()=>updateItemData("creasedCount", (activeItem.data.creasedCount || 0) + 1)}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
 
-                            <div style={{marginBottom:10}}>
-                              <div className="lbl">Torn/Missing Count</div>
-                              <div className="row">
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("tornMissingCount", Math.max(0, (activeItem.data.tornMissingCount || 0) - 1))}
-                                >
-                                  −
-                                </button>
-                                <input
-                                  className="inp"
-                                  type="number"
-                                  min="0"
-                                  value={activeItem.data.tornMissingCount || 0}
-                                  onChange={(e)=>updateItemData("tornMissingCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                                />
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("tornMissingCount", (activeItem.data.tornMissingCount || 0) + 1)}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Torn/Missing Count</div>
+                                  <div className="row">
+                                    <button
+                                      className="btn"
+                                      style={{flex:"0 0 auto"}}
+                                      onClick={()=>updateItemData("tornMissingCount", Math.max(0, (activeItem.data.tornMissingCount || 0) - 1))}
+                                    >
+                                      −
+                                    </button>
+                                    <input
+                                      className="inp"
+                                      type="number"
+                                      min="0"
+                                      value={activeItem.data.tornMissingCount || 0}
+                                      onChange={(e)=>updateItemData("tornMissingCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                    />
+                                    <button
+                                      className="btn"
+                                      style={{flex:"0 0 auto"}}
+                                      onClick={()=>updateItemData("tornMissingCount", (activeItem.data.tornMissingCount || 0) + 1)}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
 
-                            <div style={{marginBottom:10}}>
-                              <div className="lbl">Creased Photo</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("creasedPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.creasedPhoto)}
-                            </div>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Creased Photo</div>
+                                  <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("creasedPhoto", e.target.files[0])}/>
+                                  {renderFileName(activeItem.data.creasedPhoto)}
+                                </div>
 
-                            <div style={{marginBottom:10}}>
-                              <div className="lbl">Torn/Missing Photo</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("tornMissingPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.tornMissingPhoto)}
-                            </div>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Torn/Missing Photo</div>
+                                  <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("tornMissingPhoto", e.target.files[0])}/>
+                                  {renderFileName(activeItem.data.tornMissingPhoto)}
+                                </div>
+                              </>
+                            )}
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo (optional)</div>
@@ -6526,6 +6559,40 @@ const loadPdfJs = () => {
               {reportTab === "inspection" && (
                 <>
                   <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Settings</div>
+                    <div className="reportGrid">
+                      <div>
+                        <div className="lbl">Roof General Condition</div>
+                        <div className="radioGrid">
+                          {["good", "fair", "poor"].map(condition => (
+                            <div
+                              key={condition}
+                              className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
+                              onClick={() => updateReportSection("inspection", "roofCondition", condition)}
+                            >
+                              {condition.charAt(0).toUpperCase() + condition.slice(1)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="lbl">Exterior Components Inspected</div>
+                        <div className="chipList">
+                          {INSPECTION_COMPONENTS.map(component => (
+                            <div
+                              key={component.key}
+                              className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
+                              onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
+                            >
+                              {component.label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
                     <div className="reportSectionTitle">Inspection Narrative (Diagram-Synced)</div>
                     <div className="inspectionParagraphList">
                       {inspectionGeneratedSections.map(group => (
@@ -6534,23 +6601,31 @@ const loadPdfJs = () => {
                             <span>{group.label}</span>
                           </summary>
                           <div className="inspectionParagraphList" style={{marginTop:10}}>
-                            {group.sections.map(section => (
-                              <details className="inspectionParagraphCard" key={section.key}>
-                                <summary>
-                                  <span>{section.title}</span>
-                                </summary>
-                                {section.key === "interior" ? (
+                            {group.sections.map(section => {
+                              const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
+                              const paragraphText = paragraphSettings.text?.trim() ? paragraphSettings.text : section.text;
+                              return (
+                                <details className="inspectionParagraphCard" key={section.key}>
+                                  <summary>
+                                    <span>{section.title}</span>
+                                  </summary>
+                                  <label className="tiny" style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+                                    <input
+                                      type="checkbox"
+                                      checked={paragraphSettings.include ?? true}
+                                      onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
+                                    />
+                                    Include in export
+                                  </label>
                                   <textarea
                                     className="inp"
-                                    value={reportData.inspection.paragraphs?.interior?.text || ""}
-                                    onChange={(e) => updateInspectionParagraph("interior", "text", e.target.value)}
-                                    placeholder="Optional interior findings..."
+                                    value={paragraphText}
+                                    onChange={(e) => updateInspectionParagraph(section.key, "text", e.target.value)}
+                                    placeholder="Edit paragraph text..."
                                   />
-                                ) : (
-                                  <textarea className="inp" value={section.text} readOnly />
-                                )}
-                              </details>
-                            ))}
+                                </details>
+                              );
+                            })}
                           </div>
                         </details>
                       ))}
