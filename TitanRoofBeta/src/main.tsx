@@ -107,9 +107,7 @@ const loadPdfJs = () => {
       const REPORT_TABS = [
         { key: "project", label: "Project" },
         { key: "description", label: "Description" },
-        { key: "background", label: "Background" },
-        { key: "writer", label: "Report Writer" },
-        { key: "inspection", label: "Inspection" }
+        { key: "background", label: "Background" }
       ];
 
       const PARTY_ROLES = ["Homeowner", "Insured", "Contractor", "Public Adjuster", "Engineer", "Other"];
@@ -120,11 +118,10 @@ const loadPdfJs = () => {
       const TRIM_COMPONENTS = ["Fascia", "Soffit", "Window Trim", "Door Trim", "Corner Trim", "Other"];
       const WINDOW_TYPES = ["Single-hung", "Double-hung", "Fixed", "Sliding", "Casement", "Other"];
       const GARAGE_DOOR_MATERIALS = ["Steel", "Wood", "Aluminum", "Composite", "Other"];
-      const GARAGE_ELEVATIONS = ["Front", "Rear", "Left", "Right", "Other"];
-      const FENCE_TYPES = ["Wood", "Chain Link", "Vinyl", "Metal", "Masonry", "Other"];
-      const FENCE_LOCATIONS = ["Front", "Rear", "Left", "Right", "Perimeter", "Interior"];
+      const GARAGE_ELEVATIONS = ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"];
       const TERRAIN_TYPES = ["Flat", "Sloped", "Mixed"];
-      const VEGETATION_TYPES = ["Front Yard", "Rear Yard", "Perimeter", "Minimal", "Dense", "Other"];
+      const VEGETATION_TYPES = ["North", "South", "East", "West", "Perimeter", "Minimal", "Dense", "Other"];
+      const ROOF_SLOPE_OPTIONS = Array.from({ length: 12 }, (_, idx) => `${idx + 1}:12`);
       const ROOF_GEOMETRIES = ["Gable", "Hip", "Gable/Hip Combination", "Flat", "Other"];
       const ROOF_APPURTENANCES = ["Vent Stacks", "Roof Vents", "Ridge Vents", "Chimney", "Skylights", "Solar", "Other"];
       const BACKGROUND_CONCERNS = ["Hail", "Wind", "Water Intrusion", "Interior Staining", "Other"];
@@ -550,7 +547,7 @@ const loadPdfJs = () => {
         // Header data (Smith Residence / roof line / front faces)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
         const [residenceName, setResidenceName] = useState("Enter Name");
-        const [frontFaces, setFrontFaces] = useState("North"); // display "Front faces: North"
+        const [frontFaces, setFrontFaces] = useState("North"); // display "Primary facing direction: North"
         const [viewMode, setViewMode] = useState("diagram");
         const [reportTab, setReportTab] = useState("project");
         const [diagramSource, setDiagramSource] = useState("upload");
@@ -582,9 +579,6 @@ const loadPdfJs = () => {
             garageDoors: "",
             garageDoorMaterial: "",
             garageElevation: "",
-            fencingPresent: "",
-            fenceType: "",
-            fenceLocations: [],
             terrain: "",
             vegetation: "",
             roofGeometry: "",
@@ -593,7 +587,8 @@ const loadPdfJs = () => {
             shingleExposure: "",
             ridgeWidth: "",
             ridgeExposure: "",
-            roofSlopes: "",
+            primarySlope: "",
+            additionalSlopes: [],
             guttersPresent: "",
             downspoutsPresent: "",
             roofAppurtenances: [],
@@ -811,7 +806,7 @@ const loadPdfJs = () => {
           setReportData(prev => {
             const nextDesc = { ...prev.description };
             if(!nextDesc.roofCovering){
-              nextDesc.roofCovering = roof.covering === "SHINGLE" ? "Shingle" : (roof.covering === "METAL" ? "Metal" : "Other");
+              nextDesc.roofCovering = roof.covering === "SHINGLE" ? "Laminated asphalt shingles" : (roof.covering === "METAL" ? "Metal" : "Other");
             }
             if(roof.covering === "SHINGLE"){
               if(!nextDesc.shingleLength){
@@ -1677,35 +1672,9 @@ const loadPdfJs = () => {
             reportData.description.occupancy &&
             reportData.description.roofGeometry
           );
-          const inspectionStarted = reportData.inspection.performed === "no"
-            || reportData.inspection.performed === "yes"
-            || Object.values(reportData.inspection.components).some(component => (
-              component.none ||
-              component.conditions.length ||
-              component.maxSize ||
-              component.directions.length ||
-              component.notes ||
-              component.photos.length
-            ));
-          const writerStarted = Boolean(
-            reportData.writer.letterhead ||
-            reportData.writer.attention ||
-            reportData.writer.reference ||
-            reportData.writer.subject ||
-            reportData.writer.propertyAddress ||
-            reportData.writer.clientFile ||
-            reportData.writer.haagFile ||
-            reportData.writer.introduction ||
-            reportData.writer.narrative ||
-            reportData.writer.description ||
-            reportData.writer.background ||
-            reportData.writer.inspection
-          );
           return {
             project: projectComplete,
-            description: descriptionComplete,
-            writer: writerStarted,
-            inspection: inspectionStarted
+            description: descriptionComplete
           };
         }, [reportData]);
 
@@ -3187,7 +3156,7 @@ const loadPdfJs = () => {
           }
 
           if(reportData.description.exteriorFinishes.length){
-            descriptionSentences.push(`Exterior walls were clad with ${joinReadableList(reportData.description.exteriorFinishes.map(item => item.toLowerCase()))} on all elevations.`);
+            descriptionSentences.push(`Exterior walls were finished with ${joinReadableList(reportData.description.exteriorFinishes.map(item => item.toLowerCase()))} on all elevations.`);
           }
 
           if(reportData.description.trimComponents.length){
@@ -3213,17 +3182,9 @@ const loadPdfJs = () => {
             const bays = reportData.description.garageBays ? `${reportData.description.garageBays}-car ` : "";
             const doorCount = reportData.description.garageDoors ? `${reportData.description.garageDoors} overhead garage door${reportData.description.garageDoors === "1" ? "" : "s"}` : "";
             const doorMaterial = reportData.description.garageDoorMaterial ? ` with ${reportData.description.garageDoorMaterial.toLowerCase()} panels` : "";
-            const elevation = reportData.description.garageElevation ? ` opened to the ${reportData.description.garageElevation.toLowerCase()}` : "";
+            const elevation = reportData.description.garageElevation ? ` opening toward ${reportData.description.garageElevation.toLowerCase()}` : "";
             const garageSentence = `A ${bays}garage${doorCount ? ` with ${doorCount}${doorMaterial}` : ""}${elevation}.`;
             descriptionSentences.push(garageSentence);
-          }
-
-          if(reportData.description.fencingPresent === "Yes"){
-            const fenceType = reportData.description.fenceType ? reportData.description.fenceType.toLowerCase() : "fencing";
-            const fenceLocations = reportData.description.fenceLocations.length
-              ? ` along the ${joinReadableList(reportData.description.fenceLocations.map(item => item.toLowerCase()))} areas`
-              : "";
-            descriptionSentences.push(`Fencing consisted of ${fenceType}${fenceLocations}.`);
           }
 
           if(reportData.description.terrain){
@@ -3249,7 +3210,7 @@ const loadPdfJs = () => {
           if(reportData.description.shingleLength || reportData.description.shingleExposure){
             const length = reportData.description.shingleLength ? reportData.description.shingleLength.replace("width", "length") : "standard length";
             const exposure = reportData.description.shingleExposure ? reportData.description.shingleExposure.replace("exposure", "exposure") : "";
-            roofSentences.push(`Roof shingles measured ${length}${exposure ? ` with ${exposure} of exposure` : ""}.`);
+            roofSentences.push(`The roof was surfaced with laminated asphalt shingles measuring ${length}${exposure ? ` with ${exposure}` : ""}.`);
           }
 
           if(reportData.description.ridgeWidth || reportData.description.ridgeExposure){
@@ -3258,8 +3219,12 @@ const loadPdfJs = () => {
             roofSentences.push(`Ridge shingles were ${ridgeWidth} wide${ridgeExposure ? ` and were installed with ${ridgeExposure} of exposure` : ""}.`);
           }
 
-          if(reportData.description.roofSlopes){
-            roofSentences.push(`Roof sections were sloped ${reportData.description.roofSlopes} (rise to run).`);
+          const selectedSlopes = [
+            reportData.description.primarySlope,
+            ...(reportData.description.additionalSlopes || [])
+          ].filter(Boolean);
+          if(selectedSlopes.length){
+            roofSentences.push(`Roof sections were sloped ${joinReadableList(selectedSlopes)} (rise to run).`);
           }
 
           if(reportData.description.guttersPresent || reportData.description.downspoutsPresent){
@@ -3803,7 +3768,7 @@ const loadPdfJs = () => {
                 <input className="inp headerInput" value={residenceName} onChange={(e)=>setResidenceName(e.target.value)} placeholder="Enter name or property" />
               </div>
               <div style={{flex:1}}>
-                <div className="lbl">Front Faces</div>
+                <div className="lbl">Primary Facing Direction</div>
                 <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
                   <option value="North">North</option>
                   <option value="South">South</option>
@@ -4072,11 +4037,9 @@ const loadPdfJs = () => {
         const exportIndexItems = [
           "Title Page",
           "Index",
-          "Report Writer",
           "Project Information",
           "Description",
           "Background",
-          "Inspection Summary",
           "Roof Diagram",
           "Dashboard",
           `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
@@ -5589,7 +5552,7 @@ const loadPdfJs = () => {
                                       style={{flex:"1 1 260px"}}
                                       value={activeItem.data.label}
                                       onChange={(e)=>updateItemData("label", e.target.value)}
-                                      placeholder="e.g., Front entry, garage impact"
+                                      placeholder="e.g., South entry, west garage impact"
                                     />
                                     <div className="segToggle compact">
                                       <button
@@ -5661,12 +5624,6 @@ const loadPdfJs = () => {
                   {tab.key === "description" && (
                     <span className={"statusDot " + (completeness.description ? "ready" : "")} />
                   )}
-                  {tab.key === "inspection" && (
-                    <span className={"statusDot " + (completeness.inspection ? "ready" : "")} />
-                  )}
-                  {tab.key === "writer" && (
-                    <span className={"statusDot " + (completeness.writer ? "ready" : "")} />
-                  )}
                 </button>
               ))}
             </div>
@@ -5713,12 +5670,12 @@ const loadPdfJs = () => {
                         <input className="inp" type="time" value={reportData.project.endTime} onChange={(e)=>updateReportSection("project", "endTime", e.target.value)} />
                       </div>
                       <div>
-                        <div className="lbl">Front Faces (from diagram)</div>
+                        <div className="lbl">Primary Facing Direction (from diagram)</div>
                         <div className="inlineTag">{frontFaces}</div>
                       </div>
                       <div>
                         <div className="lbl">General Orientation</div>
-                        <input className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)} placeholder="Faced approximately west" />
+                        <input className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)} placeholder="Faced approximately south" />
                       </div>
                     </div>
                   </div>
@@ -5871,7 +5828,7 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Garage Opens To</div>
+                        <div className="lbl">Garage Opens Toward</div>
                         <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
                           <option value="">Select</option>
                           {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
@@ -5883,21 +5840,6 @@ const loadPdfJs = () => {
                   <div className="reportCard">
                     <div className="reportSectionTitle">Site Conditions</div>
                     <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Fencing Present</div>
-                        <select className="inp" value={reportData.description.fencingPresent} onChange={(e)=>updateReportSection("description", "fencingPresent", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Fence Type</div>
-                        <select className="inp" value={reportData.description.fenceType} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)}>
-                          <option value="">Select</option>
-                          {FENCE_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
                       <div>
                         <div className="lbl">Terrain</div>
                         <select className="inp" value={reportData.description.terrain} onChange={(e)=>updateReportSection("description", "terrain", e.target.value)}>
@@ -5911,20 +5853,6 @@ const loadPdfJs = () => {
                           <option value="">Select</option>
                           {VEGETATION_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
                         </select>
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Fence Locations</div>
-                      <div className="chipList">
-                        {FENCE_LOCATIONS.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + (reportData.description.fenceLocations.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("description", "fenceLocations", option)}
-                          >
-                            {option}
-                          </div>
-                        ))}
                       </div>
                     </div>
                   </div>
@@ -5960,8 +5888,25 @@ const loadPdfJs = () => {
                         <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inch" />
                       </div>
                       <div>
-                        <div className="lbl">Roof Slopes</div>
-                        <input className="inp" value={reportData.description.roofSlopes} onChange={(e)=>updateReportSection("description", "roofSlopes", e.target.value)} placeholder="e.g., 6:12, 8:12" />
+                        <div className="lbl">Primary Roof Slope</div>
+                        <select className="inp" value={reportData.description.primarySlope} onChange={(e)=>updateReportSection("description", "primarySlope", e.target.value)}>
+                          <option value="">Select</option>
+                          {ROOF_SLOPE_OPTIONS.map(option => <option key={`primary-${option}`} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Additional Roof Slopes</div>
+                        <div className="chipList">
+                          {ROOF_SLOPE_OPTIONS.map(option => (
+                            <div
+                              key={`additional-${option}`}
+                              className={"chip " + (reportData.description.additionalSlopes.includes(option) ? "active" : "")}
+                              onClick={() => toggleReportList("description", "additionalSlopes", option)}
+                            >
+                              {option}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                       <div>
                         <div className="lbl">Gutters Present</div>
@@ -6006,8 +5951,8 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Roof Area</div>
-                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 42 squares" />
+                        <div className="lbl">Roof Area (square foot)</div>
+                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 4,200 square foot" />
                       </div>
                       <div>
                         <div className="lbl">Attachment Letter</div>
@@ -6073,178 +6018,6 @@ const loadPdfJs = () => {
                     </div>
                     <div className="sectionHint">Separate areas with commas. Reasons can be included inline.</div>
                   </div>
-                </>
-              )}
-
-              {reportTab === "writer" && (
-                <>
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Report Writer Header</div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Letterhead / Addressee Block</div>
-                        <textarea className="inp" value={reportData.writer.letterhead} onChange={(e)=>updateReportSection("writer", "letterhead", e.target.value)} placeholder="Company name, address lines..." />
-                        <div className="sectionHint">Use line breaks to match your formal letter layout.</div>
-                      </div>
-                      <div>
-                        <div className="lbl">Attention</div>
-                        <input className="inp" value={reportData.writer.attention} onChange={(e)=>updateReportSection("writer", "attention", e.target.value)} placeholder="Attention: Name" />
-                      </div>
-                      <div>
-                        <div className="lbl">Reference Line</div>
-                        <input className="inp" value={reportData.writer.reference} onChange={(e)=>updateReportSection("writer", "reference", e.target.value)} placeholder="Re: Residence / Report type" />
-                      </div>
-                      <div>
-                        <div className="lbl">Subject Line</div>
-                        <input className="inp" value={reportData.writer.subject} onChange={(e)=>updateReportSection("writer", "subject", e.target.value)} placeholder="Roof Evaluation" />
-                      </div>
-                      <div>
-                        <div className="lbl">Property Address Block</div>
-                        <textarea className="inp" value={reportData.writer.propertyAddress} onChange={(e)=>updateReportSection("writer", "propertyAddress", e.target.value)} placeholder="Street, City, State ZIP" />
-                      </div>
-                      <div>
-                        <div className="lbl">Client File</div>
-                        <input className="inp" value={reportData.writer.clientFile} onChange={(e)=>updateReportSection("writer", "clientFile", e.target.value)} placeholder="Client File #" />
-                      </div>
-                      <div>
-                        <div className="lbl">Haag File</div>
-                        <input className="inp" value={reportData.writer.haagFile} onChange={(e)=>updateReportSection("writer", "haagFile", e.target.value)} placeholder="Haag File #" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Narrative</div>
-                    <div style={{marginBottom:12}}>
-                      <div className="lbl">Introduction Paragraph</div>
-                      <textarea className="inp" value={reportData.writer.introduction} onChange={(e)=>updateReportSection("writer", "introduction", e.target.value)} placeholder="Complying with your request..." />
-                    </div>
-                    <div style={{marginBottom:12}}>
-                      <div className="lbl">Primary Narrative</div>
-                      <textarea className="inp" value={reportData.writer.narrative} onChange={(e)=>updateReportSection("writer", "narrative", e.target.value)} placeholder="Engineering report language, limitations, etc." />
-                    </div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Description Notes</div>
-                        <textarea className="inp" value={reportData.writer.description} onChange={(e)=>updateReportSection("writer", "description", e.target.value)} placeholder="Optional descriptive paragraph..." />
-                      </div>
-                      <div>
-                        <div className="lbl">Background Notes</div>
-                        <textarea className="inp" value={reportData.writer.background} onChange={(e)=>updateReportSection("writer", "background", e.target.value)} placeholder="Optional background paragraph..." />
-                      </div>
-                      <div>
-                        <div className="lbl">Inspection Notes</div>
-                        <textarea className="inp" value={reportData.writer.inspection} onChange={(e)=>updateReportSection("writer", "inspection", e.target.value)} placeholder="Optional inspection paragraph..." />
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {reportTab === "inspection" && (
-                <>
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Inspection Overview</div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Inspection Performed</div>
-                        <select className="inp" value={reportData.inspection.performed} onChange={(e)=>updateReportSection("inspection", "performed", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="yes">Yes</option>
-                          <option value="no">Not Performed</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Test Square Summary (from diagram)</div>
-                        <table className="dashTable" style={{marginTop:6}}>
-                          <thead>
-                            <tr>
-                              <th>Dir</th>
-                              <th>Hits</th>
-                              <th>Max Hail</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {WIND_DIRS.map(dir => (
-                              <tr key={`report-ts-${dir}`}>
-                                <td style={{fontWeight:1200}}>{dir}</td>
-                                <td>{dashboard[dir].tsHits}</td>
-                                <td>{dashboard[dir].tsMaxHail ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="sectionHint">Use this summary as a reference while logging observations.</div>
-                  </div>
-
-                  {INSPECTION_COMPONENTS.map(component => {
-                    const data = reportData.inspection.components[component.key];
-                    return (
-                      <div className="reportCard" key={component.key}>
-                        <div className="reportSectionTitle">{component.label}</div>
-                        <div style={{marginBottom:10}}>
-                          <div className="lbl">Observed Conditions</div>
-                          <div className="chipList">
-                            {OBSERVED_CONDITIONS.map(option => (
-                              <div
-                                key={option}
-                                className={"chip " + (data.conditions.includes(option) ? "active" : "")}
-                                onClick={() => toggleInspectionList(component.key, "conditions", option)}
-                              >
-                                {option}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">No Notable Conditions Observed</div>
-                            <select className="inp" value={data.none ? "Yes" : "No"} onChange={(e)=>updateInspection(component.key, "none", e.target.value === "Yes")}>
-                              <option value="No">No</option>
-                              <option value="Yes">Yes</option>
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Maximum Observed Size</div>
-                            <select className="inp" value={data.maxSize} onChange={(e)=>updateInspection(component.key, "maxSize", e.target.value)}>
-                              <option value="">Select</option>
-                              {SIZES.map(size => <option key={size} value={size}>{size}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Directions Observed</div>
-                            <div className="chipList">
-                              {WIND_DIRS.map(dir => (
-                                <div
-                                  key={dir}
-                                  className={"chip " + (data.directions.includes(dir) ? "active" : "")}
-                                  onClick={() => toggleInspectionList(component.key, "directions", dir)}
-                                >
-                                  {dir}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Notes</div>
-                          <textarea className="inp" value={data.notes} onChange={(e)=>updateInspection(component.key, "notes", e.target.value)} placeholder="Observed conditions, factual only..." />
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Associated Photos (file names)</div>
-                          <input
-                            className="inp"
-                            value={data.photos.join(", ")}
-                            onChange={(e)=>updateInspection(component.key, "photos", e.target.value.split(",").map(v => v.trim()).filter(Boolean))}
-                            placeholder="e.g., IMG_1021, IMG_1022"
-                          />
-                          <div className="sectionHint">Use file names to track photos; images can be attached later.</div>
-                        </div>
-                      </div>
-                    );
-                  })}
                 </>
               )}
             </div>
@@ -6429,7 +6202,7 @@ const loadPdfJs = () => {
               <div className="printTitlePage">
                 <div className="printTitleHero">Titan Roof Version 4.2.2</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
-                <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
                 <div className="printMetaGrid">
                   <div className="printMetaCard">
                     <div className="lbl">Property</div>
@@ -6445,8 +6218,6 @@ const loadPdfJs = () => {
                   <div className="printMetaCard">
                     <div className="lbl">File References</div>
                     <div className="printBlock">Report #: {valueOrDash(reportData.project.reportNumber)}</div>
-                    <div className="printBlock">Client File: {valueOrDash(reportData.writer.clientFile)}</div>
-                    <div className="printBlock">Haag File: {valueOrDash(reportData.writer.haagFile)}</div>
                   </div>
                 </div>
               </div>
@@ -6465,27 +6236,6 @@ const loadPdfJs = () => {
 
             <div className="printPage">
               <div className="printSection">
-                <h3>Report Writer</h3>
-                <div className="printBlock">{formatBlock(reportData.writer.letterhead)}</div>
-                <div className="printDivider" />
-                <div className="printKeyValue">
-                  <div className="lbl">Attention</div>
-                  <div>{valueOrDash(reportData.writer.attention)}</div>
-                  <div className="lbl">Reference</div>
-                  <div>{valueOrDash(reportData.writer.reference)}</div>
-                  <div className="lbl">Subject</div>
-                  <div>{valueOrDash(reportData.writer.subject)}</div>
-                  <div className="lbl">Property</div>
-                  <div className="printBlock">{formatBlock(reportData.writer.propertyAddress)}</div>
-                </div>
-                <div className="printDivider" />
-                <div className="printBlock">{formatBlock(reportData.writer.introduction)}</div>
-                <div className="printBlock">{formatBlock(reportData.writer.narrative)}</div>
-              </div>
-            </div>
-
-            <div className="printPage">
-              <div className="printSection">
                 <h3>Project Information</h3>
                 <div className="printKeyValue">
                   <div className="lbl">Report #</div>
@@ -6494,7 +6244,7 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.project.projectName || residenceName)}</div>
                   <div className="lbl">Address</div>
                   <div>{formatAddressLine(reportData.project)}</div>
-                  <div className="lbl">Front Faces</div>
+                  <div className="lbl">Primary Facing Direction</div>
                   <div>{frontFaces}</div>
                   <div className="lbl">Orientation</div>
                   <div>{valueOrDash(reportData.project.orientation)}</div>
@@ -6532,14 +6282,8 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.description.garageDoors)}</div>
                   <div className="lbl">Garage Material</div>
                   <div>{valueOrDash(reportData.description.garageDoorMaterial)}</div>
-                  <div className="lbl">Garage Opens To</div>
+                  <div className="lbl">Garage Opens Toward</div>
                   <div>{valueOrDash(reportData.description.garageElevation)}</div>
-                  <div className="lbl">Fencing</div>
-                  <div>{valueOrDash(reportData.description.fencingPresent)}</div>
-                  <div className="lbl">Fence Type</div>
-                  <div>{valueOrDash(reportData.description.fenceType)}</div>
-                  <div className="lbl">Fence Locations</div>
-                  <div>{joinList(reportData.description.fenceLocations)}</div>
                   <div className="lbl">Terrain</div>
                   <div>{valueOrDash(reportData.description.terrain)}</div>
                   <div className="lbl">Vegetation</div>
@@ -6556,8 +6300,10 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.description.ridgeWidth)}</div>
                   <div className="lbl">Ridge Exposure</div>
                   <div>{valueOrDash(reportData.description.ridgeExposure)}</div>
-                  <div className="lbl">Roof Slopes</div>
-                  <div>{valueOrDash(reportData.description.roofSlopes)}</div>
+                  <div className="lbl">Primary Roof Slope</div>
+                  <div>{valueOrDash(reportData.description.primarySlope)}</div>
+                  <div className="lbl">Additional Roof Slopes</div>
+                  <div>{joinList(reportData.description.additionalSlopes)}</div>
                   <div className="lbl">Gutters</div>
                   <div>{valueOrDash(reportData.description.guttersPresent)}</div>
                   <div className="lbl">Downspouts</div>
@@ -6566,13 +6312,11 @@ const loadPdfJs = () => {
                   <div>{joinList(reportData.description.roofAppurtenances)}</div>
                   <div className="lbl">EagleView</div>
                   <div>{valueOrDash(reportData.description.eagleView)}</div>
-                  <div className="lbl">Roof Area</div>
+                  <div className="lbl">Roof Area (square foot)</div>
                   <div>{valueOrDash(reportData.description.roofArea)}</div>
                   <div className="lbl">Attachment Letter</div>
                   <div>{valueOrDash(reportData.description.attachmentLetter)}</div>
                 </div>
-                <div className="printDivider" />
-                <div className="printBlock">{formatBlock(reportData.writer.description)}</div>
               </div>
             </div>
 
@@ -6593,38 +6337,6 @@ const loadPdfJs = () => {
                 </div>
                 <div className="printDivider" />
                 <div className="printBlock">{formatBlock(reportData.background.notes)}</div>
-                <div className="printBlock">{formatBlock(reportData.writer.background)}</div>
-              </div>
-            </div>
-
-            <div className="printPage">
-              <div className="printSection">
-                <h3>Inspection Summary</h3>
-                <div className="printKeyValue">
-                  <div className="lbl">Inspection Performed</div>
-                  <div>{valueOrDash(reportData.inspection.performed)}</div>
-                </div>
-                <div className="printDivider" />
-                <div className="printGrid">
-                  {INSPECTION_COMPONENTS.map(component => {
-                    const data = reportData.inspection.components[component.key];
-                    const detailParts = [];
-                    if(data.none) detailParts.push("No notable conditions.");
-                    if(data.conditions.length) detailParts.push(`Conditions: ${data.conditions.join(", ")}`);
-                    if(data.maxSize) detailParts.push(`Max size: ${data.maxSize}"`);
-                    if(data.directions.length) detailParts.push(`Directions: ${data.directions.join(", ")}`);
-                    if(data.notes) detailParts.push(`Notes: ${data.notes}`);
-                    if(data.photos.length) detailParts.push(`Photos: ${data.photos.join(", ")}`);
-                    return (
-                      <div className="printCard" key={`inspection-${component.key}`}>
-                        <div style={{fontWeight:1200}}>{component.label}</div>
-                        <div className="tiny">{detailParts.length ? detailParts.join(" ") : "No details recorded."}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="printDivider" />
-                <div className="printBlock">{formatBlock(reportData.writer.inspection)}</div>
               </div>
             </div>
 
@@ -6632,7 +6344,7 @@ const loadPdfJs = () => {
               <div className="printHeader">
                 <div>
                   <div className="printTitle">{residenceName} • Roof Diagram Export</div>
-                  <div className="tiny">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+                  <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
                 </div>
               </div>
 
