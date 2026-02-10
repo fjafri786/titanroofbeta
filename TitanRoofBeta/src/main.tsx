@@ -1818,6 +1818,16 @@ const loadPdfJs = () => {
           return stats;
         }, [pageItems]);
 
+        const getDashStats = useCallback((dir) => (
+          dashboard?.[dir] || {
+            tsHits: 0,
+            tsMaxHail: 0,
+            wind: { creased: 0, torn_missing: 0 },
+            aptMax: 0,
+            dsMax: 0
+          }
+        ), [dashboard]);
+
         const dashFocusData = useMemo(() => {
           if(!dashFocusDir) return null;
           const tsItems = pageItems.filter(item => item.type === "ts" && item.data?.dir === dashFocusDir);
@@ -1991,15 +2001,15 @@ const loadPdfJs = () => {
           }).filter(Boolean);
 
           const roofWindText = windByScope.roof.length
-            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. Diagram entries indicate ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "mapped roof wind conditions."} Roof wind conditions were plotted on the roof diagram.`
-            : "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. No roof wind-caused conditions were mapped on the diagram.";
+            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. We noted ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "wind-related conditions on roof facets."}`
+            : "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. We did not observe creased, torn, or missing shingles on the roof fields, ridges, hips, valleys, or edges.";
 
           const exteriorScopeText = selectedExteriorComponents.length
             ? localJoinReadableList(selectedExteriorComponents)
             : "fascia, trim, siding, downspouts, and other exterior components";
 
           const exteriorWindText = windByScope.exterior.length
-            ? `We inspected the exterior elevations including ${exteriorScopeText}. Exterior wind observations were mapped for ${windByScope.exterior.length} component${windByScope.exterior.length === 1 ? "" : "s"}, including ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
+            ? `We inspected the exterior elevations including ${exteriorScopeText}. We noted localized wind-related conditions at ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
             : `We inspected the exterior elevations including ${exteriorScopeText}. We found no detached, loose, missing, or displaced exterior components.`;
 
           const hailEntries = ["apt", "ds"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
@@ -2007,8 +2017,8 @@ const loadPdfJs = () => {
           )));
 
           const hailText = hailEntries.length
-            ? `We examined exterior and roof metal components for hail indicators. Diagram entries include ${localJoinReadableList(hailEntries)}.`
-            : "We examined exterior and roof metal components for hail indicators. No hail dents or spatter marks were mapped on appurtenances or downspouts.";
+            ? `We examined exterior and roof metal components for hail indicators. We observed ${localJoinReadableList(hailEntries)}.`
+            : "We examined exterior and roof metal components for hail indicators. We found no hail-caused dents or spatter marks on appurtenances or downspouts.";
 
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsCount = tsItems.length;
@@ -2035,11 +2045,11 @@ const loadPdfJs = () => {
             return `${localDirLabel(dir)} slope (${stats.squares} test square${stats.squares === 1 ? "" : "s"}): ${stats.hits} hail hit${stats.hits === 1 ? "" : "s"}${maxSizeText}`;
           }).filter(Boolean);
           const testSquaresText = tsCount
-            ? `We examined ${tsCount} test square${tsCount === 1 ? "" : "s"} across directional slopes. ${tsBruises ? `The diagram includes ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"} within the test squares${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "No hail bruises or punctures were mapped within the test squares."}`
-            : "No test squares were mapped on the diagram.";
+            ? `We examined 100-square-foot test area${tsCount === 1 ? "" : "s"} on ${localJoinReadableList(Object.keys(tsByDirection).map(localDirLabel))} roof slopes. Each shingle within the test area${tsCount === 1 ? " was" : "s were"} examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. ${tsBruises ? `Within the test area${tsCount === 1 ? "" : "s"}, we noted ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"}${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "We did not find hail-caused bruises or punctured shingles within the test areas."}`
+            : "No test squares were documented for this inspection.";
 
           const roofCondition = reportData.inspection?.roofCondition || "fair";
-          const roofGeneralText = `We found the roof shingles to be in ${roofCondition} condition with respect to weathering. Scuff marks and surface marring commonly found on asphalt shingles were generally found along ridges, hips, and easily accessible areas.`;
+          const roofGeneralText = `Overall, the roof shingles were in ${roofCondition} condition with respect to weathering. Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas.`;
 
           const scopeName = reportData.project.projectName?.trim() || residenceName?.trim() || "residence";
           const scopeText = `We inspected the ${scopeName} property exterior and roof components, and documented observed conditions paying particular attention to evidence of hailstone impact and wind-related conditions. Photographs of representative conditions are attached to this report.`;
@@ -5247,7 +5257,7 @@ const loadPdfJs = () => {
                           {dashSectionsOpen.summary && (
                             <div className="dashSummaryGrid">
                             {ROOF_WIND_DIRS.map(dir => {
-                              const d = dashboard[dir];
+                              const d = getDashStats(dir);
                               return (
                                 <button
                                   type="button"
@@ -5289,7 +5299,7 @@ const loadPdfJs = () => {
                           {dashSectionsOpen.indicators && (
                             <div className="dashIndicatorsGrid">
                             {CARDINAL_DIRS.map(dir => {
-                              const d = dashboard[dir];
+                              const d = getDashStats(dir);
                               return (
                                 <button
                                   type="button"
@@ -6607,46 +6617,44 @@ const loadPdfJs = () => {
                                     </label>
                                   </summary>
                                   <div className="inspectionNarrativeText">{section.text}</div>
+                                  {section.key === "roofGeneral" && (
+                                    <div className="inspectionInlineControls">
+                                      <div className="lbl">Roof General Condition</div>
+                                      <div className="radioGrid compact">
+                                        {["good", "fair", "poor"].map(condition => (
+                                          <div
+                                            key={condition}
+                                            className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
+                                            onClick={() => updateReportSection("inspection", "roofCondition", condition)}
+                                          >
+                                            {condition.charAt(0).toUpperCase() + condition.slice(1)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {section.key === "exteriorWind" && (
+                                    <div className="inspectionInlineControls">
+                                      <div className="lbl">Exterior Components Inspected</div>
+                                      <div className="chipList compact">
+                                        {INSPECTION_COMPONENTS.map(component => (
+                                          <div
+                                            key={component.key}
+                                            className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
+                                            onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
+                                          >
+                                            {component.label}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </details>
                               );
                             })}
                           </div>
                         </details>
                       ))}
-                    </div>
-                  </div>
-
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Inspection Settings</div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Roof General Condition</div>
-                        <div className="radioGrid">
-                          {["good", "fair", "poor"].map(condition => (
-                            <div
-                              key={condition}
-                              className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
-                              onClick={() => updateReportSection("inspection", "roofCondition", condition)}
-                            >
-                              {condition.charAt(0).toUpperCase() + condition.slice(1)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="lbl">Exterior Components Inspected</div>
-                        <div className="chipList">
-                          {INSPECTION_COMPONENTS.map(component => (
-                            <div
-                              key={component.key}
-                              className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
-                              onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
-                            >
-                              {component.label}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </>
@@ -7058,10 +7066,10 @@ const loadPdfJs = () => {
                     {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`print-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].tsHits}</td>
-                        <td>{dashboard[dir].tsMaxHail>0 ? `${dashboard[dir].tsMaxHail}"` : "—"}</td>
-                        <td>{dashboard[dir].wind.creased}</td>
-                        <td>{dashboard[dir].wind.torn_missing}</td>
+                        <td>{getDashStats(dir).tsHits}</td>
+                        <td>{getDashStats(dir).tsMaxHail>0 ? `${getDashStats(dir).tsMaxHail}"` : "—"}</td>
+                        <td>{getDashStats(dir).wind.creased}</td>
+                        <td>{getDashStats(dir).wind.torn_missing}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -7079,8 +7087,8 @@ const loadPdfJs = () => {
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`print-hail-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].aptMax>0 ? `${dashboard[dir].aptMax}"` : "—"}</td>
-                        <td>{dashboard[dir].dsMax>0 ? `${dashboard[dir].dsMax}"` : "—"}</td>
+                        <td>{getDashStats(dir).aptMax>0 ? `${getDashStats(dir).aptMax}"` : "—"}</td>
+                        <td>{getDashStats(dir).dsMax>0 ? `${getDashStats(dir).dsMax}"` : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -7128,8 +7136,8 @@ const loadPdfJs = () => {
                     {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`wind-${dir}`}>
                         <td style={{fontWeight:1300}}>{dir}</td>
-                        <td>{dashboard[dir].wind.creased}</td>
-                        <td>{dashboard[dir].wind.torn_missing}</td>
+                        <td>{getDashStats(dir).wind.creased}</td>
+                        <td>{getDashStats(dir).wind.torn_missing}</td>
                       </tr>
                     ))}
                   </tbody>
