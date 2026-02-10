@@ -107,8 +107,65 @@ const loadPdfJs = () => {
       const REPORT_TABS = [
         { key: "project", label: "Project" },
         { key: "description", label: "Description" },
-        { key: "background", label: "Background" }
+        { key: "background", label: "Background" },
+        { key: "inspection", label: "Inspection" }
       ];
+
+      const INSPECTION_PARAGRAPH_ORDER = [
+        { key: "scope", label: "1. Inspection Scope", optional: false },
+        { key: "interior", label: "2. Interior", optional: true },
+        { key: "exteriorWind", label: "3. Exterior – General / Wind Indicators", optional: false },
+        { key: "exteriorHail", label: "4. Exterior – Hail Indicators", optional: false },
+        { key: "roofGeneral", label: "5. Roof – General Condition", optional: false },
+        { key: "windRoof", label: "6. Wind Evaluation (roof)", optional: false },
+        { key: "hailAppurtenances", label: "7. Hail Evaluation – Roof Appurtenances", optional: false },
+        { key: "testSquares", label: "8. Test Squares", optional: false },
+        { key: "granuleLoss", label: "9. Granule Loss Interpretation", optional: false },
+        { key: "diagramReference", label: "10. Diagram Reference", optional: true }
+      ];
+
+      const buildInspectionParagraphDefaults = () => ({
+        scope: {
+          include: true,
+          text: "We inspected the residence roof, exterior elevations, and surrounding property for evidence of hailstone impact and/or wind-related conditions. We documented observed conditions with field notes and photographs. Representative photographs are attached to this report for reference."
+        },
+        interior: {
+          include: false,
+          text: "We inspected the interior area with the reported concerns. The room was located at the [location] of the residence. We observed [conditions]. The observed conditions were localized to this area. We also inspected the corresponding exterior location and found no visible separations, openings, fractured, missing, or deteriorated exterior components."
+        },
+        exteriorWind: {
+          include: true,
+          text: "We inspected the exterior elevations and components including fascia, trim, siding, fixtures, downspouts, and other exterior elements. We found no detached, loose, missing, or displaced exterior components on the elevations inspected."
+        },
+        exteriorHail: {
+          include: true,
+          text: "We examined exterior components for indicators of hailstone impact, including downspouts, window screens, garage door panels, light fixtures, fencing, and mechanical appurtenances. Spatter marks are spots cleaned of grime or oxidation where surfaces are impacted and may remain visible for one to two years, or more, depending on surface character and weather exposure."
+        },
+        roofGeneral: {
+          include: true,
+          text: "Overall, the roof shingles were in fair condition with respect to age and weathering. Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas. Granule loss typical of roofs of this age was present on all directional facets, including ridges and hip cap shingles."
+        },
+        windRoof: {
+          include: true,
+          text: "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. Affected shingles exhibited weathered exposed surfaces consistent with long-term exposure. The approximate locations of affected shingles were plotted on a roof diagram. Refer to Attachment D – Roof Diagram."
+        },
+        hailAppurtenances: {
+          include: true,
+          text: "We examined roof appurtenances and soft metals, including vents, flue pipes, flashing, and other roof components, for evidence of hailstone impact. We found no tears, punctures, or fractures to the roof appurtenances inspected."
+        },
+        testSquares: {
+          include: true,
+          text: "We examined 100-square-foot test areas on the north-, south-, east-, and west-facing roof slopes. Each shingle within the test areas was examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. We did not find any hail-caused bruises or punctured shingles in our test areas. We also inspected ridges, hips, rakes, and eaves—areas that are least supported—and found no hail-caused bruises or punctures."
+        },
+        granuleLoss: {
+          include: true,
+          text: "Within our test areas and elsewhere on the roof, we observed areas of missing granules. These areas varied in size and shape and exposed underlying asphalt or fiberglass mat reinforcement. Each area was inspected visually and tactilely, and no associated bruises, punctures, indentations, or impact features were identified. The distribution and appearance of the granule loss were similar across roof slopes and consistent with age-related weathering rather than impact damage."
+        },
+        diagramReference: {
+          include: false,
+          text: "The approximate locations of the observed conditions were plotted on a roof diagram. Refer to Attachment D – Roof Diagram."
+        }
+      });
 
       const PARTY_ROLES = ["Homeowner", "Insured", "Contractor", "Public Adjuster", "Engineer", "Other"];
       const OCCUPANCY_TYPES = ["Single-family", "Multi-family", "Commercial", "Industrial", "Other"];
@@ -229,7 +286,8 @@ const loadPdfJs = () => {
         },
         inspection: {
           performed: "",
-          components: buildInspectionDefaults()
+          components: buildInspectionDefaults(),
+          paragraphs: buildInspectionParagraphDefaults()
         }
       });
       const normalizeList = (value) => Array.isArray(value) ? value : [];
@@ -279,6 +337,10 @@ const loadPdfJs = () => {
             components: {
               ...defaults.inspection.components,
               ...(source.inspection?.components || {})
+            },
+            paragraphs: {
+              ...defaults.inspection.paragraphs,
+              ...(source.inspection?.paragraphs || {})
             }
           }
         };
@@ -820,6 +882,21 @@ const loadPdfJs = () => {
               }
             };
           });
+        };
+        const updateInspectionParagraph = (paragraphKey, field, value) => {
+          setReportData(prev => ({
+            ...prev,
+            inspection: {
+              ...prev.inspection,
+              paragraphs: {
+                ...prev.inspection.paragraphs,
+                [paragraphKey]: {
+                  ...prev.inspection.paragraphs[paragraphKey],
+                  [field]: value
+                }
+              }
+            }
+          }));
         };
         const addParty = () => {
           setReportData(prev => ({
@@ -1823,6 +1900,35 @@ const loadPdfJs = () => {
             obsPhotoOverflow: Math.max(0, obsPhotos.length - DASHBOARD_PHOTO_LIMIT)
           };
         }, [dashFocusDir, pageItems]);
+
+        const inspectionParagraphsForExport = useMemo(() => {
+          return INSPECTION_PARAGRAPH_ORDER
+            .map(paragraph => {
+              const data = reportData.inspection.paragraphs?.[paragraph.key];
+              return {
+                ...paragraph,
+                include: data?.include ?? !paragraph.optional,
+                text: (data?.text || "").trim()
+              };
+            })
+            .filter(paragraph => paragraph.include && paragraph.text);
+        }, [reportData.inspection.paragraphs]);
+
+        const inspectionAutoSummary = useMemo(() => {
+          const windCount = (dashboardSummary.totalCreased || 0) + (dashboardSummary.totalTornMissing || 0);
+          const testSquareCount = dashboardSummary.tsItems.length || 0;
+          const parts = [
+            `Paragraph order is locked to the standard inspection flow (${inspectionParagraphsForExport.length} active section${inspectionParagraphsForExport.length === 1 ? "" : "s"}).`,
+            windCount
+              ? `Diagram-linked wind observations currently include ${windCount} mapped shingle condition${windCount === 1 ? "" : "s"}.`
+              : "No mapped wind-caused shingle conditions are currently counted from the diagram.",
+            testSquareCount
+              ? `${testSquareCount} test square${testSquareCount === 1 ? " is" : "s are"} available to support hail methodology language.`
+              : "No test squares are currently mapped; add at least one to support the test-square methodology paragraph.",
+            "Use this section to keep one idea per paragraph and let the roof diagram carry counts, density, and exact locations."
+          ];
+          return parts.join(" ");
+        }, [dashboardSummary.totalCreased, dashboardSummary.totalTornMissing, dashboardSummary.tsItems.length, inspectionParagraphsForExport.length]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -4261,6 +4367,7 @@ const loadPdfJs = () => {
           "Project Information",
           "Description",
           "Background",
+          "Inspection",
           "Roof Diagram",
           "Dashboard",
           `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
@@ -6265,6 +6372,52 @@ const loadPdfJs = () => {
                   </div>
                 </>
               )}
+
+
+              {reportTab === "inspection" && (
+                <>
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Export Overview</div>
+                    <div className="sectionHint" style={{marginTop:0}}>
+                      One idea per paragraph. Keep wind separate from hail, keep exterior separate from roof, and let the diagram carry counts and density.
+                    </div>
+                    <div className="reportOverviewBox">{inspectionAutoSummary}</div>
+                  </div>
+
+                  <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Narrative Builder (Attachment Export)</div>
+                    <div className="sectionHint" style={{marginTop:0}}>
+                      Paragraph order is fixed to match your most common report structure. Optional sections can be toggled on when needed.
+                    </div>
+                    <div className="inspectionParagraphList">
+                      {INSPECTION_PARAGRAPH_ORDER.map(paragraph => {
+                        const paragraphState = reportData.inspection.paragraphs?.[paragraph.key] || { include: !paragraph.optional, text: "" };
+                        return (
+                          <details className="inspectionParagraphCard" key={paragraph.key} open>
+                            <summary>
+                              <span>{paragraph.label}</span>
+                              <label className="inspectionIncludeToggle" onClick={(event) => event.preventDefault()}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(paragraphState.include)}
+                                  onChange={(e) => updateInspectionParagraph(paragraph.key, "include", e.target.checked)}
+                                />
+                                Include
+                              </label>
+                            </summary>
+                            <textarea
+                              className="inp"
+                              value={paragraphState.text || ""}
+                              onChange={(e) => updateInspectionParagraph(paragraph.key, "text", e.target.value)}
+                              placeholder="Edit paragraph language for export..."
+                            />
+                          </details>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
           ) : (
@@ -6585,6 +6738,21 @@ const loadPdfJs = () => {
                 </div>
                 <div className="printDivider" />
                 <div className="printBlock">{formatBlock(reportData.background.notes)}</div>
+              </div>
+            </div>
+
+            <div className="printPage">
+              <div className="printSection">
+                <h3>Inspection</h3>
+                {inspectionParagraphsForExport.length ? (
+                  <div className="printParagraphStack">
+                    {inspectionParagraphsForExport.map(paragraph => (
+                      <p key={`print-${paragraph.key}`} className="printBlock">{paragraph.text}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="printBlock">No inspection narrative paragraphs are currently selected.</div>
+                )}
               </div>
             </div>
 

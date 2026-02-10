@@ -2225,6 +2225,58 @@
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       }
 
+      .reportOverviewBox{
+        border:1px solid rgba(14,165,233,0.25);
+        background:#F0F9FF;
+        border-radius:12px;
+        padding:10px 12px;
+        font-size:12px;
+        color:#0F172A;
+        line-height:1.55;
+      }
+      .inspectionParagraphList{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+      }
+      .inspectionParagraphCard{
+        border:1px solid var(--border);
+        background:#fff;
+        border-radius:12px;
+        padding:10px;
+      }
+      .inspectionParagraphCard summary{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+        list-style:none;
+        cursor:pointer;
+        font-size:12px;
+        font-weight:1100;
+        color:#0F172A;
+      }
+      .inspectionParagraphCard summary::-webkit-details-marker{ display:none; }
+      .inspectionIncludeToggle{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        font-size:11px;
+        font-weight:1000;
+        text-transform:uppercase;
+        color:#334155;
+      }
+      .inspectionParagraphCard textarea{
+        margin-top:10px;
+        min-height:100px;
+      }
+      .printParagraphStack{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+
+
       /* ========= PHOTOS VIEW ========= */
       .photosView{
         display:flex;
