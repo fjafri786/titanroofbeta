@@ -702,7 +702,7 @@ const loadPdfJs = () => {
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v4.2.state";
+      const STORAGE_KEY = "titanroof.v4.2.3.state";
       const AUTOSAVE_HISTORY_KEY = `${STORAGE_KEY}.autosaveHistory`;
       const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
       const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
@@ -1289,8 +1289,8 @@ const loadPdfJs = () => {
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
           const payload = {
-            app: "TitanRoof 4.2.2 Beta",
-            version: "4.2.2",
+            app: "TitanRoof 4.2.3 Beta",
+            version: "4.2.3",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
@@ -1900,6 +1900,24 @@ const loadPdfJs = () => {
             obsPhotoOverflow: Math.max(0, obsPhotos.length - DASHBOARD_PHOTO_LIMIT)
           };
         }, [dashFocusDir, pageItems]);
+
+        const dashboardSummary = useMemo(() => {
+          return pageItems.reduce((summary, item) => {
+            if(item.type === "ts"){
+              summary.tsItems.push(item);
+              return summary;
+            }
+            if(item.type === "wind"){
+              summary.totalCreased += item.data.creasedCount || 0;
+              summary.totalTornMissing += item.data.tornMissingCount || 0;
+            }
+            return summary;
+          }, {
+            tsItems: [],
+            totalCreased: 0,
+            totalTornMissing: 0
+          });
+        }, [pageItems]);
 
         const inspectionParagraphsForExport = useMemo(() => {
           return INSPECTION_PARAGRAPH_ORDER
@@ -4629,7 +4647,7 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2.2" />
+          <TopBar label="TitanRoof Beta v4.2.3" />
           {isAuthenticated && headerContent}
           {isAuthenticated && (
             <input
@@ -4647,7 +4665,7 @@ const loadPdfJs = () => {
           {!isAuthenticated && (
             <div className="authOverlay">
               <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.2.2 Beta Access</div>
+                <div className="authTitle">TitanRoof 4.2.3 Beta Access</div>
                 <div className="authHint">Enter the security password to continue.</div>
                 <div className="lbl">Password</div>
                 <input
@@ -6601,7 +6619,7 @@ const loadPdfJs = () => {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.2.2</div>
+                <div className="printTitleHero">Titan Roof Version 4.2.3</div>
                 <div className="printTitle">{reportData.project.projectName || residenceName}</div>
                 <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
                 <div className="printMetaGrid">
