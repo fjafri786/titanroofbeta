@@ -628,6 +628,10 @@ const loadPdfJs = () => {
       };
 
       const STORAGE_KEY = "titanroof.v4.2.state";
+      const AUTOSAVE_HISTORY_KEY = `${STORAGE_KEY}.autosaveHistory`;
+      const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+      const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
+      const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
 
       function App(){
         const viewportRef = useRef(null);
@@ -1057,6 +1061,39 @@ const loadPdfJs = () => {
         const saveNoticeTimeoutRef = useRef(null);
         const [saveNotice, setSaveNotice] = useState(null);
 
+        const readAutoSaveHistory = useCallback(() => {
+          const raw = localStorage.getItem(AUTOSAVE_HISTORY_KEY);
+          if(!raw) return [];
+          try{
+            const parsed = JSON.parse(raw);
+            if(!Array.isArray(parsed)) return [];
+            return parsed.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
+          }catch(err){
+            console.warn("Failed to parse autosave history", err);
+            return [];
+          }
+        }, []);
+
+        const saveAutoSaveHistory = useCallback((history) => {
+          try{
+            localStorage.setItem(AUTOSAVE_HISTORY_KEY, JSON.stringify(history));
+          }catch(err){
+            console.warn("Failed to save autosave history", err);
+          }
+        }, []);
+
+        const pushAutoSaveSnapshot = useCallback((snapshot) => {
+          const now = Date.now();
+          const earliest = now - AUTO_SAVE_RETENTION_MS;
+          const nextHistory = [
+            ...readAutoSaveHistory(),
+            { savedAt: now, snapshot }
+          ]
+            .filter(entry => entry.savedAt >= earliest)
+            .slice(-AUTO_SAVE_HISTORY_LIMIT);
+          saveAutoSaveHistory(nextHistory);
+        }, [readAutoSaveHistory, saveAutoSaveHistory]);
+
         const showSaveNotice = useCallback((timeString) => {
           if(saveNoticeTimeoutRef.current){
             clearTimeout(saveNoticeTimeoutRef.current);
@@ -1077,6 +1114,9 @@ const loadPdfJs = () => {
           const snapshot = buildState();
           try{
             localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+            if(source === "auto"){
+              pushAutoSaveSnapshot(snapshot);
+            }
           }catch(err){
             console.warn("Failed to save project data", err);
             return false;
@@ -1087,7 +1127,36 @@ const loadPdfJs = () => {
             showSaveNotice(timeString);
           }
           return true;
-        }, [buildState, showSaveNotice]);
+        }, [buildState, showSaveNotice, pushAutoSaveSnapshot]);
+
+        const restoreAutoSave = useCallback(() => {
+          const history = readAutoSaveHistory();
+          if(!history.length){
+            window.alert("No autosave history found yet. Autosaves are created every 5 minutes and kept for 30 minutes.");
+            return;
+          }
+          const options = history.map((entry, idx) => {
+            const label = new Date(entry.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+            return `${idx + 1}. ${label}`;
+          });
+          const selection = window.prompt(
+            `Recover a checkpoint from the last 30 minutes:\n${options.join("\n")}\n\nEnter a number (latest is ${history.length}).`,
+            String(history.length)
+          );
+          if(selection == null) return;
+          const selectedIndex = parseInt(selection, 10) - 1;
+          const chosen = history[selectedIndex];
+          if(!chosen){
+            window.alert("Invalid checkpoint selection.");
+            return;
+          }
+          applySnapshot(chosen.snapshot, "recovery");
+          try{
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(chosen.snapshot));
+          }catch(err){
+            console.warn("Failed to persist recovered state", err);
+          }
+        }, [applySnapshot, readAutoSaveHistory]);
 
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
@@ -1134,11 +1203,16 @@ const loadPdfJs = () => {
             applySnapshot(parsed, "restore");
           }catch(err){
             console.warn("Failed to restore saved state", err);
+            const history = readAutoSaveHistory();
+            const fallback = history[history.length - 1];
+            if(fallback?.snapshot){
+              applySnapshot(fallback.snapshot, "recovery");
+            }
           }
-        }, [applySnapshot]);
+        }, [applySnapshot, readAutoSaveHistory]);
 
         useEffect(() => {
-          const id = setInterval(() => saveState("auto"), 5 * 60 * 1000);
+          const id = setInterval(() => saveState("auto"), AUTO_SAVE_INTERVAL_MS);
           return () => clearInterval(id);
         }, [saveState]);
 
@@ -2059,6 +2133,7 @@ const loadPdfJs = () => {
           setPanelView("items");
           counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1 };
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
           setLastSavedAt(null);
           setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false });
         };
@@ -3786,6 +3861,7 @@ const loadPdfJs = () => {
             onSave={() => saveState("manual")}
             onSaveAs={exportTrp}
             onOpen={() => trpInputRef.current?.click()}
+            onRecover={restoreAutoSave}
             onExport={() => { saveState("manual"); setExportMode(true); }}
             lastSavedAt={lastSavedAt}
             exportDisabled={exportDisabled}
@@ -6128,6 +6204,9 @@ const loadPdfJs = () => {
                       </button>
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => trpInputRef.current?.click())}>
                         Open
+                      </button>
+                      <button className="btn" type="button" onClick={() => handleMobileAction(restoreAutoSave)}>
+                        Recover
                       </button>
                       <button className="btn" type="button" disabled={exportDisabled} onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
                         Export

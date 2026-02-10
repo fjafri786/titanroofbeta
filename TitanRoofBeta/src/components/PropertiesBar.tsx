@@ -16,6 +16,7 @@ interface PropertiesBarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onOpen: () => void;
+  onRecover: () => void;
   onExport: () => void;
   lastSavedAt: { source: string; time: string } | null;
   exportDisabled?: boolean;
@@ -42,6 +43,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onSave,
   onSaveAs,
   onOpen,
+  onRecover,
   onExport,
   lastSavedAt,
   exportDisabled = false,
@@ -103,6 +105,9 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             </button>
             <button className="hdrBtn ghost" type="button" onClick={onOpen}>
               Open
+            </button>
+            <button className="hdrBtn ghost" type="button" onClick={onRecover}>
+              Recover
             </button>
             <button
               className="hdrBtn ghost"
