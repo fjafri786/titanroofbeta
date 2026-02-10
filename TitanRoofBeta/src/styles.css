@@ -1489,6 +1489,18 @@
       .radioGrid.wrap{
         flex-wrap:wrap;
       }
+
+      .radioGrid.compact{
+        gap:6px;
+        margin-top:8px;
+      }
+      .radioGrid.compact .radio{
+        flex:0 0 auto;
+        min-width:68px;
+        padding:7px 10px;
+        border-radius:10px;
+        font-size:11px;
+      }
       .radio{
         flex: 1 1 0px;
         min-width: 0;
@@ -2266,6 +2278,10 @@
         text-transform:uppercase;
         color:#334155;
       }
+      
+      .inspectionInlineControls{
+        margin-top:10px;
+      }
       .inspectionNarrativeText{
         margin-top:10px;
         border:1px solid var(--border);
@@ -2606,6 +2622,15 @@
         display:flex;
         flex-wrap:wrap;
         gap:8px;
+      }
+      
+      .chipList.compact{
+        gap:6px;
+        margin-top:8px;
+      }
+      .chipList.compact .chip{
+        padding:5px 8px;
+        font-size:11px;
       }
       .chip{
         display:flex;
