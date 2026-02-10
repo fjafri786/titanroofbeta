@@ -1820,9 +1820,9 @@ const loadPdfJs = () => {
 
         const dashFocusData = useMemo(() => {
           if(!dashFocusDir) return null;
-          const tsItems = pageItems.filter(item => item.type === "ts" && item.data.dir === dashFocusDir);
-          const windItems = pageItems.filter(item => item.type === "wind" && item.data.dir === dashFocusDir);
-          const obsItems = pageItems.filter(item => item.type === "obs" && item.data.dir === dashFocusDir);
+          const tsItems = pageItems.filter(item => item.type === "ts" && item.data?.dir === dashFocusDir);
+          const windItems = pageItems.filter(item => item.type === "wind" && item.data?.dir === dashFocusDir);
+          const obsItems = pageItems.filter(item => item.type === "obs" && item.data?.dir === dashFocusDir);
           let maxBruise = null;
           let maxBruiseSize = 0;
           let maxBruiseItem = null;
@@ -1833,7 +1833,8 @@ const loadPdfJs = () => {
           const obsPhotos = [];
 
           tsItems.forEach(ts => {
-            (ts.data.bruises || []).forEach(b => {
+            const tsData = ts.data || {};
+            (tsData.bruises || []).forEach(b => {
               const size = parseSize(b.size);
               if(size > maxBruiseSize){
                 maxBruiseSize = size;
@@ -1841,15 +1842,15 @@ const loadPdfJs = () => {
                 maxBruiseItem = ts;
               }
             });
-            const tsLabel = testSquareLabel(ts.data.dir);
-            if(ts.data.overviewPhoto?.url){
+            const tsLabel = testSquareLabel(tsData.dir);
+            if(tsData.overviewPhoto?.url){
               hailPhotos.push({
                 itemId: ts.id,
-                url: ts.data.overviewPhoto.url,
+                url: tsData.overviewPhoto.url,
                 caption: `Overview of the ${tsLabel}`
               });
             }
-            (ts.data.bruises || []).forEach((b, idx) => {
+            (tsData.bruises || []).forEach((b, idx) => {
               if(!b.photo?.url) return;
               hailPhotos.push({
                 itemId: ts.id,
@@ -1857,7 +1858,7 @@ const loadPdfJs = () => {
                 caption: `Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`
               });
             });
-            (ts.data.conditions || []).forEach((c, idx) => {
+            (tsData.conditions || []).forEach((c, idx) => {
               if(!c.photo?.url) return;
               const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
               hailPhotos.push({
@@ -1869,27 +1870,28 @@ const loadPdfJs = () => {
           });
 
           windItems.forEach(wind => {
-            totalCreased += wind.data.creasedCount || 0;
-            totalTornMissing += wind.data.tornMissingCount || 0;
-            if(wind.data.scope !== "exterior" && wind.data.creasedPhoto?.url){
+            const windData = wind.data || {};
+            totalCreased += windData.creasedCount || 0;
+            totalTornMissing += windData.tornMissingCount || 0;
+            if(windData.scope !== "exterior" && windData.creasedPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
-                url: wind.data.creasedPhoto.url,
-                caption: windCaption("creased", wind.data)
+                url: windData.creasedPhoto.url,
+                caption: windCaption("creased", windData)
               });
             }
-            if(wind.data.scope !== "exterior" && wind.data.tornMissingPhoto?.url){
+            if(windData.scope !== "exterior" && windData.tornMissingPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
-                url: wind.data.tornMissingPhoto.url,
-                caption: windCaption("torn", wind.data)
+                url: windData.tornMissingPhoto.url,
+                caption: windCaption("torn", windData)
               });
             }
-            if(wind.data.overviewPhoto?.url){
+            if(windData.overviewPhoto?.url){
               windPhotos.push({
                 itemId: wind.id,
-                url: wind.data.overviewPhoto.url,
-                caption: windCaption("overview", wind.data)
+                url: windData.overviewPhoto.url,
+                caption: windCaption("overview", windData)
               });
             }
           });
@@ -2008,10 +2010,32 @@ const loadPdfJs = () => {
             ? `We examined exterior and roof metal components for hail indicators. Diagram entries include ${localJoinReadableList(hailEntries)}.`
             : "We examined exterior and roof metal components for hail indicators. No hail dents or spatter marks were mapped on appurtenances or downspouts.";
 
-          const tsCount = pageItems.filter(item => item.type === "ts").length;
-          const tsBruises = pageItems.reduce((count, item) => count + (item.type === "ts" ? (item.data.bruises || []).length : 0), 0);
+          const tsItems = pageItems.filter(item => item.type === "ts");
+          const tsCount = tsItems.length;
+          const tsByDirection = tsItems.reduce((acc, item) => {
+            const dir = item.data?.dir;
+            if(!dir) return acc;
+            if(!acc[dir]) acc[dir] = { squares: 0, hits: 0, maxSize: 0, maxSizeLabel: "" };
+            acc[dir].squares += 1;
+            (item.data?.bruises || []).forEach(bruise => {
+              const parsed = parseSize(bruise.size);
+              acc[dir].hits += 1;
+              if(parsed > acc[dir].maxSize){
+                acc[dir].maxSize = parsed;
+                acc[dir].maxSizeLabel = bruise.size || "";
+              }
+            });
+            return acc;
+          }, {});
+          const tsBruises = Object.values(tsByDirection).reduce((count, stats) => count + stats.hits, 0);
+          const directionalHitText = ["N", "S", "E", "W"].map(dir => {
+            const stats = tsByDirection[dir];
+            if(!stats || !stats.hits) return "";
+            const maxSizeText = stats.maxSizeLabel ? ` with a largest mapped bruise of ${stats.maxSizeLabel}\"` : "";
+            return `${localDirLabel(dir)} slope (${stats.squares} test square${stats.squares === 1 ? "" : "s"}): ${stats.hits} hail hit${stats.hits === 1 ? "" : "s"}${maxSizeText}`;
+          }).filter(Boolean);
           const testSquaresText = tsCount
-            ? `We examined ${tsCount} test square${tsCount === 1 ? "" : "s"} across directional slopes. ${tsBruises ? `The diagram includes ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"} within the test squares.` : "No hail bruises or punctures were mapped within the test squares."}`
+            ? `We examined ${tsCount} test square${tsCount === 1 ? "" : "s"} across directional slopes. ${tsBruises ? `The diagram includes ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"} within the test squares${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "No hail bruises or punctures were mapped within the test squares."}`
             : "No test squares were mapped on the diagram.";
 
           const roofCondition = reportData.inspection?.roofCondition || "fair";
@@ -2041,7 +2065,7 @@ const loadPdfJs = () => {
               key: "interior",
               label: "Interior and Roof",
               sections: [
-                { key: "interior", title: "Interior findings", text: reportData.inspection.paragraphs?.interior?.text?.trim() || "No interior observations were documented in the diagram for this export." },
+                { key: "interior", title: "Interior findings", text: "No interior observations were documented in the diagram for this export." },
                 { key: "windRoof", title: "Roof wind findings", text: roofWindText },
                 { key: "testSquares", title: "Test squares", text: testSquaresText }
               ]
@@ -2055,7 +2079,7 @@ const loadPdfJs = () => {
             return {
               key: section.key,
               include: configured?.include ?? true,
-              text: configured?.text?.trim() ? configured.text : section.text
+              text: section.text
             };
           })).filter(paragraph => paragraph.include && paragraph.text)
         ), [inspectionGeneratedSections, reportData.inspection.paragraphs]);
@@ -6559,6 +6583,40 @@ const loadPdfJs = () => {
               {reportTab === "inspection" && (
                 <>
                   <div className="reportCard">
+                    <div className="reportSectionTitle">Inspection Narrative</div>
+                    <div className="inspectionParagraphList">
+                      {inspectionGeneratedSections.map(group => (
+                        <details className="inspectionParagraphCard" key={group.key} open>
+                          <summary>
+                            <span>{group.label}</span>
+                          </summary>
+                          <div className="inspectionParagraphList" style={{marginTop:10}}>
+                            {group.sections.map(section => {
+                              const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
+                              return (
+                                <details className="inspectionParagraphCard" key={section.key}>
+                                  <summary>
+                                    <span>{section.title}</span>
+                                    <label className="inspectionIncludeToggle" onClick={(e) => e.stopPropagation()}>
+                                      <input
+                                        type="checkbox"
+                                        checked={paragraphSettings.include ?? true}
+                                        onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
+                                      />
+                                      Include
+                                    </label>
+                                  </summary>
+                                  <div className="inspectionNarrativeText">{section.text}</div>
+                                </details>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="reportCard">
                     <div className="reportSectionTitle">Inspection Settings</div>
                     <div className="reportGrid">
                       <div>
@@ -6589,46 +6647,6 @@ const loadPdfJs = () => {
                           ))}
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  <div className="reportCard">
-                    <div className="reportSectionTitle">Inspection Narrative (Diagram-Synced)</div>
-                    <div className="inspectionParagraphList">
-                      {inspectionGeneratedSections.map(group => (
-                        <details className="inspectionParagraphCard" key={group.key} open>
-                          <summary>
-                            <span>{group.label}</span>
-                          </summary>
-                          <div className="inspectionParagraphList" style={{marginTop:10}}>
-                            {group.sections.map(section => {
-                              const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
-                              const paragraphText = paragraphSettings.text?.trim() ? paragraphSettings.text : section.text;
-                              return (
-                                <details className="inspectionParagraphCard" key={section.key}>
-                                  <summary>
-                                    <span>{section.title}</span>
-                                  </summary>
-                                  <label className="tiny" style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
-                                    <input
-                                      type="checkbox"
-                                      checked={paragraphSettings.include ?? true}
-                                      onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
-                                    />
-                                    Include in export
-                                  </label>
-                                  <textarea
-                                    className="inp"
-                                    value={paragraphText}
-                                    onChange={(e) => updateInspectionParagraph(section.key, "text", e.target.value)}
-                                    placeholder="Edit paragraph text..."
-                                  />
-                                </details>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      ))}
                     </div>
                   </div>
                 </>
