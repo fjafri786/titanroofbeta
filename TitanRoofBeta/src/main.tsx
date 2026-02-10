@@ -117,8 +117,12 @@ const loadPdfJs = () => {
       const EXTERIOR_FINISHES = ["Brick", "Vinyl Siding", "Stucco", "Fiber Cement", "Stone", "Wood", "Other"];
       const TRIM_COMPONENTS = ["Fascia", "Soffit", "Window Trim", "Door Trim", "Corner Trim", "Other"];
       const WINDOW_TYPES = ["Single-hung", "Double-hung", "Fixed", "Sliding", "Casement", "Other"];
+      const WINDOW_MATERIALS = ["Vinyl", "Wood", "Aluminum", "Fiberglass", "Composite", "Other"];
       const GARAGE_DOOR_MATERIALS = ["Steel", "Wood", "Aluminum", "Composite", "Other"];
+      const GARAGE_BAY_OPTIONS = ["1", "2", "3", "4", "5+"];
+      const GARAGE_OVERHEAD_DOOR_OPTIONS = ["1", "2", "3", "4", "5+"];
       const GARAGE_ELEVATIONS = ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"];
+      const GENERAL_ORIENTATION_OPTIONS = ["North", "South", "East", "West", "Northeast", "Northwest", "Southeast", "Southwest"];
       const TERRAIN_TYPES = ["Flat", "Sloped", "Mixed"];
       const VEGETATION_TYPES = ["North", "South", "East", "West", "Perimeter", "Minimal", "Dense", "Other"];
       const ROOF_SLOPE_OPTIONS = Array.from({ length: 12 }, (_, idx) => `${idx + 1}:12`);
@@ -160,8 +164,6 @@ const loadPdfJs = () => {
           state: "Texas",
           zip: "",
           inspectionDate: "",
-          startTime: "",
-          endTime: "",
           orientation: "",
           parties: []
         },
@@ -171,8 +173,15 @@ const loadPdfJs = () => {
           framing: "",
           foundation: "",
           exteriorFinishes: [],
+          exteriorFinishByElevation: {
+            north: "",
+            south: "",
+            east: "",
+            west: ""
+          },
           trimComponents: [],
           windowType: "",
+          windowMaterial: "",
           windowScreens: "",
           garagePresent: "",
           garageBays: "",
@@ -246,6 +255,10 @@ const loadPdfJs = () => {
             ...defaults.description,
             ...(source.description || {}),
             exteriorFinishes: normalizeList(source.description?.exteriorFinishes),
+            exteriorFinishByElevation: {
+              ...defaults.description.exteriorFinishByElevation,
+              ...(source.description?.exteriorFinishByElevation || {})
+            },
             trimComponents: normalizeList(source.description?.trimComponents),
             additionalSlopes: normalizeList(source.description?.additionalSlopes),
             roofAppurtenances: normalizeList(source.description?.roofAppurtenances)
@@ -756,6 +769,18 @@ const loadPdfJs = () => {
             };
           });
         };
+        const updateExteriorFinish = (elevation, material) => {
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              exteriorFinishByElevation: {
+                ...prev.description.exteriorFinishByElevation,
+                [elevation]: material
+              }
+            }
+          }));
+        };
         const updateInspection = (componentKey, field, value) => {
           setReportData(prev => ({
             ...prev,
@@ -871,6 +896,27 @@ const loadPdfJs = () => {
             return { ...prev, description: nextDesc };
           });
         }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
+
+        useEffect(() => {
+          setReportData(prev => {
+            const mapping = prev.description.exteriorFinishByElevation || {};
+            const hasDirectionalValue = Object.values(mapping).some(Boolean);
+            if(hasDirectionalValue || prev.description.exteriorFinishes.length !== 1) return prev;
+            const fallbackMaterial = prev.description.exteriorFinishes[0];
+            return {
+              ...prev,
+              description: {
+                ...prev.description,
+                exteriorFinishByElevation: {
+                  north: fallbackMaterial,
+                  south: fallbackMaterial,
+                  east: fallbackMaterial,
+                  west: fallbackMaterial
+                }
+              }
+            };
+          });
+        }, []);
 
         const serializeFile = (obj) => obj ? {
           name: obj.name,
@@ -3232,6 +3278,20 @@ const loadPdfJs = () => {
           if(list.length === 2) return `${list[0]} and ${list[1]}`;
           return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
         };
+        const formatDirectionalExteriorFinishes = (finishByElevation = {}) => {
+          const grouped = Object.entries(finishByElevation).reduce((acc, [elevation, material]) => {
+            if(!material) return acc;
+            if(!acc[material]) acc[material] = [];
+            acc[material].push(elevation);
+            return acc;
+          }, {});
+          const parts = Object.entries(grouped).map(([material, elevations]) => {
+            const readableElevations = joinReadableList(elevations.map(elevation => elevation.toLowerCase()));
+            const elevationLabel = elevations.length > 1 ? "elevations" : "elevation";
+            return `${material.toLowerCase()} on the ${readableElevations} ${elevationLabel}`;
+          });
+          return joinReadableList(parts);
+        };
         const normalizeFacing = (value) => {
           if(!value) return "";
           return value.toString().trim().replace(/^(faced|facing)\s+/i, "").replace(/\.$/, "");
@@ -3267,7 +3327,10 @@ const loadPdfJs = () => {
             descriptionSentences.push(`The ${reportData.description.framing.toLowerCase()}-framed structure was supported on a ${reportData.description.foundation.toLowerCase()} foundation.`);
           }
 
-          if(reportData.description.exteriorFinishes.length){
+          const directionalExteriorFinishes = formatDirectionalExteriorFinishes(reportData.description.exteriorFinishByElevation);
+          if(directionalExteriorFinishes){
+            descriptionSentences.push(`Exterior walls were finished with ${directionalExteriorFinishes}.`);
+          } else if(reportData.description.exteriorFinishes.length){
             descriptionSentences.push(`Exterior walls were finished with ${joinReadableList(reportData.description.exteriorFinishes.map(item => item.toLowerCase()))} on all elevations.`);
           }
 
@@ -3275,8 +3338,11 @@ const loadPdfJs = () => {
             descriptionSentences.push(`Painted trim components were present around all elevations including ${joinReadableList(reportData.description.trimComponents.map(item => item.toLowerCase()))}.`);
           }
 
-          if(reportData.description.windowType || reportData.description.windowScreens){
+          if(reportData.description.windowType || reportData.description.windowScreens || reportData.description.windowMaterial){
             const windowType = reportData.description.windowType ? reportData.description.windowType.toLowerCase() : "windows";
+            const materialPrefix = reportData.description.windowMaterial
+              ? `${reportData.description.windowMaterial.toLowerCase()} `
+              : "";
             const screens = reportData.description.windowScreens === "Yes"
               ? "with screens"
               : reportData.description.windowScreens === "No"
@@ -3285,8 +3351,8 @@ const loadPdfJs = () => {
                   ? "with some screens"
                   : "";
             const windowSentence = reportData.description.windowType
-              ? `${sentenceCase(windowType)} windows were installed${screens ? ` ${screens}` : ""}.`
-              : `Windows were installed${screens ? ` ${screens}` : ""}.`;
+              ? `${sentenceCase(materialPrefix + windowType)} windows were installed${screens ? ` ${screens}` : ""}.`
+              : `${sentenceCase((materialPrefix + "windows").trim())} were installed${screens ? ` ${screens}` : ""}.`;
             descriptionSentences.push(windowSentence);
           }
 
@@ -5775,20 +5841,15 @@ const loadPdfJs = () => {
                         <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
                       </div>
                       <div>
-                        <div className="lbl">Start Time</div>
-                        <input className="inp" type="time" value={reportData.project.startTime} onChange={(e)=>updateReportSection("project", "startTime", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">End Time</div>
-                        <input className="inp" type="time" value={reportData.project.endTime} onChange={(e)=>updateReportSection("project", "endTime", e.target.value)} />
-                      </div>
-                      <div>
                         <div className="lbl">Primary Facing Direction (from diagram)</div>
                         <div className="inlineTag">{frontFaces}</div>
                       </div>
                       <div>
                         <div className="lbl">General Orientation</div>
-                        <input className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)} placeholder="Faced approximately south" />
+                        <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
+                          <option value="">Select</option>
+                          {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
                       </div>
                     </div>
                   </div>
@@ -5866,18 +5927,34 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                     </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Exterior Wall Finishes</div>
-                      <div className="chipList">
-                        {EXTERIOR_FINISHES.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + (reportData.description.exteriorFinishes.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("description", "exteriorFinishes", option)}
-                          >
-                            {option}
-                          </div>
-                        ))}
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">North Exterior Finish</div>
+                        <select className="inp" value={reportData.description.exteriorFinishByElevation.north} onChange={(e)=>updateExteriorFinish("north", e.target.value)}>
+                          <option value="">Select</option>
+                          {EXTERIOR_FINISHES.map(option => <option key={`north-${option}`} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">South Exterior Finish</div>
+                        <select className="inp" value={reportData.description.exteriorFinishByElevation.south} onChange={(e)=>updateExteriorFinish("south", e.target.value)}>
+                          <option value="">Select</option>
+                          {EXTERIOR_FINISHES.map(option => <option key={`south-${option}`} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">East Exterior Finish</div>
+                        <select className="inp" value={reportData.description.exteriorFinishByElevation.east} onChange={(e)=>updateExteriorFinish("east", e.target.value)}>
+                          <option value="">Select</option>
+                          {EXTERIOR_FINISHES.map(option => <option key={`east-${option}`} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">West Exterior Finish</div>
+                        <select className="inp" value={reportData.description.exteriorFinishByElevation.west} onChange={(e)=>updateExteriorFinish("west", e.target.value)}>
+                          <option value="">Select</option>
+                          {EXTERIOR_FINISHES.map(option => <option key={`west-${option}`} value={option}>{option}</option>)}
+                        </select>
                       </div>
                     </div>
                     <div style={{marginTop:12}}>
@@ -5900,6 +5977,13 @@ const loadPdfJs = () => {
                         <select className="inp" value={reportData.description.windowType} onChange={(e)=>updateReportSection("description", "windowType", e.target.value)}>
                           <option value="">Select</option>
                           {WINDOW_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Window Material</div>
+                        <select className="inp" value={reportData.description.windowMaterial} onChange={(e)=>updateReportSection("description", "windowMaterial", e.target.value)}>
+                          <option value="">Select</option>
+                          {WINDOW_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
                         </select>
                       </div>
                       <div>
@@ -5927,11 +6011,17 @@ const loadPdfJs = () => {
                       </div>
                       <div>
                         <div className="lbl">Garage Bays</div>
-                        <input className="inp" value={reportData.description.garageBays} onChange={(e)=>updateReportSection("description", "garageBays", e.target.value)} placeholder="e.g., 2" />
+                        <select className="inp" value={reportData.description.garageBays} onChange={(e)=>updateReportSection("description", "garageBays", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_BAY_OPTIONS.map(option => <option key={`bays-${option}`} value={option}>{option}</option>)}
+                        </select>
                       </div>
                       <div>
                         <div className="lbl">Overhead Doors</div>
-                        <input className="inp" value={reportData.description.garageDoors} onChange={(e)=>updateReportSection("description", "garageDoors", e.target.value)} placeholder="Number of doors" />
+                        <select className="inp" value={reportData.description.garageDoors} onChange={(e)=>updateReportSection("description", "garageDoors", e.target.value)}>
+                          <option value="">Select</option>
+                          {GARAGE_OVERHEAD_DOOR_OPTIONS.map(option => <option key={`doors-${option}`} value={option}>{option}</option>)}
+                        </select>
                       </div>
                       <div>
                         <div className="lbl">Door Panel Material</div>
@@ -6064,8 +6154,8 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Roof Area (square foot)</div>
-                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 4,200 square foot" />
+                        <div className="lbl">Roof Area (square feet)</div>
+                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 4,200 square feet" />
                       </div>
                       <div>
                         <div className="lbl">Attachment Letter</div>
@@ -6328,8 +6418,6 @@ const loadPdfJs = () => {
                   <div className="printMetaCard">
                     <div className="lbl">Inspection</div>
                     <div className="printBlock">Date: {valueOrDash(reportData.project.inspectionDate)}</div>
-                    <div className="printBlock">Start: {valueOrDash(reportData.project.startTime)}</div>
-                    <div className="printBlock">End: {valueOrDash(reportData.project.endTime)}</div>
                   </div>
                   <div className="printMetaCard">
                     <div className="lbl">File References</div>
@@ -6382,12 +6470,14 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.description.framing)}</div>
                   <div className="lbl">Foundation</div>
                   <div>{valueOrDash(reportData.description.foundation)}</div>
-                  <div className="lbl">Exterior Finishes</div>
-                  <div>{joinList(reportData.description.exteriorFinishes)}</div>
+                  <div className="lbl">Exterior Finishes by Elevation</div>
+                  <div>{formatDirectionalExteriorFinishes(reportData.description.exteriorFinishByElevation) || joinList(reportData.description.exteriorFinishes)}</div>
                   <div className="lbl">Trim Components</div>
                   <div>{joinList(reportData.description.trimComponents)}</div>
                   <div className="lbl">Window Type</div>
                   <div>{valueOrDash(reportData.description.windowType)}</div>
+                  <div className="lbl">Window Material</div>
+                  <div>{valueOrDash(reportData.description.windowMaterial)}</div>
                   <div className="lbl">Screens</div>
                   <div>{valueOrDash(reportData.description.windowScreens)}</div>
                   <div className="lbl">Garage</div>
@@ -6428,7 +6518,7 @@ const loadPdfJs = () => {
                   <div>{joinList(reportData.description.roofAppurtenances)}</div>
                   <div className="lbl">EagleView</div>
                   <div>{valueOrDash(reportData.description.eagleView)}</div>
-                  <div className="lbl">Roof Area (square foot)</div>
+                  <div className="lbl">Roof Area (square feet)</div>
                   <div>{valueOrDash(reportData.description.roofArea)}</div>
                   <div className="lbl">Attachment Letter</div>
                   <div>{valueOrDash(reportData.description.attachmentLetter)}</div>
