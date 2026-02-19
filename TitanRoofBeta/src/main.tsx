@@ -742,9 +742,6 @@ const loadPdfJs = () => {
         const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
         const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-        const [isAuthenticated, setIsAuthenticated] = useState(false);
-        const [passwordInput, setPasswordInput] = useState("");
-        const [passwordError, setPasswordError] = useState("");
 
         // Drag states:
         // { mode: 'ts-draw' | 'obs-draw' | 'ts-move' | 'obs-move' | 'ts-point' | 'obs-point' | 'obs-arrow-point' | 'marker-move' | 'pan', id, start, cur, origin, pointIndex }
@@ -939,17 +936,6 @@ const loadPdfJs = () => {
             }
           }));
         };
-        const handleAuthSubmit = (e) => {
-          e.preventDefault();
-          if(passwordInput === "yaali110"){
-            setIsAuthenticated(true);
-            setPasswordInput("");
-            setPasswordError("");
-          } else {
-            setPasswordError("Incorrect password. Please try again.");
-          }
-        };
-
         useEffect(() => {
           pagesRef.current = pages;
         }, [pages]);
@@ -1267,6 +1253,9 @@ const loadPdfJs = () => {
             }
           }catch(err){
             console.warn("Failed to save project data", err);
+            if(source === "manual"){
+              window.alert("Save failed on this device. Please use Save As to export a backup file immediately.");
+            }
             return false;
           }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -1644,6 +1633,7 @@ const loadPdfJs = () => {
             const ay = anchorClient.y - v.top;
             const s0 = prev.scale;
             const s1 = scale;
+            if(!Number.isFinite(s0) || s0 <= 0 || !Number.isFinite(s1)) return prev;
 
             const tx0 = prev.tx;
             const ty0 = prev.ty;
@@ -1730,6 +1720,7 @@ const loadPdfJs = () => {
 
           // scale anchored at pinch center
           const targetScale = clamp(pinchRef.current.startScale * ratio, 0.35, 3.0);
+          if(!Number.isFinite(targetScale)) return;
 
           // also allow two-finger pan using center movement
           const dcx = center.x - pinchRef.current.lastCenterX;
@@ -1745,6 +1736,7 @@ const loadPdfJs = () => {
 
             const s0 = pinchRef.current.startScale;
             const s1 = targetScale;
+            if(!Number.isFinite(s0) || s0 <= 0 || !Number.isFinite(s1)) return prev;
 
             const tx0 = pinchRef.current.startTx;
             const ty0 = pinchRef.current.startTy;
@@ -4794,44 +4786,18 @@ const loadPdfJs = () => {
         return (
           <>
           <TopBar label="TitanRoof Beta v4.2.3" />
-          {isAuthenticated && headerContent}
-          {isAuthenticated && (
-            <input
-              ref={trpInputRef}
-              type="file"
-              accept=".trp,application/trp+json,application/json"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if(file) importTrp(file);
-                e.target.value = "";
-              }}
-            />
-          )}
-          {!isAuthenticated && (
-            <div className="authOverlay">
-              <form className="authCard" onSubmit={handleAuthSubmit}>
-                <div className="authTitle">TitanRoof 4.2.3 Beta Access</div>
-                <div className="authHint">Enter the security password to continue.</div>
-                <div className="lbl">Password</div>
-                <input
-                  className="inp"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e)=>{ setPasswordInput(e.target.value); setPasswordError(""); }}
-                  placeholder="Enter password"
-                  autoFocus
-                />
-                {passwordError && <div className="authError">{passwordError}</div>}
-                <div style={{display:"flex", justifyContent:"flex-end", marginTop:14}}>
-                  <button className="btn btnPrimary" type="submit">Unlock</button>
-                </div>
-              </form>
-            </div>
-          )}
-          {isAuthenticated && (
-            <div style={{display:"none"}} aria-hidden="true" />
-          )}
+          {headerContent}
+          <input
+            ref={trpInputRef}
+            type="file"
+            accept=".trp,application/trp+json,application/json"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if(file) importTrp(file);
+              e.target.value = "";
+            }}
+          />
           {headerEditModal}
           {pageNameModal}
           {photoLightboxModal}
@@ -6696,7 +6662,7 @@ const loadPdfJs = () => {
             </>
           )}
 
-          {isMobile && isAuthenticated && (
+          {isMobile && (
             <>
               <div
                 className={"mobileMenuOverlay" + (mobileMenuOpen ? " show" : "")}
