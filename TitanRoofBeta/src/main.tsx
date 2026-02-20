@@ -713,11 +713,56 @@ const loadPdfJs = () => {
         return null;
       };
 
-      const STORAGE_KEY = "titanroof.v4.2.3.state";
-      const AUTOSAVE_HISTORY_KEY = `${STORAGE_KEY}.autosaveHistory`;
-      const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
-      const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
-      const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
+const STORAGE_KEY = "titanroof.v4.2.3.state";
+const AUTOSAVE_HISTORY_KEY = `${STORAGE_KEY}.autosaveHistory`;
+const PERSISTENCE_DB_NAME = "titanroof.persistence";
+const PERSISTENCE_STORE_NAME = "kv";
+const PERSISTENCE_STATE_KEY = `${STORAGE_KEY}.primary`;
+const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
+const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
+
+let persistenceDbPromise: Promise<IDBDatabase | null> | null = null;
+const getPersistenceDb = () => {
+  if(typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
+  if(persistenceDbPromise) return persistenceDbPromise;
+  persistenceDbPromise = new Promise((resolve) => {
+    const request = window.indexedDB.open(PERSISTENCE_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if(!db.objectStoreNames.contains(PERSISTENCE_STORE_NAME)){
+        db.createObjectStore(PERSISTENCE_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.warn("IndexedDB unavailable for persistent saves", request.error);
+      resolve(null);
+    };
+  });
+  return persistenceDbPromise;
+};
+const writePersistentValue = async (key, value) => {
+  const db = await getPersistenceDb();
+  if(!db) return false;
+  return new Promise((resolve) => {
+    const tx = db.transaction(PERSISTENCE_STORE_NAME, "readwrite");
+    tx.objectStore(PERSISTENCE_STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+    tx.onabort = () => resolve(false);
+  });
+};
+const readPersistentValue = async (key) => {
+  const db = await getPersistenceDb();
+  if(!db) return null;
+  return new Promise((resolve) => {
+    const tx = db.transaction(PERSISTENCE_STORE_NAME, "readonly");
+    const req = tx.objectStore(PERSISTENCE_STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => resolve(null);
+  });
+};
 
       function App(){
         const viewportRef = useRef(null);
@@ -1246,24 +1291,30 @@ const loadPdfJs = () => {
 
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
+          let persisted = false;
           try{
             localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+            persisted = true;
             if(source === "auto"){
               pushAutoSaveSnapshot(snapshot);
             }
           }catch(err){
             console.warn("Failed to save project data", err);
-            if(source === "manual"){
-              window.alert("Save failed on this device. Please use Save As to export a backup file immediately.");
+          }
+          void writePersistentValue(PERSISTENCE_STATE_KEY, snapshot).then((ok) => {
+            if(!ok){
+              console.warn("Failed to save project data to IndexedDB backup");
             }
-            return false;
+          });
+          if(!persisted && source === "manual"){
+            window.alert("Local save is full on this device. A backup save was attempted; use Save As for an extra copy.");
           }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
           setLastSavedAt({ source, time: timeString });
           if(source === "manual"){
             showSaveNotice(timeString);
           }
-          return true;
+          return persisted;
         }, [buildState, showSaveNotice, pushAutoSaveSnapshot]);
 
         const restoreAutoSave = useCallback(() => {
@@ -1333,20 +1384,45 @@ const loadPdfJs = () => {
         }, [applySnapshot]);
 
         useEffect(() => {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if(!raw) return;
-          try{
-            const parsed = JSON.parse(raw);
-            applySnapshot(parsed, "restore");
-          }catch(err){
-            console.warn("Failed to restore saved state", err);
+          let cancelled = false;
+          const restore = async () => {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if(raw){
+              try{
+                const parsed = JSON.parse(raw);
+                if(!cancelled){
+                  applySnapshot(parsed, "restore");
+                }
+                return;
+              }catch(err){
+                console.warn("Failed to restore saved state", err);
+              }
+            }
+            const indexedSnapshot = await readPersistentValue(PERSISTENCE_STATE_KEY);
+            if(indexedSnapshot?.roof){
+              if(!cancelled){
+                applySnapshot(indexedSnapshot, "restore");
+              }
+              return;
+            }
             const history = readAutoSaveHistory();
             const fallback = history[history.length - 1];
-            if(fallback?.snapshot){
+            if(!cancelled && fallback?.snapshot){
               applySnapshot(fallback.snapshot, "recovery");
             }
-          }
+          };
+          void restore();
+          return () => {
+            cancelled = true;
+          };
         }, [applySnapshot, readAutoSaveHistory]);
+
+        useEffect(() => {
+          const timer = setTimeout(() => {
+            void writePersistentValue(PERSISTENCE_STATE_KEY, buildState());
+          }, 1200);
+          return () => clearTimeout(timer);
+        }, [buildState]);
 
         useEffect(() => {
           const id = setInterval(() => saveState("auto"), AUTO_SAVE_INTERVAL_MS);
@@ -2449,6 +2525,7 @@ const loadPdfJs = () => {
           counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1 };
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
+          void writePersistentValue(PERSISTENCE_STATE_KEY, null);
           setLastSavedAt(null);
           setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false });
         };
