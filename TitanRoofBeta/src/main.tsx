@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import ReactDOM from "react-dom/client";
 import PropertiesBar from "./components/PropertiesBar";
 import TopBar from "./components/TopBar";
+import { AuthProvider } from "./auth/AuthContext";
+import AuthGate from "./auth/AuthGate";
 import "./styles.css";
 
 declare global {
@@ -7755,6 +7757,10 @@ const loadPdfJs = () => {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <AuthProvider>
+      <AuthGate>
+        <App />
+      </AuthGate>
+    </AuthProvider>
   </React.StrictMode>
 );
