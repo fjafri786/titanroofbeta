@@ -27,6 +27,88 @@ interface PropertiesBarProps {
   onMobileMenuToggle: () => void;
 }
 
+const svgProps = {
+  className: "icon",
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
+const IconSave = () => (
+  <svg {...svgProps}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <path d="M17 21v-8H7v8" />
+    <path d="M7 3v5h8" />
+  </svg>
+);
+
+const IconSaveAs = () => (
+  <svg {...svgProps}>
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <path d="M12 12v6" />
+    <path d="M9 15l3 3 3-3" />
+  </svg>
+);
+
+const IconOpen = () => (
+  <svg {...svgProps}>
+    <path d="M3 7h6l2 2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    <path d="M3 7V5a2 2 0 0 1 2-2h4l2 2" />
+  </svg>
+);
+
+const IconRecover = () => (
+  <svg {...svgProps}>
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v6h6" />
+  </svg>
+);
+
+const IconExport = () => (
+  <svg {...svgProps}>
+    <path d="M12 3v12" />
+    <path d="M8 7l4-4 4 4" />
+    <path d="M5 21h14a2 2 0 0 0 2-2v-4" />
+    <path d="M3 15v4a2 2 0 0 0 2 2" />
+  </svg>
+);
+
+const IconDiagram = () => (
+  <svg {...svgProps}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 10h18" />
+    <path d="M9 4v16" />
+  </svg>
+);
+
+const IconPhotos = () => (
+  <svg {...svgProps}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <circle cx="9" cy="11" r="2" />
+    <path d="M21 17l-5-5-8 8" />
+  </svg>
+);
+
+const IconReport = () => (
+  <svg {...svgProps}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 13h6" />
+    <path d="M9 17h6" />
+  </svg>
+);
+
+const IconPencil = () => (
+  <svg {...svgProps}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  </svg>
+);
+
 const PropertiesBar: React.FC<PropertiesBarProps> = ({
   viewMode,
   onViewModeChange,
@@ -35,10 +117,9 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   frontFaces,
   pages,
   activePageId,
-  onPageChange,
-  onAddPage,
-  onEditPage,
-  onRotatePage,
+  onAddPage: _onAddPage,
+  onEditPage: _onEditPage,
+  onRotatePage: _onRotatePage,
   onEdit,
   onSave,
   onSaveAs,
@@ -68,19 +149,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
                 title="Edit residence details"
                 aria-label="Edit residence details"
               >
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                </svg>
+                <IconPencil />
               </button>
             )}
           </div>
@@ -97,50 +166,78 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
       {!isMobile && (
         <div className="propertiesCenter">
           <div className="propertiesActions">
-            <button className="hdrBtn ghost" type="button" onClick={onSave}>
-              Save
-            </button>
-            <button className="hdrBtn ghost" type="button" onClick={onSaveAs}>
-              Save As
-            </button>
-            <button className="hdrBtn ghost" type="button" onClick={onOpen}>
-              Open
-            </button>
-            <button className="hdrBtn ghost" type="button" onClick={onRecover}>
-              Recover
+            <button
+              className="hdrBtn ghost withIcon"
+              type="button"
+              onClick={onSave}
+              title="Save (local)"
+            >
+              <IconSave />
+              <span>Save</span>
             </button>
             <button
-              className="hdrBtn ghost"
+              className="hdrBtn ghost withIcon"
+              type="button"
+              onClick={onSaveAs}
+              title="Save As (download JSON)"
+            >
+              <IconSaveAs />
+              <span>Save As</span>
+            </button>
+            <button
+              className="hdrBtn ghost withIcon"
+              type="button"
+              onClick={onOpen}
+              title="Open project file"
+            >
+              <IconOpen />
+              <span>Open</span>
+            </button>
+            <button
+              className="hdrBtn ghost withIcon"
+              type="button"
+              onClick={onRecover}
+              title="Recover from autosave"
+            >
+              <IconRecover />
+              <span>Recover</span>
+            </button>
+            <button
+              className="hdrBtn ghost withIcon"
               type="button"
               onClick={onExport}
               disabled={exportDisabled}
-              title="Export"
+              title="Export report as PDF"
             >
-              Export
+              <IconExport />
+              <span>Export</span>
             </button>
             {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
           </div>
           <div className="modeToggle" role="tablist" aria-label="View mode" data-active={viewMode}>
             <button
               type="button"
-              className={viewMode === "diagram" ? "active" : ""}
+              className={"withIcon" + (viewMode === "diagram" ? " active" : "")}
               onClick={() => onViewModeChange("diagram")}
             >
-              Diagram
+              <IconDiagram />
+              <span>Diagram</span>
             </button>
             <button
               type="button"
-              className={viewMode === "photos" ? "active" : ""}
+              className={"withIcon" + (viewMode === "photos" ? " active" : "")}
               onClick={() => onViewModeChange("photos")}
             >
-              Photos
+              <IconPhotos />
+              <span>Photos</span>
             </button>
             <button
               type="button"
-              className={viewMode === "report" ? "active" : ""}
+              className={"withIcon" + (viewMode === "report" ? " active" : "")}
               onClick={() => onViewModeChange("report")}
             >
-              Report
+              <IconReport />
+              <span>Report</span>
             </button>
           </div>
         </div>

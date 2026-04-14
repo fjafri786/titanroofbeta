@@ -710,6 +710,22 @@ const loadPdfJs = () => {
             </svg>
           );
         }
+        if(name === "free"){
+          return (
+            <svg {...common}>
+              <path d="M3 17c3-6 6-9 9-9s5 3 4 6-3 3-3 0 2-3 4-3 5 2 5 5" />
+            </svg>
+          );
+        }
+        if(name === "trash"){
+          return (
+            <svg {...common}>
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
+            </svg>
+          );
+        }
         return null;
       };
 
@@ -748,7 +764,18 @@ const loadPdfJs = () => {
         const [drag, setDrag] = useState(null);
 
         // counters
-        const counts = useRef({ ts:1, apt:1, wind:1, obs:1, ds:1 });
+        const counts = useRef({ ts:1, apt:1, wind:1, obs:1, ds:1, free:1 });
+
+        // Free draw: stroke in progress + hold-to-perfect recognizer
+        const [freeStroke, setFreeStroke] = useState(null); // { points:[{x,y}], inputType, pressure }
+        const freeHoldRef = useRef({
+          timerId: null,
+          lastMoveAt: 0,
+          lastPos: null,
+          applied: false,
+          suggestion: null
+        });
+        const [freeSuggestion, setFreeSuggestion] = useState(null); // preview of recognized shape
 
         // Header data (Smith Residence / roof line / front faces)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
@@ -796,7 +823,7 @@ const loadPdfJs = () => {
         // Dash collapse
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
-        const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false });
+        const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false, free:false });
         const [dashFocusDir, setDashFocusDir] = useState(null);
         const [photoSectionsOpen, setPhotoSectionsOpen] = useState({});
         const [photoLightbox, setPhotoLightbox] = useState(null);
@@ -1030,6 +1057,10 @@ const loadPdfJs = () => {
           if(it.type === "obs"){
             data.photo = serializeFile(it.data.photo);
           }
+          if(it.type === "free"){
+            // points are plain numeric arrays, no special handling needed
+            data.points = Array.isArray(it.data.points) ? it.data.points.map(p => ({ x:p.x, y:p.y })) : [];
+          }
           return { ...it, data };
         };
         const reviveExteriorPhotos = (entries) => (entries || []).map(entry => ({
@@ -1118,6 +1149,15 @@ const loadPdfJs = () => {
             data.arrowType = data.arrowType || "triangle";
             data.arrowLabelPosition = data.arrowLabelPosition || "end";
           }
+          if(nextType === "free"){
+            data.points = Array.isArray(it.data.points) ? it.data.points : [];
+            data.shape = data.shape || "stroke";
+            data.closed = !!data.closed;
+            data.color = data.color || "#0EA5E9";
+            data.strokeWidth = data.strokeWidth || 2;
+            data.caption = data.caption ?? "";
+            data.locked = !!data.locked;
+          }
           return { ...it, type: nextType, name: nextName, data, pageId: it.pageId || fallbackPageId };
         };
 
@@ -1180,13 +1220,14 @@ const loadPdfJs = () => {
               apt: parsed.counts.apt ?? parsed.counts.app ?? 1,
               wind: parsed.counts.wind ?? 1,
               obs: parsed.counts.obs ?? 1,
-              ds: parsed.counts.ds ?? 1
+              ds: parsed.counts.ds ?? 1,
+              free: parsed.counts.free ?? 1
             };
           } else {
             counts.current = revivedItems.reduce((acc, it) => {
               acc[it.type] = Math.max(acc[it.type] || 1, parseInt((it.name || "").split("-")[1], 10) + 1 || 1);
               return acc;
-            }, { ts:1, apt:1, wind:1, obs:1, ds:1 });
+            }, { ts:1, apt:1, wind:1, obs:1, ds:1, free:1 });
           }
           setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
         }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
@@ -1300,33 +1341,55 @@ const loadPdfJs = () => {
           const payload = {
             app: "TitanRoof 4.2.3 Beta",
             version: "4.2.3",
+            format: "titanroof-project",
             exportedAt: new Date().toISOString(),
             data: snapshot
           };
-          const blob = new Blob([JSON.stringify(payload)], { type: "application/trp+json" });
-          const name = (residenceName || "titanroof-project").trim().replace(/\s+/g, "-");
+          const json = JSON.stringify(payload, null, 2);
+          const blob = new Blob([json], { type: "application/json" });
+          const safeName = (residenceName || reportData?.project?.projectName || "titanroof-project")
+            .trim()
+            .replace(/[^a-zA-Z0-9._-]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+          const stamp = new Date().toISOString().slice(0, 10);
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.download = `${name || "titanroof-project"}.trp`;
-          link.type = "application/trp+json";
+          link.download = `${safeName || "titanroof-project"}-${stamp}.json`;
+          link.type = "application/json";
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }, [buildState, residenceName]);
+          // Revoke on next tick to avoid Safari/iPadOS aborting the download
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          setLastSavedAt({ source: "export", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
+        }, [buildState, residenceName, reportData]);
 
         const importTrp = useCallback((file) => {
           if(!file) return;
           const reader = new FileReader();
+          reader.onerror = () => {
+            window.alert("Could not read that file. Make sure it is a TitanRoof .json project file.");
+          };
           reader.onload = () => {
             try{
-              const raw = JSON.parse(reader.result);
-              const snapshot = raw?.data || raw;
+              const text = typeof reader.result === "string" ? reader.result : "";
+              if(!text) throw new Error("Empty file");
+              const raw = JSON.parse(text);
+              // Accept both the wrapped format ({ app, data }) and a bare snapshot
+              const snapshot = raw?.data && typeof raw.data === "object" ? raw.data : raw;
+              if(!snapshot || typeof snapshot !== "object" || !snapshot.roof){
+                throw new Error("Not a valid TitanRoof project file");
+              }
               applySnapshot(snapshot, "import");
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+              try{
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+              }catch(persistErr){
+                console.warn("Failed to persist imported state to localStorage", persistErr);
+              }
             }catch(err){
-              console.warn("Failed to import TRP file", err);
+              console.warn("Failed to import project file", err);
+              window.alert("Could not open that project file. Please pick a valid TitanRoof .json export.");
             }
           };
           reader.readAsText(file);
@@ -1352,6 +1415,35 @@ const loadPdfJs = () => {
           const id = setInterval(() => saveState("auto"), AUTO_SAVE_INTERVAL_MS);
           return () => clearInterval(id);
         }, [saveState]);
+
+        // Debounced "silent" autosave on any change: persists the latest snapshot to
+        // localStorage 2 seconds after edits stop, so the app can always restore work on
+        // accidental reload. The 5-minute interval above still creates the retained
+        // checkpoints used by Recover.
+        const silentAutoSaveRef = useRef(null);
+        useEffect(() => {
+          if(silentAutoSaveRef.current){
+            clearTimeout(silentAutoSaveRef.current);
+          }
+          silentAutoSaveRef.current = setTimeout(() => {
+            try{
+              const snapshot = buildState();
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+              setLastSavedAt(prev => prev?.source === "manual"
+                ? prev
+                : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
+            }catch(err){
+              // localStorage may be full on iPad — fail silently; the 5-minute checkpoint
+              // will still surface a hard error via saveState("auto") on quota exceeded.
+              console.warn("Silent autosave skipped", err);
+            }
+          }, 2000);
+          return () => {
+            if(silentAutoSaveRef.current){
+              clearTimeout(silentAutoSaveRef.current);
+            }
+          };
+        }, [buildState]);
 
         useEffect(() => {
           if(!exportMode) return;
@@ -2102,6 +2194,105 @@ const loadPdfJs = () => {
           };
         }, [reportData]);
 
+        // === Free-draw shape recognizer ===
+        // Attempts to recognize a drawn stroke as a circle, rectangle, line, or triangle.
+        // Returns { shape, points, closed } or null if no confident match.
+        const recognizeShape = (points) => {
+          if(!points || points.length < 4) return null;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for(const p of points){
+            if(p.x < minX) minX = p.x;
+            if(p.y < minY) minY = p.y;
+            if(p.x > maxX) maxX = p.x;
+            if(p.y > maxY) maxY = p.y;
+          }
+          const w = maxX - minX;
+          const h = maxY - minY;
+          if(w < 0.01 && h < 0.01) return null;
+
+          const first = points[0];
+          const last = points[points.length - 1];
+          const gapToStart = Math.hypot(last.x - first.x, last.y - first.y);
+          const diag = Math.hypot(w, h);
+          const closed = diag > 0 && (gapToStart / diag) < 0.3;
+
+          // Total stroke length
+          let pathLen = 0;
+          for(let i = 1; i < points.length; i++){
+            pathLen += Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y);
+          }
+
+          // LINE: stroke is almost perfectly straight
+          if(!closed){
+            // Perpendicular distance of each point from the line first->last
+            const dx = last.x - first.x;
+            const dy = last.y - first.y;
+            const lineLen = Math.hypot(dx, dy) || 1;
+            let maxDev = 0;
+            for(const p of points){
+              const dev = Math.abs((dy * p.x - dx * p.y + last.x * first.y - last.y * first.x) / lineLen);
+              if(dev > maxDev) maxDev = dev;
+            }
+            if(maxDev / lineLen < 0.08 && lineLen > 0.03){
+              return { shape: "line", points: [{ x: first.x, y: first.y }, { x: last.x, y: last.y }], closed: false };
+            }
+            return null;
+          }
+
+          // Closed shape: test circle vs rect vs triangle
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+
+          // CIRCLE: consistent radius
+          const radii = points.map(p => Math.hypot(p.x - cx, p.y - cy));
+          const rAvg = radii.reduce((a, b) => a + b, 0) / radii.length;
+          const rMin = Math.min(...radii);
+          const rMax = Math.max(...radii);
+          const aspect = Math.min(w, h) / Math.max(w, h);
+          const radiusVariance = (rMax - rMin) / (rAvg || 1);
+          const perimeterCircle = 2 * Math.PI * rAvg;
+          const perimeterMatch = Math.abs(pathLen - perimeterCircle) / (perimeterCircle || 1);
+
+          if(aspect > 0.7 && radiusVariance < 0.35 && perimeterMatch < 0.35){
+            // Generate a perfect circle as a polygon of N points
+            const N = 48;
+            const perfect = [];
+            const r = rAvg;
+            for(let i = 0; i < N; i++){
+              const t = (i / N) * Math.PI * 2;
+              perfect.push({ x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) });
+            }
+            return { shape: "circle", points: perfect, closed: true, center: { x: cx, y: cy }, radius: r };
+          }
+
+          // RECT: bounding-box fill ratio is high and points cluster near the box
+          // Count points inside a margin band around the bounding rectangle
+          const margin = 0.03 * Math.max(w, h);
+          let nearEdge = 0;
+          for(const p of points){
+            const dL = Math.abs(p.x - minX);
+            const dR = Math.abs(p.x - maxX);
+            const dT = Math.abs(p.y - minY);
+            const dB = Math.abs(p.y - maxY);
+            const d = Math.min(dL, dR, dT, dB);
+            if(d <= margin) nearEdge++;
+          }
+          if(nearEdge / points.length > 0.8 && w > 0.02 && h > 0.02){
+            return {
+              shape: "rect",
+              points: [
+                { x: minX, y: minY },
+                { x: maxX, y: minY },
+                { x: maxX, y: maxY },
+                { x: minX, y: maxY }
+              ],
+              closed: true
+            };
+          }
+
+          return null;
+        };
+
         // === FACTORY / UPDATERS ===
         const createItem = (type, pos, options = {}) => {
           const base = { id: uid(), type, name:"", data: {}, x: pos?.x ?? 0.5, y: pos?.y ?? 0.5, pageId: activePageId };
@@ -2187,6 +2378,21 @@ const loadPdfJs = () => {
               label: "",
               arrowType: "triangle",
               arrowLabelPosition: "end"
+            };
+          }
+
+          if(type === "free"){
+            base.name = `DRAW-${counts.current.free++}`;
+            base.data = {
+              locked: false,
+              caption: "",
+              points: pos?.points || [],
+              shape: options.shape || "stroke", // "stroke" | "circle" | "rect" | "line" | "triangle"
+              closed: !!options.closed,
+              color: options.color || "#0EA5E9",
+              strokeWidth: options.strokeWidth || 2,
+              pressure: options.pressure || 1,
+              inputType: options.inputType || "mouse"
             };
           }
 
@@ -2446,11 +2652,11 @@ const loadPdfJs = () => {
           setItems([]);
           setSelectedId(null);
           setPanelView("items");
-          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1 };
+          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1, free:1 };
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
           setLastSavedAt(null);
-          setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false });
+          setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false, free:false });
         };
 
         const setTsOverviewPhoto = async (file) => {
@@ -2805,6 +3011,22 @@ const loadPdfJs = () => {
           }
 
           // If no hit:
+          if(tool === "free"){
+            e.preventDefault();
+            const inputType = e.pointerType || "mouse";
+            const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
+            setFreeStroke({ points: [norm], inputType, pressure });
+            setDrag({ mode: "free-draw", start: norm, cur: norm });
+            freeHoldRef.current = {
+              timerId: null,
+              lastMoveAt: performance.now(),
+              lastPos: norm,
+              applied: false,
+              suggestion: null
+            };
+            setFreeSuggestion(null);
+            return;
+          }
           if(tool === "ts"){
             e.preventDefault();
             setDrag({ mode:"ts-draw", start: norm, cur: norm });
@@ -2871,6 +3093,35 @@ const loadPdfJs = () => {
           const norm = clientToSheetNorm(e.clientX, e.clientY);
           if(!norm) return;
 
+          if(drag.mode === "free-draw"){
+            e.preventDefault();
+            const now = performance.now();
+            const last = freeHoldRef.current.lastPos;
+            const moved = last ? Math.hypot(norm.x - last.x, norm.y - last.y) : 1;
+            // If the pointer has moved meaningfully, reset the hold timer
+            if(moved > 0.003){
+              freeHoldRef.current.lastMoveAt = now;
+              freeHoldRef.current.lastPos = norm;
+              freeHoldRef.current.applied = false;
+              if(freeSuggestion) setFreeSuggestion(null);
+            }
+            setFreeStroke(prev => prev ? { ...prev, points: [...prev.points, norm], pressure: e.pressure && e.pressure > 0 ? e.pressure : prev.pressure } : prev);
+            setDrag(prev => ({ ...prev, cur: norm }));
+
+            // Hold-to-perfect: if the user has been still for >= 550ms at the end of the stroke,
+            // try to recognize the shape and preview the snapped result. Requires pen or touch
+            // input (mouse users normally don't rest the cursor) but we support all for fairness.
+            if(!freeHoldRef.current.applied && now - freeHoldRef.current.lastMoveAt > 550){
+              const pts = (freeStroke?.points || []).concat([norm]);
+              const suggestion = recognizeShape(pts);
+              if(suggestion){
+                freeHoldRef.current.applied = true;
+                freeHoldRef.current.suggestion = suggestion;
+                setFreeSuggestion(suggestion);
+              }
+            }
+            return;
+          }
           if(drag.mode === "ts-draw"){
             e.preventDefault();
             setDrag(prev => ({ ...prev, cur: norm }));
@@ -2965,6 +3216,30 @@ const loadPdfJs = () => {
             startPinchIfTwo();
           }
 
+          if(drag?.mode === "free-draw"){
+            const stroke = freeStroke;
+            const suggestion = freeHoldRef.current.suggestion;
+            if(stroke && stroke.points.length > 1){
+              const useSnap = !!suggestion;
+              const finalPoints = useSnap ? suggestion.points : stroke.points.map(p => ({ x:p.x, y:p.y }));
+              const finalShape = useSnap ? suggestion.shape : "stroke";
+              const finalClosed = useSnap ? !!suggestion.closed : false;
+              const it = createItem("free", { points: finalPoints }, {
+                shape: finalShape,
+                closed: finalClosed,
+                color: "#0EA5E9",
+                strokeWidth: 2,
+                pressure: stroke.pressure,
+                inputType: stroke.inputType
+              });
+              setItems(prev => [...prev, it]);
+              setSelectedId(it.id);
+              setPanelView("props");
+            }
+            setFreeStroke(null);
+            setFreeSuggestion(null);
+            freeHoldRef.current = { timerId: null, lastMoveAt: 0, lastPos: null, applied: false, suggestion: null };
+          }
           if(drag?.mode === "ts-draw"){
             const start = drag.start, cur = drag.cur;
             const w = Math.abs(cur.x - start.x);
@@ -3059,7 +3334,7 @@ const loadPdfJs = () => {
 
         // === Grouped list ===
         const grouped = useMemo(() => {
-          const g = { ts:[], apt:[], ds:[], obs:[], wind:[] };
+          const g = { ts:[], apt:[], ds:[], obs:[], wind:[], free:[] };
           pageItems.forEach(i => g[i.type] && g[i.type].push(i));
           return g;
         }, [pageItems]);
@@ -3361,6 +3636,7 @@ const loadPdfJs = () => {
           { key:"ds", label:"Downspout", shortLabel:"DS", icon:"ds", cls:"ds" },
           { key:"wind", label:"Wind", shortLabel:"W", icon:"wind", cls:"wind" },
           { key:"obs", label:"Observation", shortLabel:"OBS", icon:"obs", cls:"obs" },
+          { key:"free", label:"Free Draw (Pencil)", shortLabel:"DRAW", icon:"free", cls:"free" },
         ];
 
         const handleToolSelect = (key) => {
@@ -4790,7 +5066,7 @@ const loadPdfJs = () => {
           <input
             ref={trpInputRef}
             type="file"
-            accept=".trp,application/trp+json,application/json"
+            accept=".json,application/json,.trp,application/trp+json"
             style={{ display: "none" }}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -4954,12 +5230,13 @@ const loadPdfJs = () => {
                             <button
                               key={t.key}
                               ref={isObs ? obsButtonRef : undefined}
-                              className={"toolBtn textLabel " + t.cls + " " + (isActive ? "active" : "")}
+                              className={"toolBtn iconLabel " + t.cls + " " + (isActive ? "active" : "")}
                               type="button"
                               onClick={() => handleToolSelect(t.key)}
                               title={t.key==="ts" ? "Drag to draw a test square" : t.label}
                               aria-label={t.label}
                             >
+                              <Icon name={t.icon} />
                               <span className="toolText">{t.shortLabel}</span>
                             </button>
                           );
@@ -5059,6 +5336,45 @@ const loadPdfJs = () => {
                       </defs>
 
                       <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      {dashVisibleItems.filter(i => i.type === "free" && i.data.points?.length > 1).map(i => {
+                        const pts = i.data.points;
+                        const isSel = selectedId === i.id;
+                        const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ") + (i.data.closed ? " Z" : "");
+                        return (
+                          <path
+                            key={i.id}
+                            d={d}
+                            fill={i.data.closed ? "rgba(14,165,233,0.10)" : "none"}
+                            stroke={i.data.color || "#0EA5E9"}
+                            strokeWidth={(i.data.strokeWidth || 2) * (isSel ? 1.5 : 1)}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity={isSel ? 1 : 0.95}
+                            style={{ cursor: "pointer" }}
+                          />
+                        );
+                      })}
+                      {freeStroke && freeStroke.points.length > 1 && !freeSuggestion && (
+                        <path
+                          d={freeStroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ")}
+                          fill="none"
+                          stroke="#0EA5E9"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+                      {freeSuggestion && (
+                        <path
+                          d={freeSuggestion.points.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ") + (freeSuggestion.closed ? " Z" : "")}
+                          fill={freeSuggestion.closed ? "rgba(14,165,233,0.15)" : "none"}
+                          stroke="#0EA5E9"
+                          strokeWidth="3"
+                          strokeDasharray="6,4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
                       {dashVisibleItems.filter(i => i.type === "ts").map(renderTS)}
                       {dashVisibleItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsArea)}
                       {dashVisibleItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrow)}
@@ -5100,7 +5416,7 @@ const loadPdfJs = () => {
                       )}
                     </svg>
 
-                    {dashVisibleItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
+                    {dashVisibleItems.filter(i => i.type !== "ts" && i.type !== "free" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                       const isSel = selectedId === i.id;
                       const m = markerMeta(i);
                       return (
@@ -5468,7 +5784,7 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
-                    {["ts","apt","ds","obs","wind"].map(type => {
+                    {["ts","apt","ds","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
                       const isOpen = !!groupOpen[type];
@@ -5480,6 +5796,7 @@ const loadPdfJs = () => {
                       if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; }
                       if(type==="obs"){ title="Observations"; color="var(--c-obs)"; }
                       if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; }
+                      if(type==="free"){ title="Free Draw"; color="#0EA5E9"; }
 
                       return (
                         <div key={type}>
@@ -5538,6 +5855,16 @@ const loadPdfJs = () => {
                                 {type==="wind" && (
                                   <span>
                                     {item.data.dir} • Creased: {item.data.creasedCount || 0} • Torn/Missing: {item.data.tornMissingCount || 0}
+                                  </span>
+                                )}
+                                {type==="free" && (
+                                  <span>
+                                    {item.data.shape === "circle" ? "Circle" :
+                                     item.data.shape === "rect" ? "Rectangle" :
+                                     item.data.shape === "line" ? "Line" :
+                                     item.data.shape === "triangle" ? "Triangle" : "Stroke"}
+                                    {" • "}
+                                    {(item.data.points || []).length} pts
                                   </span>
                                 )}
                               </div>
@@ -6107,6 +6434,55 @@ const loadPdfJs = () => {
                             </div>
 
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Observation</button>
+                          </>
+                        )}
+
+                        {/* === FREE DRAW === */}
+                        {activeItem.type === "free" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Shape</div>
+                              <div className="tiny" style={{marginBottom:4}}>
+                                {activeItem.data.shape === "circle" ? "Recognized circle (hold-to-perfect)" :
+                                 activeItem.data.shape === "rect" ? "Recognized rectangle (hold-to-perfect)" :
+                                 activeItem.data.shape === "line" ? "Recognized line (hold-to-perfect)" :
+                                 "Freehand stroke"}
+                              </div>
+                              <div className="tiny">
+                                Input: {activeItem.data.inputType === "pen" ? "Apple Pencil / Stylus" : activeItem.data.inputType === "touch" ? "Touch" : "Mouse"}
+                              </div>
+                            </div>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Stroke Color</div>
+                              <input
+                                className="inp"
+                                type="color"
+                                value={activeItem.data.color || "#0EA5E9"}
+                                onChange={(e)=>updateItemData("color", e.target.value)}
+                              />
+                            </div>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Stroke Width</div>
+                              <input
+                                className="inp"
+                                type="range"
+                                min="1"
+                                max="8"
+                                step="1"
+                                value={activeItem.data.strokeWidth || 2}
+                                onChange={(e)=>updateItemData("strokeWidth", parseInt(e.target.value, 10) || 2)}
+                              />
+                            </div>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Label</div>
+                              <textarea
+                                className="inp"
+                                value={activeItem.data.caption}
+                                onChange={(e)=>updateItemData("caption", e.target.value)}
+                                placeholder="Optional annotation..."
+                              />
+                            </div>
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Drawing</button>
                           </>
                         )}
                       </>

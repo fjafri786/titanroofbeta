@@ -701,6 +701,21 @@
         height: var(--toolbar-control-size);
         border-radius:50%;
       }
+      .toolBtn.iconLabel{
+        padding:0 10px;
+        min-width: calc(var(--toolbar-control-size) + 16px);
+        height: var(--toolbar-control-size);
+        border-radius: 999px;
+        gap:6px;
+      }
+      .toolBtn.iconLabel svg{
+        width:16px;
+        height:16px;
+      }
+      .toolBtn.iconLabel .toolText{
+        font-size:10px;
+      }
+      .toolBtn.free{ --toolColor: #0EA5E9; }
       .toolbar.vertical .toolBtn.textLabel{
         width:100%;
         justify-content:center;
@@ -1263,6 +1278,23 @@
       .modeToggle button.active{
         background: transparent;
         color:#0B2A3A;
+      }
+      .modeToggle button.withIcon{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:5px;
+      }
+      .modeToggle button.withIcon .icon{
+        width:14px;
+        height:14px;
+      }
+      .hdrBtn.withIcon{
+        padding:6px 10px;
+      }
+      .hdrBtn.withIcon .icon{
+        width:14px;
+        height:14px;
       }
       .panelRail{
         width:100%;
