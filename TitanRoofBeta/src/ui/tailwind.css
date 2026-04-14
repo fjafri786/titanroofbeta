@@ -1,0 +1,14 @@
+/*
+ * Tailwind entry point — Phase 6 foundation.
+ *
+ * Imports the design tokens first so utility classes that
+ * reference CSS variables resolve to them, then pulls in the
+ * Tailwind layers. The legacy `styles.css` remains in force for
+ * every pre-existing surface; Tailwind is additive.
+ */
+
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

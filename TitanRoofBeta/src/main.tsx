@@ -6,6 +6,10 @@ import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
 import AppShell from "./app/AppShell";
+// Phase 6 foundation: Tailwind + design tokens. Imported before
+// styles.css so the legacy hand-written rules win any specificity
+// ties while we migrate surfaces over incrementally.
+import "./ui/tailwind.css";
 import "./styles.css";
 
 declare global {

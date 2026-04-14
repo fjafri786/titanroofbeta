@@ -1,0 +1,80 @@
+/*
+ * Design tokens — Phase 6 foundation.
+ *
+ * Every color, spacing, radius, and shadow used by the Tailwind
+ * config resolves back here through CSS custom properties. Both
+ * the existing hand-written `styles.css` and any new Tailwind /
+ * shadcn-style components read these variables, so the palette
+ * lives in exactly one place.
+ *
+ * Dark mode is implemented by flipping the `:root.dark` selector —
+ * any component built against `var(--color-*)` inherits automatically
+ * when the theme toggle lands in a later Phase 6 pass.
+ */
+
+:root {
+  /* Surface / neutral scale */
+  --color-bg: #F6F8FC;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F1F5F9;
+  --color-border: rgba(148, 163, 184, 0.25);
+  --color-text: #0B1220;
+  --color-muted: #64748B;
+
+  /* Brand gradient: sky -> blue -> violet */
+  --color-brand: #0EA5E9;
+  --color-brand-soft: rgba(14, 165, 233, 0.12);
+  --color-brand-strong: #0B2A3A;
+
+  /* Semantic */
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #DC2626;
+  --color-info: #3B82F6;
+
+  /* Titan domain category colors (mirror the legacy --c-* tokens) */
+  --color-ts: #DC2626;
+  --color-apt: #111827;
+  --color-ds: #2563EB;
+  --color-wind: #16A34A;
+  --color-obs: #9333EA;
+  --color-free: #0EA5E9;
+
+  /* Spacing scale (matching the named aliases in tailwind.config.js) */
+  --space-gutter: 24px;
+  --space-card-x: 16px;
+  --space-card-y: 14px;
+
+  /* Radius scale */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-pill: 999px;
+
+  /* Shadow scale */
+  --shadow-elev-1: 0 8px 16px -10px rgba(2, 6, 23, 0.22);
+  --shadow-elev-2: 0 16px 32px -20px rgba(2, 6, 23, 0.22);
+  --shadow-elev-3: 0 22px 42px -20px rgba(2, 6, 23, 0.30);
+  --shadow-ring-brand: 0 0 0 4px rgba(14, 165, 233, 0.18);
+}
+
+:root.dark {
+  --color-bg: #0B1220;
+  --color-surface: #0F172A;
+  --color-surface-muted: #1E293B;
+  --color-border: rgba(148, 163, 184, 0.15);
+  --color-text: #F8FAFC;
+  --color-muted: #94A3B8;
+
+  --color-brand: #38BDF8;
+  --color-brand-soft: rgba(56, 189, 248, 0.16);
+  --color-brand-strong: #E0F2FE;
+
+  --shadow-elev-1: 0 8px 16px -10px rgba(0, 0, 0, 0.6);
+  --shadow-elev-2: 0 16px 32px -20px rgba(0, 0, 0, 0.65);
+  --shadow-elev-3: 0 22px 42px -20px rgba(0, 0, 0, 0.7);
+  --shadow-ring-brand: 0 0 0 4px rgba(56, 189, 248, 0.25);
+}
