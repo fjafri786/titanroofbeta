@@ -1,6 +1,7 @@
 import React from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useProject } from "../project/ProjectContext";
+import SaveIndicator from "../autosave/SaveIndicator";
 
 interface TopBarProps {
   label: string;
@@ -24,6 +25,7 @@ const TopBar: React.FC<TopBarProps> = ({ label }) => {
         </button>
       )}
       <span className="topBarLabel">{label}</span>
+      {route === "workspace" && <SaveIndicator />}
       {user && (
         <div className="topBarUser">
           <span className="topBarUserName" title={user.email || user.displayName}>

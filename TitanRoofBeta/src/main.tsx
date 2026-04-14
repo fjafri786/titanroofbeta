@@ -5,6 +5,7 @@ import TopBar from "./components/TopBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
+import { AutosaveProvider } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
 // Phase 6 foundation: Tailwind + design tokens. Imported before
 // styles.css so the legacy hand-written rules win any specificity
@@ -7766,7 +7767,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <AuthProvider>
       <AuthGate>
         <ProjectProvider>
-          <AppShell WorkspaceComponent={App} />
+          <AutosaveProvider>
+            <AppShell WorkspaceComponent={App} />
+          </AutosaveProvider>
         </ProjectProvider>
       </AuthGate>
     </AuthProvider>

@@ -1,9 +1,8 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Tldraw, type Editor, getSnapshot, loadSnapshot } from "tldraw";
 import "tldraw/tldraw.css";
 import { useProject } from "../project/ProjectContext";
-import { useAuth } from "../auth/AuthContext";
-import { projectStore, type ProjectRecord } from "../storage";
+import { useAutosave } from "../autosave/AutosaveContext";
 
 /**
  * Phase 5 scaffold — tldraw-backed workspace.
@@ -34,7 +33,7 @@ import { projectStore, type ProjectRecord } from "../storage";
 
 const WorkspaceV2: React.FC = () => {
   const { currentProject, returnToDashboard } = useProject();
-  const { user } = useAuth();
+  const { registerEngineSnapshot, forceSave, markDirty } = useAutosave();
   const editorRef = useRef<Editor | null>(null);
 
   const persistenceKey = currentProject ? `titanroof-proj-${currentProject.projectId}` : undefined;
@@ -52,51 +51,47 @@ const WorkspaceV2: React.FC = () => {
           console.warn("Could not load tldraw snapshot", err);
         }
       }
+      // Mark dirty on any store change so the next autosave tick
+      // picks it up. The autosave worker still dedupes against
+      // the last-serialized form, so idle ticks stay cheap.
+      const unlistenStore = editor.store.listen(() => {
+        markDirty();
+      });
+      // Return a cleanup function from the onMount callback; tldraw
+      // runs it on unmount.
+      return () => {
+        try { unlistenStore(); } catch { /* ignore */ }
+      };
     },
-    [currentProject],
+    [currentProject, markDirty],
   );
 
-  const persistSnapshotToRecord = useCallback(async (): Promise<void> => {
-    if (!user || !currentProject || !editorRef.current) return;
-    try {
-      const snapshot = getSnapshot(editorRef.current.store);
-      const updated: ProjectRecord = {
-        ...currentProject,
-        updatedAt: new Date().toISOString(),
-        sections: currentProject.sections.map((section, si) =>
-          si === 0
-            ? {
-                ...section,
-                pages: section.pages.map((page, pi) =>
-                  pi === 0
-                    ? {
-                        ...page,
-                        engine: {
-                          name: "tldraw",
-                          version: "3",
-                          state: snapshot as unknown,
-                        },
-                      }
-                    : page,
-                ),
-              }
-            : section,
-        ),
-      };
-      await projectStore.put(updated);
-    } catch (err) {
-      console.warn("Could not persist tldraw snapshot", err);
-    }
-  }, [user, currentProject]);
+  // Register a snapshot function with the autosave context so the
+  // 10s ticker can persist tldraw state without reaching into this
+  // component directly.
+  useEffect(() => {
+    return registerEngineSnapshot(() => {
+      const editor = editorRef.current;
+      if (!editor) return null;
+      try {
+        return getSnapshot(editor.store);
+      } catch (err) {
+        console.warn("Could not read tldraw snapshot for autosave", err);
+        return null;
+      }
+    });
+  }, [registerEngineSnapshot]);
 
   const handleBack = useCallback(async () => {
-    await persistSnapshotToRecord();
+    // Flush through the autosave path so the indicator goes to
+    // "Saved" before we route away.
+    await forceSave();
     await returnToDashboard();
-  }, [persistSnapshotToRecord, returnToDashboard]);
+  }, [forceSave, returnToDashboard]);
 
   const handleSave = useCallback(async () => {
-    await persistSnapshotToRecord();
-  }, [persistSnapshotToRecord]);
+    await forceSave();
+  }, [forceSave]);
 
   if (!currentProject) {
     return <div className="workspaceV2Empty">No project open.</div>;
