@@ -313,9 +313,160 @@ Resolved by this document:
 
 Still open — to be answered before Phase 5 code starts:
 
-- [ ] tldraw version pin (leaning `^3`)
-- [ ] Photo handling at scale — base64 in the record or separate
-      object store? Tentatively base64 until the Netlify Blobs
-      adapter lands, then promote.
-- [ ] Whether the sync worker runs in a `Worker` or on the main
-      thread for Phase 7. Leaning `Worker` to keep the UI smooth.
+- [x] tldraw version pin — **`tldraw@^3`** (confirmed)
+- [x] Per-**page** scale model (confirmed; already reflected in
+      `ProjectPage.scale`)
+- [x] Photo handling at scale — **start base64 in the record, promote
+      to the Netlify Blobs object store when that adapter ships**.
+      See §8 for the migration plan and the project-size warning.
+- [x] Offline-first confirmed — all saves must succeed with no
+      network. Phase 7's autosave queues writes locally and syncs on
+      reconnect (see §9).
+- [ ] Sync worker threading (main thread vs. `Worker`). Leaning
+      `Worker`. Decided when Phase 7 code lands.
+
+---
+
+## 8. Photo storage — base64 → object store migration
+
+Per Phase 4 decision, photos ship **inline as base64** on the
+`ProjectAttachment.data` field until the Netlify Blobs object store
+adapter lands. That gets the field-capture flow working immediately
+with zero backend setup, at the cost of fast project bloat. This
+section records the migration plan so we do not accumulate heavy
+projects before the promotion happens.
+
+### 8.1 Project size warning
+
+The storage layer enforces a **per-project soft cap of 25 MB** while
+we are in base64 mode. The cap is chosen so that:
+
+1. A typical 20-photo field report (~1 MB/photo after compression at
+   ~1600px longest edge) fits comfortably.
+2. IndexedDB quota on iPadOS Safari (typically ~1 GB shared across
+   origins, but evictable under memory pressure) still holds tens of
+   projects before we run out.
+3. The JSON serialize + parse round trip the workspace does on
+   save/load stays under ~250 ms on a mid-range iPad.
+
+Behavior around the cap:
+
+- Below 20 MB — normal save, no warning.
+- 20 MB to 25 MB — the save succeeds, the dashboard card shows a
+  yellow "Heavy project" badge, and the workspace shows a toast:
+  "This project is approaching the 25 MB size limit. Shrink your
+  photos or wait for the object-store migration."
+- Above 25 MB — the save **still succeeds** (we will not block a
+  user in the field from saving their work), but the toast escalates
+  to red and the dashboard badge turns red. A follow-up retry-only
+  path warns the user on every subsequent save until they free space.
+
+Image-side defenses we ship in the same window:
+
+- **Client-side downscale on import.** Photos dropped or picked into
+  the workspace are automatically resized to a longest edge of
+  1600 px and re-encoded as JPEG at quality 0.82 before they become
+  an attachment. The original is not retained.
+- **Thumbnail generation.** Dashboard thumbnails are generated at
+  320 px longest edge and stored separately in
+  `ProjectRecord.thumbnailDataUrl`, so listing the dashboard does
+  not deserialize the heavy attachment blobs.
+- **Lazy attachment load in the workspace.** The workspace can open
+  a project with attachments collapsed (metadata only) and resolve
+  the base64 `data` fields only when a page that references them is
+  rendered.
+
+### 8.2 Migration plan — base64 → Netlify Blobs
+
+Migration is run **once per project, lazily**, the first time the
+project is opened after the Netlify Blobs adapter ships. The steps:
+
+1. **Detect.** On project open, if
+   `record.schemaVersion < 2` AND any attachment has
+   `data: "data:..."` inline, the migration kicks in.
+2. **Upload each attachment.** For every inline attachment, POST the
+   base64-decoded bytes to the Netlify Blobs adapter. The blob key
+   is `att/<projectId>/<attachmentId>`.
+3. **Swap the reference.** Replace `attachment.data` with a compact
+   reference:
+   ```ts
+   attachment.data = null;
+   attachment.ref = {
+     store: "netlify-blobs",
+     key: `att/${projectId}/${attachmentId}`,
+     byteSize: decodedBytes.length,
+     contentType: attachment.mimeType,
+   };
+   ```
+4. **Bump the schema.** Set `record.schemaVersion = 2` and save the
+   lean record back to the `ProjectStore`.
+5. **Revalidate size.** After migration, the project size cap check
+   is lifted — the soft cap only applies to inline-base64 mode.
+
+### 8.3 Rollback plan
+
+If the Netlify Blobs upload fails for an attachment during migration:
+
+- The attachment keeps its `data: "data:..."` base64 content (not
+  dropped).
+- The record stays at `schemaVersion: 1` until every attachment
+  migrates successfully.
+- A toast surfaces "Some photos could not be uploaded to cloud
+  storage. Retry when back online."
+- Migration resumes automatically on the next online project open.
+
+### 8.4 Schema delta
+
+`ProjectAttachment` gains one optional field in `schemaVersion: 2`.
+Until then, `ref` is not defined and code must treat `data` as the
+source of truth.
+
+```ts
+interface ProjectAttachment {
+  attachmentId: string;
+  kind: "photo" | "file";
+  mimeType: string;
+  filename: string;
+  /** Inline base64 ONLY in schemaVersion 1. Null in schemaVersion 2+
+      once the object-store promotion has run. */
+  data: string | null;
+  /** Remote reference. Present in schemaVersion 2+ for attachments
+      that have been promoted out of the record body. */
+  ref?: {
+    store: "netlify-blobs" | "supabase-storage";
+    key: string;
+    byteSize: number;
+    contentType: string;
+  };
+  createdAt: string;
+}
+```
+
+---
+
+## 9. Offline-first — confirmed Phase 7 contract
+
+Per the Phase 4 decision, **all saves must succeed with no network**.
+The Phase 7 autosave implementation is built against this contract:
+
+1. **The workspace never awaits the network on save.** Every save
+   writes to the local `IndexedDbProjectStore` first. That write is
+   what the "Saved" indicator reflects.
+2. **Remote sync is a separate pipeline.** A background sync worker
+   (leaning toward a `Worker`, decided when Phase 7 code lands)
+   drains a dirty-record queue to the `NetlifyBlobsProjectStore` when
+   connectivity returns. The workspace never blocks on it.
+3. **The save indicator has three states:**
+   - **Saving** — a save is in flight to IndexedDB. Sub-second.
+   - **Saved** — local save committed. The user is safe.
+   - **Offline & Queued** — local save committed AND the record is
+     dirty against the remote. Clears to Saved when the sync worker
+     flushes the record successfully.
+4. **Conflict resolution starts as last-write-wins** keyed on
+   `updatedAt`. CRDT / OT is explicitly deferred until real-world
+   contention shows up.
+5. **No silent data loss.** If the IndexedDB write itself fails
+   (quota exceeded, storage disabled), the indicator shows a red
+   "Save failed" state and the workspace surfaces the 25 MB size
+   warning from §8.1.
+
