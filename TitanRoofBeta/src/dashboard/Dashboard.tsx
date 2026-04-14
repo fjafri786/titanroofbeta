@@ -66,7 +66,16 @@ const Dashboard: React.FC = () => {
   const handleCreate = useCallback(() => {
     const name = window.prompt("New project name", "Untitled Project");
     if (name === null) return;
-    void createProject({ name: name || "Untitled Project" });
+    void createProject({ name: name || "Untitled Project", engine: "legacy-v4" });
+  }, [createProject]);
+
+  const handleCreatePreview = useCallback(() => {
+    const name = window.prompt(
+      "New tldraw-preview project name",
+      "Preview Project",
+    );
+    if (name === null) return;
+    void createProject({ name: name || "Preview Project", engine: "tldraw" });
   }, [createProject]);
 
   const handleRename = useCallback(
@@ -148,6 +157,14 @@ const Dashboard: React.FC = () => {
             onClick={() => { void logout(); }}
           >
             Sign out
+          </button>
+          <button
+            type="button"
+            className="dashSecondaryBtn"
+            onClick={handleCreatePreview}
+            title="Create a tldraw-powered preview project"
+          >
+            + Preview (tldraw)
           </button>
           <button type="button" className="dashPrimaryBtn" onClick={handleCreate}>
             + New Project

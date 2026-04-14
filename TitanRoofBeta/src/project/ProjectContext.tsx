@@ -3,6 +3,7 @@ import {
   projectStore,
   createBlankProjectRecord,
   cryptoRandomId,
+  type EngineName,
   type ProjectRecord,
   type ProjectSummary,
 } from "../storage";
@@ -28,7 +29,7 @@ interface ProjectContextValue {
   summaries: ProjectSummary[];
   isLoadingSummaries: boolean;
   openProject: (projectId: string) => Promise<void>;
-  createProject: (opts?: { name?: string }) => Promise<void>;
+  createProject: (opts?: { name?: string; engine?: EngineName }) => Promise<void>;
   returnToDashboard: () => Promise<void>;
   refreshSummaries: () => Promise<void>;
 }
@@ -127,7 +128,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const createProject = useCallback(
-    async (opts?: { name?: string }) => {
+    async (opts?: { name?: string; engine?: EngineName }) => {
       if (!userId) return;
       const now = new Date().toISOString();
       const record = createBlankProjectRecord({
@@ -135,9 +136,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         userId,
         name: (opts?.name || "Untitled Project").trim() || "Untitled Project",
         now,
+        engine: opts?.engine,
       });
       await projectStore.put(record);
-      // Clear the legacy key so the workspace starts fresh.
+      // Clear the legacy workspace key so the legacy App starts
+      // fresh if this is a legacy-engine project. The tldraw
+      // workspace reads from the record's engine.state directly
+      // so it does not care about the legacy key.
       try {
         localStorage.removeItem(LEGACY_STATE_KEY);
       } catch {

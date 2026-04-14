@@ -3197,6 +3197,100 @@
         margin:10px 0;
       }
 
+      /* ========= PHASE 5 WORKSPACE V2 (tldraw scaffold) ========= */
+      .workspaceV2Root{
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        background: #F6F8FC;
+      }
+      .workspaceV2Header{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: #FFFFFF;
+        border-bottom: 1px solid rgba(148,163,184,0.22);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 8px 16px -14px rgba(2,6,23,0.2);
+        z-index: 10;
+      }
+      .workspaceV2BackBtn{
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: #FFFFFF;
+        font-size: 12px;
+        font-weight: 1200;
+        color: #0B1220;
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease;
+      }
+      .workspaceV2BackBtn:hover{
+        background: #F1F5F9;
+        border-color: rgba(100,116,139,0.5);
+      }
+      .workspaceV2Title{
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        font-weight: 1300;
+        color: #0B1220;
+        margin-right: auto;
+      }
+      .workspaceV2Badge{
+        font-size: 10px;
+        font-weight: 1300;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #0EA5E9, #6366F1);
+        color: #FFFFFF;
+        box-shadow: 0 6px 12px -8px rgba(14,165,233,0.7);
+      }
+      .workspaceV2Actions{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .workspaceV2SaveBtn{
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        color: #FFFFFF;
+        font-size: 12px;
+        font-weight: 1300;
+        cursor: pointer;
+        box-shadow: 0 12px 22px -12px rgba(14,165,233,0.7);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .workspaceV2SaveBtn:hover{
+        transform: translateY(-1px);
+        box-shadow: 0 16px 26px -12px rgba(14,165,233,0.8);
+      }
+      .workspaceV2Canvas{
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      .workspaceV2Empty,
+      .workspaceV2Loading{
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748B;
+        font-size: 13px;
+      }
+
       /* ========= PHASE 3 DASHBOARD ========= */
       .dashRoot{
         position: fixed;

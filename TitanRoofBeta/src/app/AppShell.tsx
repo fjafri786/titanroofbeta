@@ -1,18 +1,23 @@
-import React from "react";
+import React, { Suspense } from "react";
 import Dashboard from "../dashboard/Dashboard";
 import { useProject } from "../project/ProjectContext";
+import { engineNameFor } from "../storage";
 
 /**
  * AppShell — picks which top-level view to render based on the
- * ProjectContext route.
+ * ProjectContext route AND the current project's engine name.
  *
- * Phase 3 has exactly two routes: `dashboard` and `workspace`. The
- * workspace is the legacy <App/> component imported from
- * ../main-app. We key it on the current project id so React fully
- * remounts when switching projects, which lets App's existing
- * mount-time state restore flow pick up the new legacy v4 blob we
- * hydrate into `titanroof.v4.2.3.state` before routing.
+ * Routes:
+ * - `dashboard`: always shows <Dashboard />
+ * - `workspace` + legacy-v4 engine: renders the legacy <App />
+ *   component from main.tsx, keyed on the project id so it fully
+ *   remounts when switching projects.
+ * - `workspace` + tldraw engine: renders the Phase 5 scaffold
+ *   <WorkspaceV2 />, lazy-loaded so the ~1 MB tldraw bundle only
+ *   ships for users who actually open a preview project.
  */
+
+const WorkspaceV2 = React.lazy(() => import("../workspace-v2/WorkspaceV2"));
 
 interface AppShellProps {
   WorkspaceComponent: React.ComponentType;
@@ -23,6 +28,22 @@ const AppShell: React.FC<AppShellProps> = ({ WorkspaceComponent }) => {
 
   if (route === "dashboard" || !currentProject) {
     return <Dashboard />;
+  }
+
+  const engine = engineNameFor(currentProject);
+
+  if (engine === "tldraw") {
+    return (
+      <Suspense
+        fallback={
+          <div className="workspaceV2Loading" role="status" aria-busy="true">
+            Loading tldraw workspace…
+          </div>
+        }
+      >
+        <WorkspaceV2 key={currentProject.projectId} />
+      </Suspense>
+    );
   }
 
   return <WorkspaceComponent key={currentProject.projectId} />;

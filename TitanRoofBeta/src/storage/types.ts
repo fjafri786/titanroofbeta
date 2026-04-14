@@ -149,13 +149,16 @@ export function createBlankProjectRecord(args: {
   userId: string;
   name: string;
   now: string;
+  engine?: EngineName;
 }): ProjectRecord {
   const pageId = cryptoRandomId();
+  const engineName: EngineName = args.engine ?? CURRENT_ENGINE;
+  const engineVersion = engineName === "tldraw" ? "3" : CURRENT_ENGINE_VERSION;
   return {
     projectId: args.projectId,
     userId: args.userId,
     name: args.name,
-    tags: [],
+    tags: engineName === "tldraw" ? ["preview"] : [],
     createdAt: args.now,
     updatedAt: args.now,
     status: "active",
@@ -170,8 +173,8 @@ export function createBlankProjectRecord(args: {
             name: "Page 1",
             order: 0,
             engine: {
-              name: CURRENT_ENGINE,
-              version: CURRENT_ENGINE_VERSION,
+              name: engineName,
+              version: engineVersion,
               state: null,
             },
             notes: "",
@@ -182,6 +185,12 @@ export function createBlankProjectRecord(args: {
     attachments: [],
     schemaVersion: 1,
   };
+}
+
+/** Helper — read the primary engine name off a project record.
+ *  Falls back to the legacy engine when the record is empty. */
+export function engineNameFor(record: ProjectRecord | null | undefined): EngineName {
+  return record?.sections[0]?.pages[0]?.engine?.name ?? CURRENT_ENGINE;
 }
 
 /** Drop-in for `crypto.randomUUID()` with a fallback for older
