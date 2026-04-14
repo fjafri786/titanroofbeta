@@ -776,6 +776,9 @@ const loadPdfJs = () => {
           suggestion: null
         });
         const [freeSuggestion, setFreeSuggestion] = useState(null); // preview of recognized shape
+        const [freeDrawColor, setFreeDrawColor] = useState("#0EA5E9");
+        const [freeDrawWidth, setFreeDrawWidth] = useState(2);
+        const [eraserMode, setEraserMode] = useState(false);
 
         // Header data (Smith Residence / roof line / front faces)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
@@ -2919,6 +2922,22 @@ const loadPdfJs = () => {
               if(distanceToSegment(norm, a, b) < 0.02){
                 return { kind:"item", id: it.id };
               }
+            } else if(it.type === "free"){
+              const pts = it.data.points || [];
+              if(pts.length < 2) continue;
+              // Closed shapes (circle/rect) — allow either boundary or interior hit
+              if(it.data.closed && pts.length >= 3 && pointInPoly(norm, pts)){
+                return { kind:"item", id: it.id };
+              }
+              // Near any segment of the polyline
+              let minDist = Infinity;
+              for(let i = 1; i < pts.length; i++){
+                const d = distanceToSegment(norm, pts[i-1], pts[i]);
+                if(d < minDist) minDist = d;
+              }
+              if(minDist < 0.018){
+                return { kind:"item", id: it.id };
+              }
             } else {
               const dist = Math.hypot((it.x - norm.x), (it.y - norm.y));
               if(dist < 0.032) return { kind:"item", id: it.id };
@@ -2965,6 +2984,20 @@ const loadPdfJs = () => {
 
           if(hit){
             e.preventDefault();
+
+            // Eraser mode: if enabled, delete the hit free-draw item and bail
+            if(eraserMode){
+              const target = items.find(x => x.id === hit.id);
+              if(target?.type === "free"){
+                setItems(prev => prev.filter(i => i.id !== hit.id));
+                if(selectedId === hit.id){
+                  setSelectedId(null);
+                  setPanelView("items");
+                }
+                return;
+              }
+            }
+
             setSelectedId(hit.id);
             setPanelView("props");
             if(isMobile) setMobilePanelOpen(true);
@@ -2999,6 +3032,11 @@ const loadPdfJs = () => {
 
             if(it.type === "obs" && it.data.kind === "arrow" && it.data.points?.length === 2 && !it.data.locked){
               setDrag({ mode:"obs-arrow-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
+              return;
+            }
+
+            if(it.type === "free" && !it.data.locked){
+              setDrag({ mode:"free-move", id: it.id, start: norm, origin: { points: (it.data.points||[]).map(p => ({...p})) } });
               return;
             }
 
@@ -3172,6 +3210,15 @@ const loadPdfJs = () => {
             return;
           }
 
+          if(drag.mode === "free-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            const pts = drag.origin.points.map(p => ({ x: clamp(p.x + dx, 0, 1), y: clamp(p.y + dy, 0, 1) }));
+            setItems(prev => prev.map(i => i.id === drag.id ? { ...i, data: { ...i.data, points: pts } } : i));
+            return;
+          }
+
           if(drag.mode === "ts-point"){
             e.preventDefault();
             const it = items.find(x => x.id === drag.id);
@@ -3227,8 +3274,8 @@ const loadPdfJs = () => {
               const it = createItem("free", { points: finalPoints }, {
                 shape: finalShape,
                 closed: finalClosed,
-                color: "#0EA5E9",
-                strokeWidth: 2,
+                color: freeDrawColor,
+                strokeWidth: freeDrawWidth,
                 pressure: stroke.pressure,
                 inputType: stroke.inputType
               });
@@ -4504,7 +4551,7 @@ const loadPdfJs = () => {
               </div>
             </div>
 
-            <div className="reportCard" style={{marginBottom:10}}>
+            <div className="reportCard tone-project" style={{marginBottom:10}}>
               <div className="reportSectionTitle">Project Information</div>
               <div className="reportGrid">
                 <div>
@@ -5784,6 +5831,65 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
+                    {/* Draw quick tools — always visible so Draw/Erase/Color
+                        are one tap away regardless of which group is open. */}
+                    <div className="drawToolbar" role="group" aria-label="Drawing tools">
+                      <div className="drawToolbarLabel">Drawing</div>
+                      <div className="drawToolbarActions">
+                        <button
+                          type="button"
+                          className={"drawToolBtn" + (tool === "free" && !eraserMode ? " active" : "")}
+                          onClick={() => {
+                            setEraserMode(false);
+                            setTool(prev => (prev === "free" ? null : "free"));
+                          }}
+                          title="Free draw (Apple Pencil / stylus / touch / mouse)"
+                        >
+                          <Icon name="free" />
+                          <span>Draw</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={"drawToolBtn danger" + (eraserMode ? " active" : "")}
+                          onClick={() => {
+                            setEraserMode(prev => {
+                              const next = !prev;
+                              if(next) setTool(null);
+                              return next;
+                            });
+                          }}
+                          title="Eraser: tap a stroke to delete it"
+                        >
+                          <Icon name="trash" />
+                          <span>Erase</span>
+                        </button>
+                        <label className="drawColorBtn" title="Stroke color">
+                          <span className="drawColorSwatch" style={{ background: freeDrawColor }} />
+                          <span>Color</span>
+                          <input
+                            type="color"
+                            value={freeDrawColor}
+                            onChange={(e) => setFreeDrawColor(e.target.value)}
+                          />
+                        </label>
+                        <div className="drawWidthRow" title="Stroke width">
+                          <Icon name="minus" />
+                          <input
+                            type="range"
+                            min="1"
+                            max="8"
+                            step="1"
+                            value={freeDrawWidth}
+                            onChange={(e) => setFreeDrawWidth(parseInt(e.target.value, 10) || 2)}
+                            aria-label="Stroke width"
+                          />
+                          <Icon name="plus" />
+                        </div>
+                      </div>
+                      {eraserMode && (
+                        <div className="drawToolbarHint">Eraser mode on — tap a stroke on the diagram to remove it.</div>
+                      )}
+                    </div>
                     {["ts","apt","ds","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
@@ -5791,12 +5897,13 @@ const loadPdfJs = () => {
 
                       let title = "Items";
                       let color = "var(--border)";
-                      if(type==="ts"){ title="Test Squares"; color="var(--c-ts)"; }
-                      if(type==="apt"){ title="Appurtenances"; color="var(--c-apt)"; }
-                      if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; }
-                      if(type==="obs"){ title="Observations"; color="var(--c-obs)"; }
-                      if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; }
-                      if(type==="free"){ title="Free Draw"; color="#0EA5E9"; }
+                      let iconName = "panel";
+                      if(type==="ts"){ title="Test Squares"; color="var(--c-ts)"; iconName="ts"; }
+                      if(type==="apt"){ title="Appurtenances"; color="var(--c-apt)"; iconName="apt"; }
+                      if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; iconName="ds"; }
+                      if(type==="obs"){ title="Observations"; color="var(--c-obs)"; iconName="obs"; }
+                      if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; iconName="wind"; }
+                      if(type==="free"){ title="Free Draw"; color="#0EA5E9"; iconName="free"; }
 
                       return (
                         <div key={type}>
@@ -5805,6 +5912,9 @@ const loadPdfJs = () => {
                             onClick={() => setGroupOpen(prev => ({ ...prev, [type]: !isOpen }))}
                           >
                             <div className="groupTitle">
+                              <span className="groupIcon" style={{ color }}>
+                                <Icon name={iconName} />
+                              </span>
                               <span>{title}</span>
                               <span className="groupCount">{group.length}</span>
                             </div>
@@ -5862,9 +5972,8 @@ const loadPdfJs = () => {
                                     {item.data.shape === "circle" ? "Circle" :
                                      item.data.shape === "rect" ? "Rectangle" :
                                      item.data.shape === "line" ? "Line" :
-                                     item.data.shape === "triangle" ? "Triangle" : "Stroke"}
-                                    {" • "}
-                                    {(item.data.points || []).length} pts
+                                     item.data.shape === "triangle" ? "Triangle" : "Freehand stroke"}
+                                    {item.data.caption ? ` • ${item.data.caption.split("\n")[0]}` : ""}
                                   </span>
                                 )}
                               </div>
@@ -6516,8 +6625,11 @@ const loadPdfJs = () => {
             <div className="reportContent">
               {reportTab === "project" && (
                 <>
-                  <div className="reportCard">
+                  <div className="reportCard tone-project">
                     <div className="reportSectionTitle">Project Information</div>
+                    <div className="reportCardSubtitle">
+                      Core identifiers used for the title page and file references on the exported Haag-style report.
+                    </div>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Report / Claim / Job #</div>
@@ -6560,7 +6672,7 @@ const loadPdfJs = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="reportCard">
+                  <div className="reportCard tone-parties">
                     <div className="reportSectionTitle">Parties Present</div>
                     <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
                       <div className="tiny">List everyone present during the inspection.</div>
@@ -6605,7 +6717,7 @@ const loadPdfJs = () => {
 
               {reportTab === "description" && (
                 <>
-                  <div className="reportCard">
+                  <div className="reportCard tone-structure">
                     <div className="reportSectionTitle">Structure</div>
                     <div className="reportGrid">
                       <div>
@@ -6705,7 +6817,7 @@ const loadPdfJs = () => {
                     </div>
                   </div>
 
-                  <div className="reportCard">
+                  <div className="reportCard tone-description">
                     <div className="reportSectionTitle">Garage</div>
                     <div className="reportGrid">
                       <div>
@@ -6747,7 +6859,7 @@ const loadPdfJs = () => {
                     </div>
                   </div>
 
-                  <div className="reportCard">
+                  <div className="reportCard tone-site">
                     <div className="reportSectionTitle">Site Conditions</div>
                     <div className="reportGrid">
                       <div>
@@ -6767,7 +6879,7 @@ const loadPdfJs = () => {
                     </div>
                   </div>
 
-                  <div className="reportCard">
+                  <div className="reportCard tone-roof">
                     <div className="reportSectionTitle">Roof Information</div>
                     <div className="reportGrid">
                       <div>
@@ -6878,8 +6990,11 @@ const loadPdfJs = () => {
 
               {reportTab === "background" && (
                 <>
-                  <div className="reportCard">
+                  <div className="reportCard tone-background">
                     <div className="reportSectionTitle">Reported Background</div>
+                    <div className="reportCardSubtitle">
+                      Short factual notes, reported concerns, and information source captured from the insured or claim file.
+                    </div>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Reported Date of Loss</div>
@@ -6909,7 +7024,7 @@ const loadPdfJs = () => {
                       <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
                     </div>
                   </div>
-                  <div className="reportCard">
+                  <div className="reportCard tone-access">
                     <div className="reportSectionTitle">Access & Limitations</div>
                     <div className="reportGrid">
                       <div>
@@ -6934,8 +7049,11 @@ const loadPdfJs = () => {
 
               {reportTab === "inspection" && (
                 <>
-                  <div className="reportCard">
+                  <div className="reportCard tone-inspection">
                     <div className="reportSectionTitle">Inspection Narrative</div>
+                    <div className="reportCardSubtitle">
+                      Paragraphs below feed the Haag-style narrative output. Toggle sections off to exclude them.
+                    </div>
                     <div className="inspectionParagraphList">
                       {inspectionGeneratedSections.map(group => (
                         <details className="inspectionParagraphCard" key={group.key} open>
@@ -7184,8 +7302,9 @@ const loadPdfJs = () => {
           <div className="printSheet">
             <div className="printPage">
               <div className="printTitlePage">
-                <div className="printTitleHero">Titan Roof Version 4.2.3</div>
-                <div className="printTitle">{reportData.project.projectName || residenceName}</div>
+                <div className="printTitleHero">TitanRoof Beta • Field Capture Report</div>
+                <div className="printReportKind">Haag-Aligned Roof Inspection Field Report</div>
+                <h1 className="printTitle">{reportData.project.projectName || residenceName || "Untitled Project"}</h1>
                 <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
                 <div className="printMetaGrid">
                   <div className="printMetaCard">
@@ -7196,10 +7315,19 @@ const loadPdfJs = () => {
                   <div className="printMetaCard">
                     <div className="lbl">Inspection</div>
                     <div className="printBlock">Date: {valueOrDash(reportData.project.inspectionDate)}</div>
+                    <div className="printBlock">Orientation: {valueOrDash(reportData.project.orientation)}</div>
                   </div>
                   <div className="printMetaCard">
                     <div className="lbl">File References</div>
-                    <div className="printBlock">Report #: {valueOrDash(reportData.project.reportNumber)}</div>
+                    <div className="printBlock">Report / Claim / Job #: {valueOrDash(reportData.project.reportNumber)}</div>
+                  </div>
+                  <div className="printMetaCard">
+                    <div className="lbl">Parties Present</div>
+                    <div className="printBlock">
+                      {reportData.project.parties.length
+                        ? reportData.project.parties.map(p => `${p.name || "Unnamed"} (${p.role || "Role"})`).join(", ")
+                        : "None listed."}
+                    </div>
                   </div>
                 </div>
               </div>
