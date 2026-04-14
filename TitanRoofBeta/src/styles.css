@@ -68,6 +68,24 @@
         flex:1;
         text-align:center;
       }
+      .topBarBackBtn{
+        font-size:10px;
+        font-weight:1200;
+        color:#fff;
+        background: rgba(255,255,255,0.18);
+        border:1px solid rgba(255,255,255,0.35);
+        border-radius:999px;
+        padding:2px 10px;
+        cursor:pointer;
+        text-transform:none;
+        letter-spacing:0.2px;
+        margin-right: auto;
+        transition: background 0.12s ease, border-color 0.12s ease;
+      }
+      .topBarBackBtn:hover{
+        background: rgba(255,255,255,0.3);
+        border-color: rgba(255,255,255,0.55);
+      }
       .topBarUser{
         display:flex;
         align-items:center;
@@ -3177,6 +3195,474 @@
         height:1px;
         background: rgba(226,232,240,0.95);
         margin:10px 0;
+      }
+
+      /* ========= PHASE 3 DASHBOARD ========= */
+      .dashRoot{
+        position: fixed;
+        inset: 0;
+        overflow: auto;
+        background:
+          radial-gradient(1200px 560px at 20% -10%, rgba(14,165,233,0.12), transparent 60%),
+          radial-gradient(900px 480px at 100% 0%, rgba(139,92,246,0.10), transparent 55%),
+          #F6F8FC;
+        padding: 32px 36px 48px;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+      .dashHeader{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+        max-width: 1280px;
+        margin: 0 auto 24px auto;
+      }
+      .dashBrand{
+        display:flex;
+        align-items:center;
+        gap:12px;
+      }
+      .dashBrandDot{
+        width:40px;
+        height:40px;
+        border-radius:12px;
+        background: linear-gradient(135deg, #0EA5E9, #6366F1);
+        box-shadow: 0 14px 24px -12px rgba(14,165,233,0.7);
+      }
+      .dashBrandTitle{
+        font-size:18px;
+        font-weight:1300;
+        color:#0B1220;
+        letter-spacing:-0.2px;
+      }
+      .dashBrandSub{
+        font-size:11px;
+        font-weight:1100;
+        color:#64748B;
+        letter-spacing:0.4px;
+        text-transform:uppercase;
+      }
+      .dashHeaderActions{
+        display:flex;
+        align-items:center;
+        gap:10px;
+      }
+      .dashUserChip{
+        display:inline-flex;
+        align-items:center;
+        padding:8px 12px;
+        border-radius:999px;
+        background:#fff;
+        border:1px solid rgba(148,163,184,0.35);
+        font-size:12px;
+        font-weight:1200;
+        color:#0B1220;
+        box-shadow: 0 8px 14px -10px rgba(2,6,23,0.2);
+      }
+      .dashPrimaryBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:10px 18px;
+        border-radius:12px;
+        border:none;
+        cursor:pointer;
+        font-size:13px;
+        font-weight:1300;
+        color:#fff;
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        box-shadow: 0 14px 28px -12px rgba(14,165,233,0.7);
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .dashPrimaryBtn:hover{
+        transform: translateY(-1px);
+        box-shadow: 0 18px 32px -14px rgba(14,165,233,0.8);
+      }
+      .dashSecondaryBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        padding:9px 14px;
+        border-radius:12px;
+        cursor:pointer;
+        font-size:12px;
+        font-weight:1200;
+        color:#0B1220;
+        background:#fff;
+        border:1px solid rgba(148,163,184,0.35);
+        transition: background 0.12s ease, border-color 0.12s ease;
+      }
+      .dashSecondaryBtn:hover{
+        background:#F1F5F9;
+        border-color: rgba(100,116,139,0.5);
+      }
+      .dashSecondaryBtn.small{
+        padding:5px 10px;
+        font-size:11px;
+        border-radius:10px;
+      }
+
+      .dashToolbar{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:16px;
+        flex-wrap: wrap;
+        max-width: 1280px;
+        margin: 0 auto 20px auto;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background:#fff;
+        border: 1px solid rgba(148,163,184,0.22);
+        box-shadow: 0 16px 32px -20px rgba(2,6,23,0.22);
+      }
+      .dashSearchWrap{
+        flex: 1 1 280px;
+        min-width: 240px;
+      }
+      .dashSearchInput{
+        width:100%;
+        padding: 11px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,0.3);
+        background:#F8FAFC;
+        font-size: 13px;
+        color:#0B1220;
+        outline: none;
+        transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      .dashSearchInput:focus{
+        background:#fff;
+        border-color: rgba(14,165,233,0.55);
+        box-shadow: 0 0 0 4px rgba(14,165,233,0.12);
+      }
+      .dashToolbarRight{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        flex-wrap: wrap;
+      }
+      .dashSegmented{
+        display:inline-flex;
+        align-items:center;
+        gap:2px;
+        padding:4px;
+        background:#F1F5F9;
+        border: 1px solid rgba(148,163,184,0.25);
+        border-radius:999px;
+      }
+      .dashSegmentedBtn{
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 1200;
+        color:#64748B;
+        background: transparent;
+        border: none;
+        border-radius:999px;
+        cursor: pointer;
+        transition: background 0.12s ease, color 0.12s ease;
+      }
+      .dashSegmentedBtn.active{
+        background:#fff;
+        color:#0B1220;
+        box-shadow: 0 8px 16px -10px rgba(2,6,23,0.25);
+      }
+      .dashSortSelect{
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,0.3);
+        background:#fff;
+        font-size: 12px;
+        font-weight: 1200;
+        color:#0B1220;
+        cursor: pointer;
+      }
+      .dashViewToggle{
+        display:inline-flex;
+        align-items:center;
+        gap:2px;
+        padding:3px;
+        background:#F1F5F9;
+        border: 1px solid rgba(148,163,184,0.25);
+        border-radius:12px;
+      }
+      .dashViewBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width: 32px;
+        height: 28px;
+        border:none;
+        background: transparent;
+        border-radius:9px;
+        cursor: pointer;
+        color:#64748B;
+      }
+      .dashViewBtn.active{
+        background:#fff;
+        color:#0B1220;
+        box-shadow: 0 8px 14px -10px rgba(2,6,23,0.25);
+      }
+
+      .dashBody{
+        max-width: 1280px;
+        margin: 0 auto;
+      }
+      .dashEmpty{
+        padding: 64px 24px;
+        text-align:center;
+        border-radius: 20px;
+        background:#fff;
+        border: 1px dashed rgba(148,163,184,0.45);
+        color:#64748B;
+        display:flex;
+        flex-direction: column;
+        align-items:center;
+        gap: 10px;
+      }
+      .dashEmptyTitle{
+        font-size: 16px;
+        font-weight: 1300;
+        color:#0B1220;
+      }
+      .dashEmptyHint{
+        font-size: 12px;
+        color:#64748B;
+        max-width: 420px;
+        line-height: 1.5;
+      }
+
+      .dashGrid{
+        display:grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .dashList{
+        display:flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .projectCard{
+        position: relative;
+        background:#fff;
+        border-radius: 18px;
+        border: 1px solid rgba(148,163,184,0.22);
+        box-shadow: 0 16px 32px -22px rgba(2,6,23,0.22);
+        overflow: hidden;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+      }
+      .projectCard:hover{
+        transform: translateY(-2px);
+        box-shadow: 0 22px 42px -20px rgba(2,6,23,0.3);
+        border-color: rgba(14,165,233,0.35);
+      }
+      .projectCardOpen{
+        width: 100%;
+        text-align: left;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: inherit;
+        display: block;
+      }
+      .projectCardThumbWrap{
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: linear-gradient(135deg, #EFF6FF, #F0F9FF);
+        display: flex;
+        align-items:center;
+        justify-content:center;
+        color: rgba(14,165,233,0.6);
+      }
+      .projectCardThumb{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .projectCardThumbFallback svg{
+        width: 56px;
+        height: 56px;
+      }
+      .projectCardBadge{
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 10px;
+        font-weight: 1300;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(245,158,11,0.92);
+        color:#fff;
+        box-shadow: 0 6px 12px -6px rgba(245,158,11,0.6);
+      }
+      .projectCardBadge.over{
+        background: rgba(220,38,38,0.92);
+        box-shadow: 0 6px 12px -6px rgba(220,38,38,0.6);
+      }
+      .projectCardBody{
+        padding: 14px 16px 16px 16px;
+      }
+      .projectCardTitle{
+        font-size: 14px;
+        font-weight: 1300;
+        color:#0B1220;
+        margin-bottom: 6px;
+        line-height: 1.3;
+      }
+      .projectCardMeta{
+        display:flex;
+        align-items:center;
+        gap: 6px;
+        font-size: 11px;
+        color:#64748B;
+        font-weight: 1100;
+      }
+      .projectCardDot{
+        opacity: 0.5;
+      }
+      .projectCardAddress{
+        margin-top: 6px;
+        font-size: 11px;
+        color:#94A3B8;
+        line-height: 1.4;
+      }
+      .projectCardTags{
+        display:flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 8px;
+      }
+      .projectCardTag{
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #F1F5F9;
+        border: 1px solid rgba(148,163,184,0.3);
+        font-size: 10px;
+        font-weight: 1200;
+        color:#475569;
+      }
+      .projectCardMenuBtn{
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.95);
+        border: 1px solid rgba(148,163,184,0.35);
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease;
+      }
+      .projectCardMenuBtn:hover{
+        background:#fff;
+        border-color: rgba(100,116,139,0.5);
+      }
+      .projectCardMenu{
+        position: absolute;
+        top: 48px;
+        right: 10px;
+        min-width: 160px;
+        padding: 6px;
+        background:#fff;
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,0.25);
+        box-shadow: 0 24px 40px -20px rgba(2,6,23,0.35);
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .projectCardMenu button{
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: 1200;
+        color:#0B1220;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .projectCardMenu button:hover{
+        background:#F1F5F9;
+      }
+      .projectCardMenuDanger{
+        color:#B91C1C !important;
+      }
+      .projectCardMenuDanger:hover{
+        background: rgba(254,226,226,0.7) !important;
+      }
+
+      .projectCard.listMode{
+        display:flex;
+        align-items:stretch;
+      }
+      .projectCard.listMode .projectCardOpen{
+        display: flex;
+        align-items: stretch;
+        gap: 16px;
+      }
+      .projectCard.listMode .projectCardThumbWrap{
+        width: 160px;
+        flex: 0 0 160px;
+        aspect-ratio: auto;
+      }
+      .projectCard.listMode .projectCardBody{
+        padding: 12px 16px 12px 0;
+        flex: 1;
+      }
+
+      .dashTableWrap{
+        background:#fff;
+        border-radius: 18px;
+        border: 1px solid rgba(148,163,184,0.22);
+        overflow: hidden;
+      }
+      .dashTable{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .dashTable thead tr{
+        background: #F8FAFC;
+      }
+      .dashTable th{
+        text-align:left;
+        padding: 12px 14px;
+        font-size: 10px;
+        font-weight: 1300;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color:#64748B;
+        border-bottom: 1px solid rgba(148,163,184,0.2);
+      }
+      .dashTable td{
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(148,163,184,0.12);
+        color:#0B1220;
+      }
+      .dashTable tbody tr{
+        cursor: pointer;
+        transition: background 0.1s ease;
+      }
+      .dashTable tbody tr:hover{
+        background: #F8FAFC;
+      }
+      .dashTableAddr{
+        color: #64748B;
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       /* ========= PHASE 2 LOGIN ========= */

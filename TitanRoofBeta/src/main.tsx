@@ -4,6 +4,8 @@ import PropertiesBar from "./components/PropertiesBar";
 import TopBar from "./components/TopBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
+import { ProjectProvider } from "./project/ProjectContext";
+import AppShell from "./app/AppShell";
 import "./styles.css";
 
 declare global {
@@ -737,7 +739,7 @@ const loadPdfJs = () => {
       const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
       const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
 
-      function App(){
+      export function App(){
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
@@ -7759,7 +7761,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AuthProvider>
       <AuthGate>
-        <App />
+        <ProjectProvider>
+          <AppShell WorkspaceComponent={App} />
+        </ProjectProvider>
       </AuthGate>
     </AuthProvider>
   </React.StrictMode>
