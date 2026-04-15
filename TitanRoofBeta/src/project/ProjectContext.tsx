@@ -8,6 +8,7 @@ import {
   type ProjectSummary,
 } from "../storage";
 import { migrateLegacyV4IfNeeded, LEGACY_STATE_KEY } from "../storage/legacyV4Migration";
+import { buildLegacyThumbnail } from "../storage/thumbnailBuilder";
 import { useAuth } from "../auth/AuthContext";
 
 /**
@@ -170,9 +171,20 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.warn("Could not read workspace state on return", err);
     }
 
+    // Build a dashboard thumbnail collage (diagram + first photo)
+    // before persisting, so the card picks it up immediately.
+    let thumbnailDataUrl: string | undefined = currentProject.thumbnailDataUrl;
+    try {
+      const generated = await buildLegacyThumbnail(legacyState);
+      if (generated) thumbnailDataUrl = generated;
+    } catch (err) {
+      console.warn("Could not generate dashboard thumbnail", err);
+    }
+
     const updated: ProjectRecord = {
       ...currentProject,
       updatedAt: new Date().toISOString(),
+      thumbnailDataUrl,
       // Also promote a few common fields to the record so the
       // dashboard card has something to show even if the user
       // never renamed the project.
