@@ -68,6 +68,183 @@
         flex:1;
         text-align:center;
       }
+      /* ========= MENU BAR (File / Edit / View / Tools / Help) ========= */
+      :root{
+        --menubar-height: 32px;
+      }
+      .menuBar{
+        position: fixed;
+        top: var(--topbar-height);
+        left: 0;
+        width: 100%;
+        height: var(--menubar-height);
+        z-index: 199;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        background: #FFFFFF;
+        border-bottom: 1px solid rgba(148,163,184,0.24);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 4px 8px -6px rgba(2,6,23,0.1);
+        font-size: 12px;
+        font-weight: 1200;
+        color: #0B1220;
+      }
+      .menuBarLeft{
+        display: inline-flex;
+        align-items: stretch;
+        height: 100%;
+      }
+      .menuBarRight{
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .menuBarSaved{
+        font-size: 10px;
+        font-weight: 1100;
+        color: var(--sub);
+      }
+      .menuBarItem{
+        position: relative;
+        display: inline-flex;
+        align-items: stretch;
+      }
+      .menuBarBtn{
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
+        background: transparent;
+        border: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: background 0.1s ease;
+      }
+      .menuBarBtn:hover{
+        background: rgba(14,165,233,0.08);
+      }
+      .menuBarItem.open .menuBarBtn{
+        background: rgba(14,165,233,0.12);
+        color: #0EA5E9;
+      }
+      .menuBarDropdown{
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 260px;
+        padding: 6px;
+        border-radius: 12px;
+        background: #FFFFFF;
+        border: 1px solid rgba(148,163,184,0.28);
+        box-shadow: 0 18px 32px -16px rgba(2,6,23,0.28);
+        z-index: 220;
+      }
+      .menuBarDivider{
+        height: 1px;
+        background: rgba(148,163,184,0.22);
+        margin: 6px 2px;
+      }
+      .menuBarMenuItem{
+        display: grid;
+        grid-template-columns: 18px 1fr auto;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border: none;
+        background: transparent;
+        color: #0B1220;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 1200;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .menuBarMenuItem:hover:not(.disabled){
+        background: rgba(14,165,233,0.1);
+      }
+      .menuBarMenuItem.danger{
+        color: #B91C1C;
+      }
+      .menuBarMenuItem.danger:hover{
+        background: rgba(254,226,226,0.7);
+      }
+      .menuBarMenuItem.disabled{
+        color: rgba(100,116,139,0.55);
+        cursor: not-allowed;
+      }
+      .menuBarMenuItem.checked{
+        color: #0EA5E9;
+      }
+      .menuBarCheck{
+        width: 14px;
+        text-align: center;
+        font-weight: 1300;
+      }
+      .menuBarKbd{
+        font-size: 10px;
+        font-weight: 1100;
+        color: var(--sub);
+        letter-spacing: 0.2px;
+      }
+
+      /* Grid settings modal */
+      .gridSettingsBody{
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .gridSettingsRow{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .gridSettingsField .lbl{ margin-bottom: 6px; }
+
+      /* Scale reference overlay + banner */
+      .scaleBanner{
+        position: fixed;
+        top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 160;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        color: #FFFFFF;
+        font-size: 12px;
+        font-weight: 1200;
+        box-shadow: 0 14px 28px -14px rgba(14,165,233,0.7);
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .scaleBannerCancel{
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.45);
+        color: #FFFFFF;
+        padding: 4px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 1200;
+      }
+      .scaleBadge{
+        position: absolute;
+        z-index: 60;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(14,165,233,0.9);
+        color: #FFFFFF;
+        font-size: 10px;
+        font-weight: 1300;
+        pointer-events: none;
+        white-space: nowrap;
+        box-shadow: 0 6px 10px -6px rgba(14,165,233,0.6);
+      }
+
       .topBarBackBtn{
         font-size:10px;
         font-weight:1200;
@@ -123,7 +300,7 @@
 
       .propertiesBar{
         position: fixed;
-        top: var(--topbar-height);
+        top: calc(var(--topbar-height) + var(--menubar-height));
         left: 0;
         width: 100%;
         height: var(--propsbar-height);
@@ -339,7 +516,7 @@
       .app{
         display:grid;
         grid-template-columns: 1fr minmax(320px, 420px);
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height));
+        padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height));
         height: 100vh;
         height: 100dvh;
         min-height: 100vh;
@@ -347,7 +524,7 @@
         animation: viewEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .app.toolbarCollapsed{
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
+        padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
       }
       .app.sidebarCollapsed{
         grid-template-columns: 1fr 56px;
@@ -459,7 +636,7 @@
       .toolbar{
         --toolbar-control-size: 34px;
         position: fixed;
-        top: calc(var(--topbar-height) + var(--propsbar-height));
+        top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         left: 0;
         right: 0;
         display:flex;
@@ -1392,7 +1569,7 @@
       }
       .saveToast{
         position: fixed;
-        top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height) + 8px);
+        top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height) + 8px);
         left: 50%;
         transform: translateX(-50%);
         z-index: 180;
@@ -2539,7 +2716,7 @@
       .reportView{
         display:flex;
         flex-direction:column;
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
+        padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         height: 100vh;
         height: 100dvh;
         background:
@@ -2782,7 +2959,7 @@
       .photosView{
         display:flex;
         flex-direction:column;
-        padding-top: calc(var(--topbar-height) + var(--propsbar-height));
+        padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         height: 100vh;
         height: 100dvh;
         background: linear-gradient(180deg, rgba(14,165,233,0.08), rgba(59,130,246,0.08) 55%, rgba(245,247,251,1) 100%);
@@ -4432,7 +4609,7 @@
         }
         .panel{
           position: fixed;
-          top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height));
+          top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height));
           right: 0;
           bottom: 0;
           height: calc(100vh - var(--topbar-height) - var(--propsbar-height) - var(--toolbar-height));
@@ -4447,7 +4624,7 @@
         }
         .panelOverlay{
           position: fixed;
-          top: calc(var(--topbar-height) + var(--propsbar-height) + var(--toolbar-height));
+          top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height));
           left: 0;
           right: 0;
           bottom: 0;

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import PropertiesBar from "./components/PropertiesBar";
+import MenuBar from "./components/MenuBar";
 import TopBar from "./components/TopBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
@@ -976,6 +977,26 @@ const loadPdfJs = () => {
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         const [mobileToolbarSection, setMobileToolbarSection] = useState("tools");
         const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
+
+        // --- Grid + ruler/scale state (Pass 3 menu bar feature) ---
+        const [gridEnabled, setGridEnabled] = usePersistedState<boolean>("titanroof.view.grid", true);
+        const [gridSettings, setGridSettings] = usePersistedState<{
+          spacing: number; color: string; thickness: number;
+        }>("titanroof.view.gridSettings", { spacing: 40, color: "#EEF2F7", thickness: 1 });
+        const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
+
+        // Scale reference: two points on the sheet (normalized) + a
+        // real-world distance + a unit. Once set, the measurement
+        // badge + Ruler tool can report true dimensions.
+        type ScaleRef = {
+          a: { x: number; y: number };
+          b: { x: number; y: number };
+          realDistance: number;
+          unit: "ft" | "in" | "m" | "cm";
+        } | null;
+        const [scaleRef, setScaleRef] = usePersistedState<ScaleRef>("titanroof.view.scaleRef", null);
+        const [scaleCaptureStep, setScaleCaptureStep] = useState<"idle" | "first" | "second">("idle");
+        const [scaleCaptureFirst, setScaleCaptureFirst] = useState<{x:number;y:number} | null>(null);
         const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -1815,11 +1836,12 @@ const loadPdfJs = () => {
         const dashBounds = useCallback(() => {
           const styles = getComputedStyle(document.documentElement);
           const topbarHeight = parseFloat(styles.getPropertyValue("--topbar-height")) || 0;
+          const menubarHeight = parseFloat(styles.getPropertyValue("--menubar-height")) || 0;
           const propsbarHeight = parseFloat(styles.getPropertyValue("--propsbar-height")) || 0;
           const toolbarHeight = parseFloat(styles.getPropertyValue("--toolbar-height")) || 0;
           return {
             left: 0,
-            top: topbarHeight + propsbarHeight + (toolbarCollapsed ? 0 : toolbarHeight),
+            top: topbarHeight + menubarHeight + propsbarHeight + (toolbarCollapsed ? 0 : toolbarHeight),
             right: window.innerWidth,
             bottom: window.innerHeight
           };
@@ -3238,6 +3260,43 @@ const loadPdfJs = () => {
 
           const norm = clientToSheetNorm(e.clientX, e.clientY);
           if(!norm) return;
+
+          // Scale-reference capture mode takes priority over every
+          // tool. Two points → prompt for real-world distance →
+          // save scaleRef, then exit the mode.
+          if(scaleCaptureStep === "first"){
+            e.preventDefault();
+            setScaleCaptureFirst(norm);
+            setScaleCaptureStep("second");
+            return;
+          }
+          if(scaleCaptureStep === "second" && scaleCaptureFirst){
+            e.preventDefault();
+            const raw = window.prompt(
+              "Known distance between those two points? Examples: 100 ft, 12 m, 18 in, 2.5 cm",
+              "100 ft",
+            );
+            if(raw != null){
+              const match = raw.trim().match(/^(\d+(?:\.\d+)?)\s*(ft|in|m|cm)?$/i);
+              if(match){
+                const num = parseFloat(match[1]);
+                const unit = (match[2] || "ft").toLowerCase() as "ft"|"in"|"m"|"cm";
+                if(num > 0){
+                  setScaleRef({
+                    a: scaleCaptureFirst,
+                    b: norm,
+                    realDistance: num,
+                    unit,
+                  });
+                }
+              } else {
+                window.alert("Could not parse that distance. Try \"100 ft\" or \"12 m\".");
+              }
+            }
+            setScaleCaptureStep("idle");
+            setScaleCaptureFirst(null);
+            return;
+          }
 
           const hit = findHit(norm);
 
@@ -5136,6 +5195,64 @@ const loadPdfJs = () => {
           </div>
         );
 
+        const gridSettingsModal = gridSettingsOpen && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) setGridSettingsOpen(false); }}
+          >
+            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Grid Settings</div>
+                <button className="btn" type="button" onClick={() => setGridSettingsOpen(false)}>Close</button>
+              </div>
+              <div className="modalBody gridSettingsBody">
+                <div className="tiny">
+                  These settings control the on-canvas grid. When a scale reference is set, grid spacing is measured in sheet pixels so you can size it to match the real-world units you care about.
+                </div>
+                <div className="gridSettingsRow">
+                  <div className="gridSettingsField">
+                    <div className="lbl">Spacing (px)</div>
+                    <input
+                      className="inp"
+                      type="number"
+                      min={4}
+                      max={400}
+                      step={1}
+                      value={gridSettings.spacing}
+                      onChange={(e) => setGridSettings(s => ({ ...s, spacing: Math.max(4, Math.min(400, parseInt(e.target.value, 10) || 40)) }))}
+                    />
+                  </div>
+                  <div className="gridSettingsField">
+                    <div className="lbl">Line Thickness (px)</div>
+                    <input
+                      className="inp"
+                      type="number"
+                      min={0.25}
+                      max={4}
+                      step={0.25}
+                      value={gridSettings.thickness}
+                      onChange={(e) => setGridSettings(s => ({ ...s, thickness: Math.max(0.25, Math.min(4, parseFloat(e.target.value) || 1)) }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="lbl">Line Color</div>
+                  <input
+                    className="inp"
+                    type="color"
+                    value={gridSettings.color}
+                    onChange={(e) => setGridSettings(s => ({ ...s, color: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setGridSettings({ spacing: 40, color: "#EEF2F7", thickness: 1 })}>Reset</button>
+                <button className="btn btnPrimary" type="button" onClick={() => setGridSettingsOpen(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        );
+
         const pageNameModal = pageNameModalOpen && (
           <div
             className="modalBackdrop"
@@ -5456,9 +5573,47 @@ const loadPdfJs = () => {
           </div>
         );
 
+        const beginScaleReference = () => {
+          setScaleCaptureStep("first");
+          setScaleCaptureFirst(null);
+          setTool(null);
+          setObsPaletteOpen(false);
+          setDrawPaletteOpen(false);
+        };
+        const cancelScaleCapture = () => {
+          setScaleCaptureStep("idle");
+          setScaleCaptureFirst(null);
+        };
+
         return (
           <>
           <TopBar label="BETA" />
+          <MenuBar
+            onSave={() => saveState("manual")}
+            onSaveAs={exportTrp}
+            onOpen={() => trpInputRef.current?.click()}
+            onRecover={restoreAutoSave}
+            onExport={() => { saveState("manual"); setExportMode(true); }}
+            exportDisabled={exportDisabled}
+            onEditProjectProperties={() => setHdrEditOpen(true)}
+            onClearDiagramAndItems={clearDiagram}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onZoomFit={zoomFit}
+            gridEnabled={gridEnabled}
+            onToggleGrid={() => setGridEnabled(g => !g)}
+            onOpenGridSettings={() => setGridSettingsOpen(true)}
+            toolbarCollapsed={toolbarCollapsed}
+            onToggleToolbar={() => setToolbarCollapsed(v => !v)}
+            onPickTool={(key) => handleToolSelect(key)}
+            currentTool={tool}
+            onBeginScaleReference={beginScaleReference}
+            onClearScaleReference={() => setScaleRef(null)}
+            scaleReferenceSet={!!scaleRef}
+            lastSavedAt={lastSavedAt}
+          />
           {headerContent}
           <input
             ref={trpInputRef}
@@ -5472,6 +5627,7 @@ const loadPdfJs = () => {
             }}
           />
           {headerEditModal}
+          {gridSettingsModal}
           {pageNameModal}
           {photoLightboxModal}
           {saveNotice && (
@@ -5847,12 +6003,19 @@ const loadPdfJs = () => {
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
-                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
+                        <pattern id="grid" width={gridSettings.spacing} height={gridSettings.spacing} patternUnits="userSpaceOnUse">
+                          <path
+                            d={`M ${gridSettings.spacing} 0 L 0 0 0 ${gridSettings.spacing}`}
+                            fill="none"
+                            stroke={gridSettings.color}
+                            strokeWidth={gridSettings.thickness}
+                          />
                         </pattern>
                       </defs>
 
-                      <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      {gridEnabled && (
+                        <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      )}
                       <defs>
                         <marker id="freeArrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                           <path d="M0 0 L10 5 L0 10 z" fill="context-stroke" />
@@ -5994,7 +6157,40 @@ const loadPdfJs = () => {
                         }
                         return null;
                       })()}
+
+                      {/* Calibrated scale reference. Drawn on top
+                          of the drawing layer so it stays visible
+                          but purely informational. */}
+                      {scaleRef && (
+                        <g pointerEvents="none">
+                          <line
+                            x1={scaleRef.a.x * sheetWidth}
+                            y1={scaleRef.a.y * sheetHeight}
+                            x2={scaleRef.b.x * sheetWidth}
+                            y2={scaleRef.b.y * sheetHeight}
+                            stroke="#0EA5E9"
+                            strokeWidth={3}
+                            strokeDasharray="8,6"
+                            strokeLinecap="round"
+                          />
+                          <circle cx={scaleRef.a.x * sheetWidth} cy={scaleRef.a.y * sheetHeight} r="6" fill="#0EA5E9" stroke="#fff" strokeWidth="2" />
+                          <circle cx={scaleRef.b.x * sheetWidth} cy={scaleRef.b.y * sheetHeight} r="6" fill="#0EA5E9" stroke="#fff" strokeWidth="2" />
+                        </g>
+                      )}
                     </svg>
+
+                    {scaleRef && (
+                      <div
+                        className="scaleBadge"
+                        style={{
+                          left: ((scaleRef.a.x + scaleRef.b.x) / 2) * sheetWidth,
+                          top: ((scaleRef.a.y + scaleRef.b.y) / 2) * sheetHeight,
+                          transform: "translate(-50%, -140%)",
+                        }}
+                      >
+                        Scale: {scaleRef.realDistance} {scaleRef.unit}
+                      </div>
+                    )}
 
                     {dashVisibleItems.filter(i => i.type !== "ts" && i.type !== "free" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                       const isSel = selectedId === i.id;
@@ -6024,6 +6220,17 @@ const loadPdfJs = () => {
                   <Icon name="reset" />
                   Reset view
                 </button>
+              )}
+
+              {scaleCaptureStep !== "idle" && (
+                <div className="scaleBanner" role="status">
+                  {scaleCaptureStep === "first"
+                    ? "Tap the first end of a known-length line on the diagram…"
+                    : "Tap the other end of the known-length line…"}
+                  <button type="button" className="scaleBannerCancel" onClick={cancelScaleCapture}>
+                    Cancel
+                  </button>
+                </div>
               )}
 
               {!hasBackground && (
