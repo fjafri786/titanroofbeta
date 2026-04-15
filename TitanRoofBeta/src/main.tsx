@@ -915,17 +915,57 @@ const loadPdfJs = () => {
       const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
       const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
 
+      /**
+       * Small helper: useState backed by localStorage so
+       * last-selected tool choices persist across sessions.
+       * Fails open if storage is unavailable.
+       */
+      function usePersistedState<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+        const [state, setState] = useState<T>(() => {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw == null) return initial;
+            return JSON.parse(raw) as T;
+          } catch {
+            return initial;
+          }
+        });
+        useEffect(() => {
+          try {
+            localStorage.setItem(key, JSON.stringify(state));
+          } catch {
+            // ignore
+          }
+        }, [key, state]);
+        return [state, setState];
+      }
+
       export function App(){
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
         const [tool, setTool] = useState(null);
-        const [obsTool, setObsTool] = useState("dot");
+        // Persisted last-used sub-selections (item 18 / 19 feedback):
+        // once the user picks an OBS type, a Draw shape, or an APT
+        // type + direction, that choice survives across other tool
+        // selections and page reloads.
+        const [obsTool, setObsTool] = usePersistedState<string>("titanroof.tool.obs", "dot");
+        const [freeShape, setFreeShape] = usePersistedState<string>("titanroof.tool.freeShape", "freehand");
+        const [freeDrawColorPersisted, setFreeDrawColorPersisted] = usePersistedState<string>("titanroof.tool.freeColor", "#0EA5E9");
+        const [freeDrawWidthPersisted, setFreeDrawWidthPersisted] = usePersistedState<number>("titanroof.tool.freeWidth", 2);
+        const [aptLastType, setAptLastType] = usePersistedState<string>("titanroof.tool.aptType", "EF");
+        const [aptLastDir, setAptLastDir] = usePersistedState<string>("titanroof.tool.aptDir", "N");
+        const [dsLastDir, setDsLastDir] = usePersistedState<string>("titanroof.tool.dsDir", "N");
+
         const [obsPaletteOpen, setObsPaletteOpen] = useState(false);
         const [obsPalettePos, setObsPalettePos] = useState({ left: 0, top: 0 });
+        const [drawPaletteOpen, setDrawPaletteOpen] = useState(false);
+        const [drawPalettePos, setDrawPalettePos] = useState({ left: 0, top: 0 });
         const toolbarRef = useRef(null);
         const obsButtonRef = useRef<HTMLButtonElement | null>(null);
         const obsPaletteRef = useRef(null);
+        const drawButtonRef = useRef<HTMLButtonElement | null>(null);
+        const drawPaletteRef = useRef(null);
         const trpInputRef = useRef(null);
         const mobileFitPagesRef = useRef(new Set());
 
@@ -956,8 +996,11 @@ const loadPdfJs = () => {
           suggestion: null
         });
         const [freeSuggestion, setFreeSuggestion] = useState(null); // preview of recognized shape
-        const [freeDrawColor, setFreeDrawColor] = useState("#0EA5E9");
-        const [freeDrawWidth, setFreeDrawWidth] = useState(2);
+        // Persisted across sessions / tool switches.
+        const freeDrawColor = freeDrawColorPersisted;
+        const setFreeDrawColor = setFreeDrawColorPersisted;
+        const freeDrawWidth = freeDrawWidthPersisted;
+        const setFreeDrawWidth = setFreeDrawWidthPersisted;
         const [eraserMode, setEraserMode] = useState(false);
 
         // Header data (Smith Residence / roof line / front faces)
@@ -1724,11 +1767,15 @@ const loadPdfJs = () => {
           if(tool !== "obs"){
             setObsPaletteOpen(false);
           }
+          if(tool !== "free"){
+            setDrawPaletteOpen(false);
+          }
         }, [tool]);
 
         useEffect(() => {
           if(toolbarCollapsed){
             setObsPaletteOpen(false);
+            setDrawPaletteOpen(false);
           }
         }, [toolbarCollapsed]);
 
@@ -1746,6 +1793,24 @@ const loadPdfJs = () => {
           }
           setObsPalettePos({ left, top });
         }, [obsPaletteOpen, viewportSize.w, viewportSize.h]);
+
+        // Draw palette positioning — mirrors the OBS palette logic so
+        // the popup anchors under the DRAW toolbar button regardless
+        // of toolbar layout changes.
+        useEffect(() => {
+          if(!drawPaletteOpen) return;
+          const rect = drawButtonRef.current?.getBoundingClientRect() || toolbarRef.current?.getBoundingClientRect();
+          if(!rect) return;
+          const offset = 8;
+          let left = rect.left + rect.width / 2;
+          let top = rect.bottom + offset;
+          const paletteRect = (drawPaletteRef.current as HTMLElement | null)?.getBoundingClientRect();
+          if(paletteRect){
+            left = clamp(left - paletteRect.width / 2, 10, window.innerWidth - paletteRect.width - 10);
+            top = clamp(top, 10, window.innerHeight - paletteRect.height - 10);
+          }
+          setDrawPalettePos({ left, top });
+        }, [drawPaletteOpen, viewportSize.w, viewportSize.h]);
 
         const dashBounds = useCallback(() => {
           const styles = getComputedStyle(document.documentElement);
@@ -2502,9 +2567,12 @@ const loadPdfJs = () => {
           if(type === "apt"){
             const n = counts.current.apt++;
             base.name = `APT-${n}`;
+            // Persist the last APT type + direction so repeat placements
+            // (e.g. "all south-sloped plumbing stacks") don't force the
+            // inspector to reselect the same subtype for each item.
             base.data = {
-              type: "EF",
-              dir: "N",
+              type: aptLastType || "EF",
+              dir: aptLastDir || "N",
               locked: false,
               caption: "",
               detailPhoto: null,
@@ -2518,7 +2586,7 @@ const loadPdfJs = () => {
             base.name = `DS-${n}`;
             base.data = {
               index: n,               // used for diagram label (show number)
-              dir: "N",
+              dir: dsLastDir || "N",
               locked: false,
               material: "Aluminum",
               style: "Box",
@@ -2592,6 +2660,17 @@ const loadPdfJs = () => {
 
         const updateItemData = (k, v) => {
           setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, [k]: v } } : i));
+          // Persist last-used APT / DS sub-selections so the next
+          // item created uses the same defaults (feedback item 18).
+          const it = items.find(i => i.id === selectedId);
+          if(!it) return;
+          if(it.type === "apt"){
+            if(k === "type" && typeof v === "string") setAptLastType(v);
+            if(k === "dir" && typeof v === "string") setAptLastDir(v);
+          }
+          if(it.type === "ds"){
+            if(k === "dir" && typeof v === "string") setDsLastDir(v);
+          }
         };
 
         const updateItemName = (name) => {
@@ -3231,6 +3310,13 @@ const loadPdfJs = () => {
           // If no hit:
           if(tool === "free"){
             e.preventDefault();
+            // Shape sub-tool decides whether this is a freehand
+            // stroke (current behavior) or a drag-to-define shape
+            // (line, rect, circle, triangle, arrow).
+            if(freeShape !== "freehand"){
+              setDrag({ mode: "free-shape-draw", shape: freeShape, start: norm, cur: norm });
+              return;
+            }
             const inputType = e.pointerType || "mouse";
             const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
             setFreeStroke({ points: [norm], inputType, pressure });
@@ -3311,6 +3397,11 @@ const loadPdfJs = () => {
           const norm = clientToSheetNorm(e.clientX, e.clientY);
           if(!norm) return;
 
+          if(drag.mode === "free-shape-draw"){
+            e.preventDefault();
+            setDrag(prev => ({ ...prev, cur: norm }));
+            return;
+          }
           if(drag.mode === "free-draw"){
             e.preventDefault();
             const now = performance.now();
@@ -3466,6 +3557,62 @@ const loadPdfJs = () => {
             setFreeStroke(null);
             setFreeSuggestion(null);
             freeHoldRef.current = { timerId: null, lastMoveAt: 0, lastPos: null, applied: false, suggestion: null };
+          }
+
+          if(drag?.mode === "free-shape-draw"){
+            const shape = (drag as any).shape as string;
+            const start = drag.start, cur = drag.cur;
+            const dx = cur.x - start.x;
+            const dy = cur.y - start.y;
+            const dist = Math.hypot(dx, dy);
+            if(dist >= 0.01){
+              let points: {x:number; y:number}[] = [];
+              let closed = true;
+              if(shape === "line"){
+                points = [{ x: start.x, y: start.y }, { x: cur.x, y: cur.y }];
+                closed = false;
+              } else if(shape === "arrow"){
+                points = [{ x: start.x, y: start.y }, { x: cur.x, y: cur.y }];
+                closed = false;
+              } else if(shape === "rect"){
+                const x1 = Math.min(start.x, cur.x), y1 = Math.min(start.y, cur.y);
+                const x2 = Math.max(start.x, cur.x), y2 = Math.max(start.y, cur.y);
+                points = [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}];
+              } else if(shape === "circle"){
+                const cx = (start.x + cur.x) / 2;
+                const cy = (start.y + cur.y) / 2;
+                const rx = Math.abs(cur.x - start.x) / 2;
+                const ry = Math.abs(cur.y - start.y) / 2;
+                const N = 48;
+                const pts = [];
+                for(let i = 0; i < N; i++){
+                  const t = (i / N) * Math.PI * 2;
+                  pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) });
+                }
+                points = pts;
+              } else if(shape === "triangle"){
+                const x1 = Math.min(start.x, cur.x), y1 = Math.min(start.y, cur.y);
+                const x2 = Math.max(start.x, cur.x), y2 = Math.max(start.y, cur.y);
+                points = [
+                  { x: (x1 + x2) / 2, y: y1 },
+                  { x: x2, y: y2 },
+                  { x: x1, y: y2 },
+                ];
+              }
+              if(points.length){
+                const it = createItem("free", { points }, {
+                  shape,
+                  closed,
+                  color: freeDrawColor,
+                  strokeWidth: freeDrawWidth,
+                  pressure: 1,
+                  inputType: e.pointerType || "mouse",
+                });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              }
+            }
           }
           if(drag?.mode === "ts-draw"){
             const start = drag.start, cur = drag.cur;
@@ -3867,14 +4014,37 @@ const loadPdfJs = () => {
         ];
 
         const handleToolSelect = (key) => {
+          // Free-draw gets the same pop-up palette treatment as OBS:
+          // clicking the DRAW button selects the tool and opens its
+          // color/stroke/shape palette; clicking again closes the
+          // palette. The palette carries everything the sidebar
+          // drawing toolbar used to carry.
+          if(key === "free"){
+            setObsPaletteOpen(false);
+            if(tool !== "free"){
+              setTool("free");
+              setDrawPaletteOpen(true);
+              setEraserMode(false);
+              return;
+            }
+            if(drawPaletteOpen){
+              setDrawPaletteOpen(false);
+              setTool(null);
+              return;
+            }
+            setDrawPaletteOpen(true);
+            return;
+          }
           if(key !== "obs"){
             setObsPaletteOpen(false);
+            setDrawPaletteOpen(false);
             setTool(prev => (prev === key ? null : key));
             return;
           }
           if(tool !== "obs"){
             setTool("obs");
             setObsPaletteOpen(true);
+            setDrawPaletteOpen(false);
             return;
           }
           if(obsPaletteOpen){
@@ -5353,10 +5523,11 @@ const loadPdfJs = () => {
                             {toolDefs.map(t => {
                               const isActive = tool === t.key;
                               const isObs = t.key === "obs";
+                              const isFree = t.key === "free";
                               return (
                                 <button
                                   key={t.key}
-                                  ref={isObs ? obsButtonRef : undefined}
+                                  ref={isObs ? obsButtonRef : isFree ? drawButtonRef : undefined}
                                   className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                   type="button"
                                   onClick={() => handleToolSelect(t.key)}
@@ -5453,10 +5624,11 @@ const loadPdfJs = () => {
                         {toolDefs.map(t => {
                           const isActive = tool === t.key;
                           const isObs = t.key === "obs";
+                          const isFree = t.key === "free";
                           return (
                             <button
                               key={t.key}
-                              ref={isObs ? obsButtonRef : undefined}
+                              ref={isObs ? obsButtonRef : isFree ? drawButtonRef : undefined}
                               className={"toolBtn iconLabel " + t.cls + " " + (isActive ? "active" : "")}
                               type="button"
                               onClick={() => handleToolSelect(t.key)}
@@ -5525,6 +5697,124 @@ const loadPdfJs = () => {
                 </div>
               )}
 
+              {/* Draw palette — the DRAW toolbar button opens this
+                  pop-up the same way the OBS button opens its
+                  palette. Colors, stroke presets, fine-tune slider,
+                  shape sub-tools and an eraser all live here so
+                  the sidebar is free of drawing controls. */}
+              {tool === "free" && drawPaletteOpen && (
+                <div
+                  className="drawPalette"
+                  style={{ left: drawPalettePos.left, top: drawPalettePos.top }}
+                  ref={drawPaletteRef}
+                  role="group"
+                  aria-label="Draw tools"
+                >
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Shape</div>
+                    <div className="drawPaletteShapes">
+                      {[
+                        { key: "freehand", icon: "free", label: "Freehand" },
+                        { key: "line", icon: "line", label: "Line" },
+                        { key: "rect", icon: "square", label: "Rectangle" },
+                        { key: "circle", icon: "circle", label: "Circle" },
+                        { key: "triangle", icon: "triangle", label: "Triangle" },
+                        { key: "arrow", icon: "arrowRight", label: "Arrow" },
+                      ].map(s => (
+                        <button
+                          key={s.key}
+                          type="button"
+                          className={"drawShapeBtn" + (freeShape === s.key ? " active" : "")}
+                          onClick={() => { setFreeShape(s.key); setEraserMode(false); }}
+                          aria-label={s.label}
+                          title={s.label}
+                        >
+                          <Icon name={s.icon} />
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={"drawShapeBtn danger" + (eraserMode ? " active" : "")}
+                        onClick={() => { setEraserMode(prev => !prev); }}
+                        aria-label="Eraser"
+                        title="Eraser — tap a stroke to delete it"
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Color</div>
+                    <div className="drawPaletteColors">
+                      {[
+                        "#FFFFFF", "#000000", "#DC2626", "#2563EB", "#16A34A",
+                        "#F97316", "#EAB308", "#9333EA", "#EC4899", "#92400E",
+                      ].map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={"drawColorDot" + (freeDrawColor.toUpperCase() === c.toUpperCase() ? " active" : "")}
+                          style={{ background: c }}
+                          onClick={() => setFreeDrawColor(c)}
+                          aria-label={`Color ${c}`}
+                          title={c}
+                        />
+                      ))}
+                      <label className="drawColorDot drawColorCustom" title="Custom color">
+                        <input
+                          type="color"
+                          value={freeDrawColor}
+                          onChange={(e) => setFreeDrawColor(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Stroke</div>
+                    <div className="drawStrokeRow">
+                      {[
+                        { key: "fine", pt: 1, label: "Fine" },
+                        { key: "small", pt: 2, label: "Small" },
+                        { key: "med", pt: 4, label: "Medium" },
+                        { key: "large", pt: 7, label: "Large" },
+                      ].map(preset => (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          className={"drawStrokePreset" + (Math.round(freeDrawWidth) === preset.pt ? " active" : "")}
+                          onClick={() => setFreeDrawWidth(preset.pt)}
+                          aria-label={`${preset.label} stroke`}
+                          title={`${preset.label} (${preset.pt} pt)`}
+                        >
+                          <span
+                            className="drawStrokeDot"
+                            style={{ width: Math.max(4, preset.pt * 2), height: Math.max(4, preset.pt * 2), background: freeDrawColor }}
+                          />
+                          <span className="drawStrokeLabel">{preset.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="drawStrokeSliderRow">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="12"
+                        step="0.5"
+                        value={freeDrawWidth}
+                        onChange={(e) => setFreeDrawWidth(parseFloat(e.target.value) || 2)}
+                        aria-label="Stroke width"
+                      />
+                      <span className="drawStrokeValue">{freeDrawWidth} pt</span>
+                    </div>
+                  </div>
+                  {eraserMode && (
+                    <div className="drawPaletteHint">
+                      Eraser on — tap any stroke on the diagram to remove it.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* VIEWPORT */}
               <div
                 className="viewport"
@@ -5563,20 +5853,29 @@ const loadPdfJs = () => {
                       </defs>
 
                       <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      <defs>
+                        <marker id="freeArrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                          <path d="M0 0 L10 5 L0 10 z" fill="context-stroke" />
+                        </marker>
+                      </defs>
                       {dashVisibleItems.filter(i => i.type === "free" && i.data.points?.length > 1).map(i => {
                         const pts = i.data.points;
                         const isSel = selectedId === i.id;
+                        const shape = i.data.shape;
+                        const color = i.data.color || "#0EA5E9";
+                        const sw = (i.data.strokeWidth || 2) * (isSel ? 1.5 : 1);
                         const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ") + (i.data.closed ? " Z" : "");
                         return (
                           <path
                             key={i.id}
                             d={d}
-                            fill={i.data.closed ? "rgba(14,165,233,0.10)" : "none"}
-                            stroke={i.data.color || "#0EA5E9"}
-                            strokeWidth={(i.data.strokeWidth || 2) * (isSel ? 1.5 : 1)}
+                            fill={i.data.closed ? `${color}1a` : "none"}
+                            stroke={color}
+                            strokeWidth={sw}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             opacity={isSel ? 1 : 0.95}
+                            markerEnd={shape === "arrow" ? "url(#freeArrowHead)" : undefined}
                             style={{ cursor: "pointer" }}
                           />
                         );
@@ -5641,6 +5940,60 @@ const loadPdfJs = () => {
                           strokeWidth="2"
                         />
                       )}
+                      {drag && (drag as any).mode === "free-shape-draw" && (() => {
+                        const s = drag.start, c = drag.cur;
+                        const shape = (drag as any).shape;
+                        const x1 = Math.min(s.x, c.x) * sheetWidth;
+                        const y1 = Math.min(s.y, c.y) * sheetHeight;
+                        const x2 = Math.max(s.x, c.x) * sheetWidth;
+                        const y2 = Math.max(s.y, c.y) * sheetHeight;
+                        const stroke = freeDrawColor;
+                        const sw = freeDrawWidth;
+                        if(shape === "line"){
+                          return (
+                            <line x1={s.x * sheetWidth} y1={s.y * sheetHeight}
+                                  x2={c.x * sheetWidth} y2={c.y * sheetHeight}
+                                  stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4" strokeLinecap="round"/>
+                          );
+                        }
+                        if(shape === "arrow"){
+                          return (
+                            <line x1={s.x * sheetWidth} y1={s.y * sheetHeight}
+                                  x2={c.x * sheetWidth} y2={c.y * sheetHeight}
+                                  stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4" strokeLinecap="round"
+                                  markerEnd="url(#freeArrowHead)"/>
+                          );
+                        }
+                        if(shape === "rect"){
+                          return (
+                            <rect x={x1} y={y1} width={x2-x1} height={y2-y1}
+                                  fill={`${stroke}1a`} stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4"/>
+                          );
+                        }
+                        if(shape === "circle"){
+                          const cx = (x1 + x2) / 2;
+                          const cy = (y1 + y2) / 2;
+                          const rx = Math.abs(x2 - x1) / 2;
+                          const ry = Math.abs(y2 - y1) / 2;
+                          return (
+                            <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+                                     fill={`${stroke}1a`} stroke={stroke} strokeWidth={sw}
+                                     strokeDasharray="6,4"/>
+                          );
+                        }
+                        if(shape === "triangle"){
+                          const path = `M${(x1+x2)/2},${y1} L${x2},${y2} L${x1},${y2} Z`;
+                          return (
+                            <path d={path} fill={`${stroke}1a`} stroke={stroke}
+                                  strokeWidth={sw} strokeDasharray="6,4"
+                                  strokeLinejoin="round"/>
+                          );
+                        }
+                        return null;
+                      })()}
                     </svg>
 
                     {dashVisibleItems.filter(i => i.type !== "ts" && i.type !== "free" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
@@ -6011,65 +6364,6 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
-                    {/* Draw quick tools — always visible so Draw/Erase/Color
-                        are one tap away regardless of which group is open. */}
-                    <div className="drawToolbar" role="group" aria-label="Drawing tools">
-                      <div className="drawToolbarLabel">Drawing</div>
-                      <div className="drawToolbarActions">
-                        <button
-                          type="button"
-                          className={"drawToolBtn" + (tool === "free" && !eraserMode ? " active" : "")}
-                          onClick={() => {
-                            setEraserMode(false);
-                            setTool(prev => (prev === "free" ? null : "free"));
-                          }}
-                          title="Free draw (Apple Pencil / stylus / touch / mouse)"
-                        >
-                          <Icon name="free" />
-                          <span>Draw</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={"drawToolBtn danger" + (eraserMode ? " active" : "")}
-                          onClick={() => {
-                            setEraserMode(prev => {
-                              const next = !prev;
-                              if(next) setTool(null);
-                              return next;
-                            });
-                          }}
-                          title="Eraser: tap a stroke to delete it"
-                        >
-                          <Icon name="trash" />
-                          <span>Erase</span>
-                        </button>
-                        <label className="drawColorBtn" title="Stroke color">
-                          <span className="drawColorSwatch" style={{ background: freeDrawColor }} />
-                          <span>Color</span>
-                          <input
-                            type="color"
-                            value={freeDrawColor}
-                            onChange={(e) => setFreeDrawColor(e.target.value)}
-                          />
-                        </label>
-                        <div className="drawWidthRow" title="Stroke width">
-                          <Icon name="minus" />
-                          <input
-                            type="range"
-                            min="1"
-                            max="8"
-                            step="1"
-                            value={freeDrawWidth}
-                            onChange={(e) => setFreeDrawWidth(parseInt(e.target.value, 10) || 2)}
-                            aria-label="Stroke width"
-                          />
-                          <Icon name="plus" />
-                        </div>
-                      </div>
-                      {eraserMode && (
-                        <div className="drawToolbarHint">Eraser mode on — tap a stroke on the diagram to remove it.</div>
-                      )}
-                    </div>
                     {["ts","apt","ds","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;

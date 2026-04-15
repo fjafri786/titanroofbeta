@@ -546,6 +546,156 @@
         color: var(--c-obs);
         box-shadow: 0 8px 14px rgba(2,6,23,0.12);
       }
+
+      /* ========= DRAW TOOL POPUP ========= */
+      .drawPalette{
+        position: fixed;
+        width: 290px;
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+        padding:14px 14px 12px;
+        border-radius:18px;
+        border:1px solid rgba(148,163,184,0.25);
+        background:#FFFFFF;
+        box-shadow: 0 14px 28px -10px rgba(2,6,23,0.22);
+        z-index: 180;
+      }
+      .drawPaletteSection{
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      }
+      .drawPaletteLabel{
+        font-size:10px;
+        font-weight:1300;
+        letter-spacing:0.6px;
+        text-transform:uppercase;
+        color: var(--sub);
+      }
+      .drawPaletteShapes{
+        display:grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap:6px;
+      }
+      .drawShapeBtn{
+        height:34px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:10px;
+        border:1px solid rgba(148,163,184,0.3);
+        background:#FFFFFF;
+        color:#0B1220;
+        cursor:pointer;
+        transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+      }
+      .drawShapeBtn svg{ width:16px; height:16px; }
+      .drawShapeBtn:hover{
+        transform: translateY(-1px);
+        border-color: rgba(14,165,233,0.5);
+      }
+      .drawShapeBtn.active{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.7);
+        color:#FFFFFF;
+        box-shadow: 0 8px 14px -8px rgba(14,165,233,0.7);
+      }
+      .drawShapeBtn.danger.active{
+        background: linear-gradient(135deg, #EF4444, #DC2626);
+        border-color: rgba(220,38,38,0.65);
+        box-shadow: 0 8px 14px -8px rgba(220,38,38,0.65);
+      }
+      .drawPaletteColors{
+        display:grid;
+        grid-template-columns: repeat(11, 1fr);
+        gap:6px;
+      }
+      .drawColorDot{
+        position: relative;
+        width: 20px;
+        height: 20px;
+        border-radius:999px;
+        border:1px solid rgba(15,23,42,0.2);
+        cursor:pointer;
+        padding: 0;
+        box-shadow: inset 0 0 0 2px #FFFFFF;
+      }
+      .drawColorDot.active{
+        outline: 2px solid #0EA5E9;
+        outline-offset: 2px;
+      }
+      .drawColorCustom{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        background: conic-gradient(from 0deg, red, orange, yellow, green, blue, indigo, violet, red);
+      }
+      .drawColorCustom input[type="color"]{
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+        border: none;
+        padding: 0;
+      }
+      .drawStrokeRow{
+        display:grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap:6px;
+      }
+      .drawStrokePreset{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:4px;
+        height: 46px;
+        border-radius:10px;
+        border:1px solid rgba(148,163,184,0.3);
+        background:#FFFFFF;
+        cursor:pointer;
+        padding: 4px;
+      }
+      .drawStrokePreset.active{
+        border-color: rgba(14,165,233,0.6);
+        background: rgba(14,165,233,0.08);
+      }
+      .drawStrokeDot{
+        border-radius:999px;
+      }
+      .drawStrokeLabel{
+        font-size: 9px;
+        font-weight: 1300;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--sub);
+      }
+      .drawStrokeSliderRow{
+        display:flex;
+        align-items:center;
+        gap:10px;
+      }
+      .drawStrokeSliderRow input[type="range"]{
+        flex:1;
+        accent-color: #0EA5E9;
+      }
+      .drawStrokeValue{
+        font-size: 11px;
+        font-weight: 1300;
+        color: #0B1220;
+        min-width: 40px;
+        text-align: right;
+      }
+      .drawPaletteHint{
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(254,226,226,0.7);
+        border: 1px solid rgba(220,38,38,0.3);
+        font-size: 11px;
+        font-weight: 1200;
+        color: #B91C1C;
+      }
       .tbDivider{
         width:1px;
         height:28px;
