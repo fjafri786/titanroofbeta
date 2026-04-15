@@ -9,6 +9,7 @@ interface ProjectCardProps {
   onDuplicate: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  onDownload: () => void;
 }
 
 const HEAVY_WARN_BYTES = 20 * 1024 * 1024;
@@ -22,6 +23,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onDuplicate,
   onArchive,
   onDelete,
+  onDownload,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +123,9 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           </button>
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDuplicate(); }}>
             Duplicate
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDownload(); }}>
+            Download (.json)
           </button>
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onArchive(); }}>
             {summary.status === "archived" ? "Unarchive" : "Archive"}

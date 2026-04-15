@@ -135,6 +135,43 @@ const Dashboard: React.FC = () => {
     [user, refreshSummaries],
   );
 
+  const handleDownload = useCallback(
+    async (summary: ProjectSummary) => {
+      if (!user) return;
+      const record = await projectStore.get(user.userId, summary.projectId);
+      if (!record) return;
+      try {
+        const payload = {
+          app: "TitanRoof 4.2.3 Beta",
+          version: "4.2.3",
+          format: "titanroof-project",
+          exportedAt: new Date().toISOString(),
+          data: record,
+        };
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const safeName = (record.name || "titanroof-project")
+          .trim()
+          .replace(/[^a-zA-Z0-9._-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        const stamp = new Date().toISOString().slice(0, 10);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${safeName || "titanroof-project"}-${stamp}.json`;
+        link.type = "application/json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        console.warn("Failed to download project", err);
+        window.alert("Could not download that project. See console for details.");
+      }
+    },
+    [user],
+  );
+
   return (
     <div className="dashRoot">
       <header className="dashHeader">
@@ -274,6 +311,7 @@ const Dashboard: React.FC = () => {
                 onDuplicate={() => handleDuplicate(p)}
                 onArchive={() => handleArchive(p)}
                 onDelete={() => handleDelete(p)}
+                onDownload={() => handleDownload(p)}
               />
             ))}
           </div>
@@ -289,6 +327,7 @@ const Dashboard: React.FC = () => {
                 onDuplicate={() => handleDuplicate(p)}
                 onArchive={() => handleArchive(p)}
                 onDelete={() => handleDelete(p)}
+                onDownload={() => handleDownload(p)}
               />
             ))}
           </div>

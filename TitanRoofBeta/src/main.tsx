@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import PropertiesBar from "./components/PropertiesBar";
+import MenuBar from "./components/MenuBar";
 import TopBar from "./components/TopBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
@@ -98,19 +99,83 @@ const loadPdfJs = () => {
       const LETTER_ASPECT_RATIO = 8.5 / 11;
 
       const SHINGLE_KIND = [
-        { code: "LAM", label: "Laminate Shingles" },
-        { code: "3TB", label: "3-Tab Shingles" },
+        { code: "LAM", label: "Laminate / Architectural" },
+        { code: "3TB", label: "3-Tab" },
+        { code: "DIM", label: "Dimensional" },
+        { code: "DES", label: "Designer / Luxury" },
+        { code: "IMP", label: "Impact-Resistant" },
+        { code: "WDS", label: "Wood Shingle" },
+        { code: "WDK", label: "Wood Shake" },
+        { code: "SLT", label: "Slate" },
+        { code: "SYN", label: "Synthetic / Composite" },
+        { code: "OTH", label: "Other / Unknown" },
       ];
-      const SHINGLE_LENGTHS = ["36 inch width", "Other / Unknown"];
-      const SHINGLE_EXPOSURES = ["5 inch exposure", "5-5/8 inch exposure", "6 inch exposure", "Other / Unknown"];
+      const SHINGLE_LENGTHS = [
+        "36 inch width",
+        "39-3/8 inch width",
+        "40 inch width",
+        "12 inch length",
+        "18 inch length",
+        "Other / Unknown",
+      ];
+      const SHINGLE_EXPOSURES = [
+        "4 inch exposure",
+        "4-1/2 inch exposure",
+        "5 inch exposure",
+        "5-1/8 inch exposure",
+        "5-5/8 inch exposure",
+        "5-3/4 inch exposure",
+        "6 inch exposure",
+        "7 inch exposure",
+        "Other / Unknown",
+      ];
 
       const METAL_KIND = [
         { code: "SS", label: "Standing Seam" },
         { code: "RP", label: "R-Panel" },
         { code: "COR", label: "Corrugated" },
+        { code: "ALM", label: "Metal Shingle" },
+        { code: "STONE", label: "Stone-Coated Steel" },
+        { code: "COPPER", label: "Copper" },
+        { code: "ZINC", label: "Zinc" },
         { code: "OTH", label: "Other" },
       ];
-      const METAL_PANEL_WIDTHS = ["12 inch", "16 inch", "24 inch", "Other / Unknown"];
+      const METAL_PANEL_WIDTHS = ["12 inch", "16 inch", "18 inch", "21 inch", "24 inch", "26 inch", "36 inch", "Other / Unknown"];
+
+      /**
+       * Secondary roof coverings — used when the primary covering
+       * doesn't fully describe the roof (e.g. main area is laminate
+       * shingle but a bay window is copper, or a partial deck has
+       * acrylic). The user can add as many as they need in the
+       * Project Properties > Roof tab.
+       */
+      const ROOF_COVERING_CATEGORIES = [
+        "Shingle",
+        "Metal",
+        "Tile",
+        "Slate",
+        "Built-Up (BUR)",
+        "Modified Bitumen",
+        "TPO",
+        "EPDM",
+        "PVC",
+        "Wood Shake",
+        "Acrylic / Polycarbonate",
+        "Copper (bay / decorative)",
+        "Other",
+      ];
+      const ROOF_COVERING_SCOPES = [
+        "Main roof",
+        "Bay window",
+        "Porch / Patio cover",
+        "Carport",
+        "Covered deck",
+        "Dormer",
+        "Sunroom",
+        "Awning",
+        "Shed / Outbuilding",
+        "Other",
+      ];
 
       const DS_MATERIALS = ["Aluminum", "Steel", "Other / Unknown"];
       const DS_STYLES = ["Box", "Round", "Other / Unknown"];
@@ -204,6 +269,20 @@ const loadPdfJs = () => {
       const ROOF_GEOMETRIES = ["Gable", "Hip", "Gable/Hip Combination", "Flat", "Other"];
       const ROOF_APPURTENANCES = ["Vent Stacks", "Roof Vents", "Ridge Vents", "Chimney", "Skylights", "Solar", "Other"];
       const BACKGROUND_CONCERNS = ["Hail", "Wind", "Water Intrusion", "Interior Staining", "Other"];
+      const ACCESS_LIMITATION_REASONS = [
+        "Steep pitch — safety",
+        "Wet / icy roof",
+        "Height — no safe tie-off",
+        "Under construction",
+        "Hazardous conditions",
+        "Attorney / legal hold",
+        "Red tape / access denied",
+        "Occupied / tenant refusal",
+        "Locked section (garage, shed, etc.)",
+        "Solar array coverage",
+        "Vegetation obstruction",
+        "No ladder access",
+      ];
       const OBSERVED_CONDITIONS = ["Spatter Marks", "Dents", "Creases", "Tears", "Displaced Elements", "Other"];
 
       const INSPECTION_COMPONENTS = [
@@ -286,7 +365,8 @@ const loadPdfJs = () => {
           concerns: [],
           notes: "",
           accessObtained: "",
-          limitations: []
+          limitations: [],
+          limitationsOther: ""
         },
         writer: {
           letterhead: "",
@@ -344,7 +424,8 @@ const loadPdfJs = () => {
             ...defaults.background,
             ...(source.background || {}),
             concerns: normalizeList(source.background?.concerns),
-            limitations: normalizeList(source.background?.limitations)
+            limitations: normalizeList(source.background?.limitations),
+            limitationsOther: typeof source.background?.limitationsOther === "string" ? source.background.limitationsOther : ""
           },
           writer: {
             ...defaults.writer,
@@ -543,19 +624,57 @@ const loadPdfJs = () => {
           return (<svg {...common}><path d="M9 18l6-6-6-6"/></svg>);
         }
         if(name === "ts"){
-          return (<svg {...common}><rect x="6" y="6" width="12" height="12" rx="2"/></svg>);
+          // Test Square: a square marker with a small crosshair inside.
+          return (
+            <svg {...common}>
+              <rect x="5" y="5" width="14" height="14" rx="2"/>
+              <path d="M12 9v6"/>
+              <path d="M9 12h6"/>
+            </svg>
+          );
         }
         if(name === "apt"){
-          return (<svg {...common}><circle cx="12" cy="12" r="6"/></svg>);
+          // Appurtenance: a roof penetration / vent-pipe with a cap.
+          return (
+            <svg {...common}>
+              <rect x="9" y="10" width="6" height="10" rx="1"/>
+              <path d="M7 10h10"/>
+              <path d="M12 10V4"/>
+              <circle cx="12" cy="4" r="1.4" fill="currentColor" stroke="none"/>
+            </svg>
+          );
         }
         if(name === "ds"){
-          return (<svg {...common}><path d="M12 5v10"/><path d="M9 12l3 3 3-3"/></svg>);
+          // Downspout: rectangular channel with a down arrow inside it.
+          return (
+            <svg {...common}>
+              <rect x="9" y="3" width="6" height="16" rx="1"/>
+              <path d="M12 7v6"/>
+              <path d="M10 11l2 2 2-2"/>
+              <path d="M9 19l-2 2"/>
+              <path d="M15 19l2 2"/>
+            </svg>
+          );
         }
         if(name === "wind"){
-          return (<svg {...common}><path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 14h14a3 3 0 1 1-3 3"/></svg>);
+          // Wind: three stacked wind streaks with a loop on one end.
+          return (
+            <svg {...common}>
+              <path d="M3 8h11a3 3 0 1 0-3-3"/>
+              <path d="M3 12h15"/>
+              <path d="M3 16h11a3 3 0 1 1-3 3"/>
+            </svg>
+          );
         }
         if(name === "obs"){
-          return (<svg {...common}><path d="M12 21s6-6 6-10a6 6 0 1 0-12 0c0 4 6 10 6 10z"/><circle cx="12" cy="11" r="2.5"/></svg>);
+          // Observation: an eye (forensic observation marker), more
+          // scannable than the previous map-pin which read as "pin".
+          return (
+            <svg {...common}>
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          );
         }
         if(name === "panel"){
           return (
@@ -720,9 +839,11 @@ const loadPdfJs = () => {
           );
         }
         if(name === "free"){
+          // Angled pencil — reads as "draw", not a squiggle.
           return (
             <svg {...common}>
-              <path d="M3 17c3-6 6-9 9-9s5 3 4 6-3 3-3 0 2-3 4-3 5 2 5 5" />
+              <path d="M14.5 4.5l5 5L8 21H3v-5z"/>
+              <path d="M12.5 6.5l5 5"/>
             </svg>
           );
         }
@@ -735,6 +856,57 @@ const loadPdfJs = () => {
             </svg>
           );
         }
+        if(name === "line"){
+          return (<svg {...common}><path d="M4 20L20 4"/></svg>);
+        }
+        if(name === "square"){
+          return (<svg {...common}><rect x="4" y="4" width="16" height="16" rx="1"/></svg>);
+        }
+        if(name === "circle"){
+          return (<svg {...common}><circle cx="12" cy="12" r="8"/></svg>);
+        }
+        if(name === "triangle"){
+          return (<svg {...common}><path d="M12 4l9 16H3z"/></svg>);
+        }
+        if(name === "arrowRight"){
+          return (
+            <svg {...common}>
+              <path d="M4 12h14"/>
+              <path d="M14 6l6 6-6 6"/>
+            </svg>
+          );
+        }
+        if(name === "ruler"){
+          return (
+            <svg {...common}>
+              <rect x="2" y="9" width="20" height="6" rx="1"/>
+              <path d="M6 9v3"/>
+              <path d="M10 9v4"/>
+              <path d="M14 9v3"/>
+              <path d="M18 9v4"/>
+            </svg>
+          );
+        }
+        if(name === "grid"){
+          return (
+            <svg {...common}>
+              <rect x="4" y="4" width="16" height="16" rx="1"/>
+              <path d="M4 10h16"/>
+              <path d="M4 16h16"/>
+              <path d="M10 4v16"/>
+              <path d="M16 4v16"/>
+            </svg>
+          );
+        }
+        if(name === "menu"){
+          return (
+            <svg {...common}>
+              <path d="M3 6h18"/>
+              <path d="M3 12h18"/>
+              <path d="M3 18h18"/>
+            </svg>
+          );
+        }
         return null;
       };
 
@@ -744,17 +916,57 @@ const loadPdfJs = () => {
       const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
       const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
 
+      /**
+       * Small helper: useState backed by localStorage so
+       * last-selected tool choices persist across sessions.
+       * Fails open if storage is unavailable.
+       */
+      function usePersistedState<T>(key: string, initial: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+        const [state, setState] = useState<T>(() => {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw == null) return initial;
+            return JSON.parse(raw) as T;
+          } catch {
+            return initial;
+          }
+        });
+        useEffect(() => {
+          try {
+            localStorage.setItem(key, JSON.stringify(state));
+          } catch {
+            // ignore
+          }
+        }, [key, state]);
+        return [state, setState];
+      }
+
       export function App(){
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
         const [tool, setTool] = useState(null);
-        const [obsTool, setObsTool] = useState("dot");
+        // Persisted last-used sub-selections (item 18 / 19 feedback):
+        // once the user picks an OBS type, a Draw shape, or an APT
+        // type + direction, that choice survives across other tool
+        // selections and page reloads.
+        const [obsTool, setObsTool] = usePersistedState<string>("titanroof.tool.obs", "dot");
+        const [freeShape, setFreeShape] = usePersistedState<string>("titanroof.tool.freeShape", "freehand");
+        const [freeDrawColorPersisted, setFreeDrawColorPersisted] = usePersistedState<string>("titanroof.tool.freeColor", "#0EA5E9");
+        const [freeDrawWidthPersisted, setFreeDrawWidthPersisted] = usePersistedState<number>("titanroof.tool.freeWidth", 2);
+        const [aptLastType, setAptLastType] = usePersistedState<string>("titanroof.tool.aptType", "EF");
+        const [aptLastDir, setAptLastDir] = usePersistedState<string>("titanroof.tool.aptDir", "N");
+        const [dsLastDir, setDsLastDir] = usePersistedState<string>("titanroof.tool.dsDir", "N");
+
         const [obsPaletteOpen, setObsPaletteOpen] = useState(false);
         const [obsPalettePos, setObsPalettePos] = useState({ left: 0, top: 0 });
+        const [drawPaletteOpen, setDrawPaletteOpen] = useState(false);
+        const [drawPalettePos, setDrawPalettePos] = useState({ left: 0, top: 0 });
         const toolbarRef = useRef(null);
         const obsButtonRef = useRef<HTMLButtonElement | null>(null);
         const obsPaletteRef = useRef(null);
+        const drawButtonRef = useRef<HTMLButtonElement | null>(null);
+        const drawPaletteRef = useRef(null);
         const trpInputRef = useRef(null);
         const mobileFitPagesRef = useRef(new Set());
 
@@ -765,6 +977,26 @@ const loadPdfJs = () => {
         const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         const [mobileToolbarSection, setMobileToolbarSection] = useState("tools");
         const [toolbarCollapsed, setToolbarCollapsed] = useState(false);
+
+        // --- Grid + ruler/scale state (Pass 3 menu bar feature) ---
+        const [gridEnabled, setGridEnabled] = usePersistedState<boolean>("titanroof.view.grid", true);
+        const [gridSettings, setGridSettings] = usePersistedState<{
+          spacing: number; color: string; thickness: number;
+        }>("titanroof.view.gridSettings", { spacing: 40, color: "#EEF2F7", thickness: 1 });
+        const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
+
+        // Scale reference: two points on the sheet (normalized) + a
+        // real-world distance + a unit. Once set, the measurement
+        // badge + Ruler tool can report true dimensions.
+        type ScaleRef = {
+          a: { x: number; y: number };
+          b: { x: number; y: number };
+          realDistance: number;
+          unit: "ft" | "in" | "m" | "cm";
+        } | null;
+        const [scaleRef, setScaleRef] = usePersistedState<ScaleRef>("titanroof.view.scaleRef", null);
+        const [scaleCaptureStep, setScaleCaptureStep] = useState<"idle" | "first" | "second">("idle");
+        const [scaleCaptureFirst, setScaleCaptureFirst] = useState<{x:number;y:number} | null>(null);
         const [mobileScale, setMobileScale] = useState(1);
         const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -785,8 +1017,11 @@ const loadPdfJs = () => {
           suggestion: null
         });
         const [freeSuggestion, setFreeSuggestion] = useState(null); // preview of recognized shape
-        const [freeDrawColor, setFreeDrawColor] = useState("#0EA5E9");
-        const [freeDrawWidth, setFreeDrawWidth] = useState(2);
+        // Persisted across sessions / tool switches.
+        const freeDrawColor = freeDrawColorPersisted;
+        const setFreeDrawColor = setFreeDrawColorPersisted;
+        const freeDrawWidth = freeDrawWidthPersisted;
+        const setFreeDrawWidth = setFreeDrawWidthPersisted;
         const [eraserMode, setEraserMode] = useState(false);
 
         // Header data (Smith Residence / roof line / front faces)
@@ -800,6 +1035,12 @@ const loadPdfJs = () => {
         const [exteriorPhotos, setExteriorPhotos] = useState([]);
 
         // Roof properties
+        // `additionalCoverings` covers the multi-roof case: e.g. a
+        // laminate shingle main roof with a copper bay window and
+        // a partial acrylic patio deck. Each entry carries a
+        // category (Shingle / Metal / TPO / ...), the scope it
+        // applies to (Main / Bay window / Porch / ...), and a free
+        // notes field for anything the enums don't cover.
         const [roof, setRoof] = useState({
           covering: "SHINGLE",
           shingleKind: "LAM",
@@ -807,8 +1048,17 @@ const loadPdfJs = () => {
           shingleExposure: "5 inch exposure",
           metalKind: "SS",
           metalPanelWidth: "24 inch",
-          otherDesc: ""
+          otherDesc: "",
+          additionalCoverings: [] as Array<{
+            id: string;
+            category: string;
+            scope: string;
+            notes: string;
+          }>,
         });
+
+        // Project-properties modal tab (general | roof).
+        const [headerEditTab, setHeaderEditTab] = useState<"general" | "roof">("general");
 
         const initialPage = useMemo(() => ({
           id: uid(),
@@ -1553,11 +1803,15 @@ const loadPdfJs = () => {
           if(tool !== "obs"){
             setObsPaletteOpen(false);
           }
+          if(tool !== "free"){
+            setDrawPaletteOpen(false);
+          }
         }, [tool]);
 
         useEffect(() => {
           if(toolbarCollapsed){
             setObsPaletteOpen(false);
+            setDrawPaletteOpen(false);
           }
         }, [toolbarCollapsed]);
 
@@ -1576,14 +1830,33 @@ const loadPdfJs = () => {
           setObsPalettePos({ left, top });
         }, [obsPaletteOpen, viewportSize.w, viewportSize.h]);
 
+        // Draw palette positioning — mirrors the OBS palette logic so
+        // the popup anchors under the DRAW toolbar button regardless
+        // of toolbar layout changes.
+        useEffect(() => {
+          if(!drawPaletteOpen) return;
+          const rect = drawButtonRef.current?.getBoundingClientRect() || toolbarRef.current?.getBoundingClientRect();
+          if(!rect) return;
+          const offset = 8;
+          let left = rect.left + rect.width / 2;
+          let top = rect.bottom + offset;
+          const paletteRect = (drawPaletteRef.current as HTMLElement | null)?.getBoundingClientRect();
+          if(paletteRect){
+            left = clamp(left - paletteRect.width / 2, 10, window.innerWidth - paletteRect.width - 10);
+            top = clamp(top, 10, window.innerHeight - paletteRect.height - 10);
+          }
+          setDrawPalettePos({ left, top });
+        }, [drawPaletteOpen, viewportSize.w, viewportSize.h]);
+
         const dashBounds = useCallback(() => {
           const styles = getComputedStyle(document.documentElement);
           const topbarHeight = parseFloat(styles.getPropertyValue("--topbar-height")) || 0;
+          const menubarHeight = parseFloat(styles.getPropertyValue("--menubar-height")) || 0;
           const propsbarHeight = parseFloat(styles.getPropertyValue("--propsbar-height")) || 0;
           const toolbarHeight = parseFloat(styles.getPropertyValue("--toolbar-height")) || 0;
           return {
             left: 0,
-            top: topbarHeight + propsbarHeight + (toolbarCollapsed ? 0 : toolbarHeight),
+            top: topbarHeight + menubarHeight + propsbarHeight + (toolbarCollapsed ? 0 : toolbarHeight),
             right: window.innerWidth,
             bottom: window.innerHeight
           };
@@ -2331,9 +2604,12 @@ const loadPdfJs = () => {
           if(type === "apt"){
             const n = counts.current.apt++;
             base.name = `APT-${n}`;
+            // Persist the last APT type + direction so repeat placements
+            // (e.g. "all south-sloped plumbing stacks") don't force the
+            // inspector to reselect the same subtype for each item.
             base.data = {
-              type: "EF",
-              dir: "N",
+              type: aptLastType || "EF",
+              dir: aptLastDir || "N",
               locked: false,
               caption: "",
               detailPhoto: null,
@@ -2347,7 +2623,7 @@ const loadPdfJs = () => {
             base.name = `DS-${n}`;
             base.data = {
               index: n,               // used for diagram label (show number)
-              dir: "N",
+              dir: dsLastDir || "N",
               locked: false,
               material: "Aluminum",
               style: "Box",
@@ -2421,6 +2697,17 @@ const loadPdfJs = () => {
 
         const updateItemData = (k, v) => {
           setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, [k]: v } } : i));
+          // Persist last-used APT / DS sub-selections so the next
+          // item created uses the same defaults (feedback item 18).
+          const it = items.find(i => i.id === selectedId);
+          if(!it) return;
+          if(it.type === "apt"){
+            if(k === "type" && typeof v === "string") setAptLastType(v);
+            if(k === "dir" && typeof v === "string") setAptLastDir(v);
+          }
+          if(it.type === "ds"){
+            if(k === "dir" && typeof v === "string") setDsLastDir(v);
+          }
         };
 
         const updateItemName = (name) => {
@@ -2989,6 +3276,43 @@ const loadPdfJs = () => {
           const norm = clientToSheetNorm(e.clientX, e.clientY);
           if(!norm) return;
 
+          // Scale-reference capture mode takes priority over every
+          // tool. Two points → prompt for real-world distance →
+          // save scaleRef, then exit the mode.
+          if(scaleCaptureStep === "first"){
+            e.preventDefault();
+            setScaleCaptureFirst(norm);
+            setScaleCaptureStep("second");
+            return;
+          }
+          if(scaleCaptureStep === "second" && scaleCaptureFirst){
+            e.preventDefault();
+            const raw = window.prompt(
+              "Known distance between those two points? Examples: 100 ft, 12 m, 18 in, 2.5 cm",
+              "100 ft",
+            );
+            if(raw != null){
+              const match = raw.trim().match(/^(\d+(?:\.\d+)?)\s*(ft|in|m|cm)?$/i);
+              if(match){
+                const num = parseFloat(match[1]);
+                const unit = (match[2] || "ft").toLowerCase() as "ft"|"in"|"m"|"cm";
+                if(num > 0){
+                  setScaleRef({
+                    a: scaleCaptureFirst,
+                    b: norm,
+                    realDistance: num,
+                    unit,
+                  });
+                }
+              } else {
+                window.alert("Could not parse that distance. Try \"100 ft\" or \"12 m\".");
+              }
+            }
+            setScaleCaptureStep("idle");
+            setScaleCaptureFirst(null);
+            return;
+          }
+
           const hit = findHit(norm);
 
           if(hit){
@@ -3060,6 +3384,13 @@ const loadPdfJs = () => {
           // If no hit:
           if(tool === "free"){
             e.preventDefault();
+            // Shape sub-tool decides whether this is a freehand
+            // stroke (current behavior) or a drag-to-define shape
+            // (line, rect, circle, triangle, arrow).
+            if(freeShape !== "freehand"){
+              setDrag({ mode: "free-shape-draw", shape: freeShape, start: norm, cur: norm });
+              return;
+            }
             const inputType = e.pointerType || "mouse";
             const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
             setFreeStroke({ points: [norm], inputType, pressure });
@@ -3140,6 +3471,11 @@ const loadPdfJs = () => {
           const norm = clientToSheetNorm(e.clientX, e.clientY);
           if(!norm) return;
 
+          if(drag.mode === "free-shape-draw"){
+            e.preventDefault();
+            setDrag(prev => ({ ...prev, cur: norm }));
+            return;
+          }
           if(drag.mode === "free-draw"){
             e.preventDefault();
             const now = performance.now();
@@ -3295,6 +3631,62 @@ const loadPdfJs = () => {
             setFreeStroke(null);
             setFreeSuggestion(null);
             freeHoldRef.current = { timerId: null, lastMoveAt: 0, lastPos: null, applied: false, suggestion: null };
+          }
+
+          if(drag?.mode === "free-shape-draw"){
+            const shape = (drag as any).shape as string;
+            const start = drag.start, cur = drag.cur;
+            const dx = cur.x - start.x;
+            const dy = cur.y - start.y;
+            const dist = Math.hypot(dx, dy);
+            if(dist >= 0.01){
+              let points: {x:number; y:number}[] = [];
+              let closed = true;
+              if(shape === "line"){
+                points = [{ x: start.x, y: start.y }, { x: cur.x, y: cur.y }];
+                closed = false;
+              } else if(shape === "arrow"){
+                points = [{ x: start.x, y: start.y }, { x: cur.x, y: cur.y }];
+                closed = false;
+              } else if(shape === "rect"){
+                const x1 = Math.min(start.x, cur.x), y1 = Math.min(start.y, cur.y);
+                const x2 = Math.max(start.x, cur.x), y2 = Math.max(start.y, cur.y);
+                points = [{x:x1,y:y1},{x:x2,y:y1},{x:x2,y:y2},{x:x1,y:y2}];
+              } else if(shape === "circle"){
+                const cx = (start.x + cur.x) / 2;
+                const cy = (start.y + cur.y) / 2;
+                const rx = Math.abs(cur.x - start.x) / 2;
+                const ry = Math.abs(cur.y - start.y) / 2;
+                const N = 48;
+                const pts = [];
+                for(let i = 0; i < N; i++){
+                  const t = (i / N) * Math.PI * 2;
+                  pts.push({ x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) });
+                }
+                points = pts;
+              } else if(shape === "triangle"){
+                const x1 = Math.min(start.x, cur.x), y1 = Math.min(start.y, cur.y);
+                const x2 = Math.max(start.x, cur.x), y2 = Math.max(start.y, cur.y);
+                points = [
+                  { x: (x1 + x2) / 2, y: y1 },
+                  { x: x2, y: y2 },
+                  { x: x1, y: y2 },
+                ];
+              }
+              if(points.length){
+                const it = createItem("free", { points }, {
+                  shape,
+                  closed,
+                  color: freeDrawColor,
+                  strokeWidth: freeDrawWidth,
+                  pressure: 1,
+                  inputType: e.pointerType || "mouse",
+                });
+                setItems(prev => [...prev, it]);
+                setSelectedId(it.id);
+                setPanelView("props");
+              }
+            }
           }
           if(drag?.mode === "ts-draw"){
             const start = drag.start, cur = drag.cur;
@@ -3696,14 +4088,37 @@ const loadPdfJs = () => {
         ];
 
         const handleToolSelect = (key) => {
+          // Free-draw gets the same pop-up palette treatment as OBS:
+          // clicking the DRAW button selects the tool and opens its
+          // color/stroke/shape palette; clicking again closes the
+          // palette. The palette carries everything the sidebar
+          // drawing toolbar used to carry.
+          if(key === "free"){
+            setObsPaletteOpen(false);
+            if(tool !== "free"){
+              setTool("free");
+              setDrawPaletteOpen(true);
+              setEraserMode(false);
+              return;
+            }
+            if(drawPaletteOpen){
+              setDrawPaletteOpen(false);
+              setTool(null);
+              return;
+            }
+            setDrawPaletteOpen(true);
+            return;
+          }
           if(key !== "obs"){
             setObsPaletteOpen(false);
+            setDrawPaletteOpen(false);
             setTool(prev => (prev === key ? null : key));
             return;
           }
           if(tool !== "obs"){
             setTool("obs");
             setObsPaletteOpen(true);
+            setDrawPaletteOpen(false);
             return;
           }
           if(obsPaletteOpen){
@@ -4538,7 +4953,30 @@ const loadPdfJs = () => {
           />
         );
 
-        const headerEditForm = (
+        // Helpers for the roof-properties multi-covering list.
+        const addAdditionalCovering = () => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: [
+              ...(p.additionalCoverings || []),
+              { id: uid(), category: "Copper (bay / decorative)", scope: "Bay window", notes: "" },
+            ],
+          }));
+        };
+        const updateAdditionalCovering = (id: string, patch: Partial<{category: string; scope: string; notes: string}>) => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: (p.additionalCoverings || []).map(c => c.id === id ? { ...c, ...patch } : c),
+          }));
+        };
+        const removeAdditionalCovering = (id: string) => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: (p.additionalCoverings || []).filter(c => c.id !== id),
+          }));
+        };
+
+        const headerEditGeneralTab = (
           <>
             <div className="rowTop" style={{marginBottom:10}}>
               <div style={{flex:1}}>
@@ -4596,67 +5034,6 @@ const loadPdfJs = () => {
                 </div>
               </div>
             </div>
-
-            <div className="rowTop" style={{marginBottom:10}}>
-              <div style={{flex:1}}>
-                <div className="lbl">Roof Covering</div>
-                <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
-                  <option value="SHINGLE">Shingle</option>
-                  <option value="METAL">Metal</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-            </div>
-
-            {roof.covering==="SHINGLE" && (
-              <div className="rowTop" style={{marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div className="lbl">Shingle Type</div>
-                  <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
-                    {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <div className="lbl">Length</div>
-                  <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
-                    {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {roof.covering==="SHINGLE" && (
-              <div style={{marginBottom:10}}>
-                <div className="lbl">Exposure</div>
-                <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
-                  {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            )}
-
-            {roof.covering==="METAL" && (
-              <div className="rowTop" style={{marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div className="lbl">Metal Type</div>
-                  <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
-                    {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <div className="lbl">Panel Width</div>
-                  <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
-                    {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {roof.covering==="OTHER" && (
-              <div style={{marginBottom:10}}>
-                <div className="lbl">Describe</div>
-                <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
-              </div>
-            )}
 
             <div className="card" style={{marginBottom:10}}>
               <div className="lbl">Diagram Source</div>
@@ -4771,6 +5148,149 @@ const loadPdfJs = () => {
                 </div>
               )}
             </div>
+
+            <div className="card" style={{marginBottom:10}}>
+              <div className="row" style={{alignItems:"center"}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Pages</div>
+                  <div className="tiny">
+                    {pages.length} page{pages.length === 1 ? "" : "s"}. Add a blank page to start a fresh sheet (roof plan, elevation, detail, etc.) without uploading a background.
+                  </div>
+                </div>
+                <button
+                  className="btn btnPrimary"
+                  type="button"
+                  onClick={() => { insertBlankPageAfter(); }}
+                  style={{flex:"0 0 auto"}}
+                >
+                  + Add Blank Page
+                </button>
+              </div>
+            </div>
+          </>
+        );
+
+        const headerEditRoofTab = (
+          <>
+            <div className="reportCard tone-roof" style={{marginBottom:10}}>
+              <div className="reportSectionTitle">Primary Roof Covering</div>
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Covering</div>
+                  <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
+                    <option value="SHINGLE">Shingle</option>
+                    <option value="METAL">Metal</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {roof.covering==="SHINGLE" && (
+                <>
+                  <div className="rowTop" style={{marginBottom:10}}>
+                    <div style={{flex:1}}>
+                      <div className="lbl">Shingle Type</div>
+                      <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
+                        {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{flex:1}}>
+                      <div className="lbl">Length</div>
+                      <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
+                        {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div className="lbl">Exposure</div>
+                    <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
+                      {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {roof.covering==="METAL" && (
+                <div className="rowTop" style={{marginBottom:10}}>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Metal Type</div>
+                    <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
+                      {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Panel Width</div>
+                    <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
+                      {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {roof.covering==="OTHER" && (
+                <div style={{marginBottom:10}}>
+                  <div className="lbl">Describe</div>
+                  <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, slate, wood shake, built-up, acrylic…"/>
+                </div>
+              )}
+            </div>
+
+            <div className="reportCard tone-roof" style={{marginBottom:10}}>
+              <div className="reportSectionTitle">Additional Coverings</div>
+              <div className="tiny" style={{marginBottom:10}}>
+                Add more entries when the structure has multiple covering materials — for example, laminate shingles on the main roof, copper on a bay window, or acrylic on a patio deck.
+              </div>
+              {(roof.additionalCoverings || []).map(c => (
+                <div key={c.id} className="card" style={{marginBottom:10}}>
+                  <div className="reportGrid">
+                    <div>
+                      <div className="lbl">Covering Category</div>
+                      <select
+                        className="inp"
+                        value={c.category}
+                        onChange={(e) => updateAdditionalCovering(c.id, { category: e.target.value })}
+                      >
+                        {ROOF_COVERING_CATEGORIES.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <div className="lbl">Applies To</div>
+                      <select
+                        className="inp"
+                        value={c.scope}
+                        onChange={(e) => updateAdditionalCovering(c.id, { scope: e.target.value })}
+                      >
+                        {ROOF_COVERING_SCOPES.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{marginTop:10}}>
+                    <div className="lbl">Notes</div>
+                    <input
+                      className="inp"
+                      value={c.notes}
+                      onChange={(e) => updateAdditionalCovering(c.id, { notes: e.target.value })}
+                      placeholder="e.g., copper standing seam over kitchen bay, 18 inch pans"
+                    />
+                  </div>
+                  <div style={{marginTop:10, textAlign:"right"}}>
+                    <button className="btn btnDanger" type="button" onClick={() => removeAdditionalCovering(c.id)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {(!roof.additionalCoverings || roof.additionalCoverings.length === 0) && (
+                <div className="tiny">No additional coverings yet.</div>
+              )}
+              <button className="btn btnPrimary" type="button" onClick={addAdditionalCovering} style={{marginTop:10}}>
+                + Add Covering
+              </button>
+            </div>
           </>
         );
 
@@ -4779,17 +5299,97 @@ const loadPdfJs = () => {
             className="modalBackdrop"
             onClick={(e)=>{ if(e.target === e.currentTarget) setHdrEditOpen(false); }}
           >
-            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+            <div className="modalCard projectPropsCard" onClick={(e)=>e.stopPropagation()}>
               <div className="modalHeader">
-                <div className="modalTitle">Project properties</div>
+                <div className="projectPropsTitleRow">
+                  <div className="modalTitle">Project properties</div>
+                  <div className="projectPropsTabs" role="tablist" aria-label="Project properties sections">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={headerEditTab === "general"}
+                      className={"projectPropsTab" + (headerEditTab === "general" ? " active" : "")}
+                      onClick={() => setHeaderEditTab("general")}
+                    >
+                      General
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={headerEditTab === "roof"}
+                      className={"projectPropsTab" + (headerEditTab === "roof" ? " active" : "")}
+                      onClick={() => setHeaderEditTab("roof")}
+                    >
+                      Roof
+                    </button>
+                  </div>
+                </div>
                 <button className="btn" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
               </div>
               <div className="modalBody">
-                {headerEditForm}
+                {headerEditTab === "general" ? headerEditGeneralTab : headerEditRoofTab}
               </div>
               <div className="modalActions">
                 <button className="btn btnPrimary" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
                 <button className="btn btnDanger" type="button" onClick={clearDiagram}>Clear Diagram + Items</button>
+              </div>
+            </div>
+          </div>
+        );
+
+        const gridSettingsModal = gridSettingsOpen && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) setGridSettingsOpen(false); }}
+          >
+            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Grid Settings</div>
+                <button className="btn" type="button" onClick={() => setGridSettingsOpen(false)}>Close</button>
+              </div>
+              <div className="modalBody gridSettingsBody">
+                <div className="tiny">
+                  These settings control the on-canvas grid. When a scale reference is set, grid spacing is measured in sheet pixels so you can size it to match the real-world units you care about.
+                </div>
+                <div className="gridSettingsRow">
+                  <div className="gridSettingsField">
+                    <div className="lbl">Spacing (px)</div>
+                    <input
+                      className="inp"
+                      type="number"
+                      min={4}
+                      max={400}
+                      step={1}
+                      value={gridSettings.spacing}
+                      onChange={(e) => setGridSettings(s => ({ ...s, spacing: Math.max(4, Math.min(400, parseInt(e.target.value, 10) || 40)) }))}
+                    />
+                  </div>
+                  <div className="gridSettingsField">
+                    <div className="lbl">Line Thickness (px)</div>
+                    <input
+                      className="inp"
+                      type="number"
+                      min={0.25}
+                      max={4}
+                      step={0.25}
+                      value={gridSettings.thickness}
+                      onChange={(e) => setGridSettings(s => ({ ...s, thickness: Math.max(0.25, Math.min(4, parseFloat(e.target.value) || 1)) }))}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="lbl">Line Color</div>
+                  <input
+                    className="inp"
+                    type="color"
+                    value={gridSettings.color}
+                    onChange={(e) => setGridSettings(s => ({ ...s, color: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={() => setGridSettings({ spacing: 40, color: "#EEF2F7", thickness: 1 })}>Reset</button>
+                <button className="btn btnPrimary" type="button" onClick={() => setGridSettingsOpen(false)}>Done</button>
               </div>
             </div>
           </div>
@@ -5115,9 +5715,47 @@ const loadPdfJs = () => {
           </div>
         );
 
+        const beginScaleReference = () => {
+          setScaleCaptureStep("first");
+          setScaleCaptureFirst(null);
+          setTool(null);
+          setObsPaletteOpen(false);
+          setDrawPaletteOpen(false);
+        };
+        const cancelScaleCapture = () => {
+          setScaleCaptureStep("idle");
+          setScaleCaptureFirst(null);
+        };
+
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2.3" />
+          <TopBar label="BETA" />
+          <MenuBar
+            onSave={() => saveState("manual")}
+            onSaveAs={exportTrp}
+            onOpen={() => trpInputRef.current?.click()}
+            onRecover={restoreAutoSave}
+            onExport={() => { saveState("manual"); setExportMode(true); }}
+            exportDisabled={exportDisabled}
+            onEditProjectProperties={() => setHdrEditOpen(true)}
+            onClearDiagramAndItems={clearDiagram}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onZoomFit={zoomFit}
+            gridEnabled={gridEnabled}
+            onToggleGrid={() => setGridEnabled(g => !g)}
+            onOpenGridSettings={() => setGridSettingsOpen(true)}
+            toolbarCollapsed={toolbarCollapsed}
+            onToggleToolbar={() => setToolbarCollapsed(v => !v)}
+            onPickTool={(key) => handleToolSelect(key)}
+            currentTool={tool}
+            onBeginScaleReference={beginScaleReference}
+            onClearScaleReference={() => setScaleRef(null)}
+            scaleReferenceSet={!!scaleRef}
+            lastSavedAt={lastSavedAt}
+          />
           {headerContent}
           <input
             ref={trpInputRef}
@@ -5131,6 +5769,7 @@ const loadPdfJs = () => {
             }}
           />
           {headerEditModal}
+          {gridSettingsModal}
           {pageNameModal}
           {photoLightboxModal}
           {saveNotice && (
@@ -5182,10 +5821,11 @@ const loadPdfJs = () => {
                             {toolDefs.map(t => {
                               const isActive = tool === t.key;
                               const isObs = t.key === "obs";
+                              const isFree = t.key === "free";
                               return (
                                 <button
                                   key={t.key}
-                                  ref={isObs ? obsButtonRef : undefined}
+                                  ref={isObs ? obsButtonRef : isFree ? drawButtonRef : undefined}
                                   className={"toolBtn " + t.cls + " " + (isActive ? "active" : "")}
                                   type="button"
                                   onClick={() => handleToolSelect(t.key)}
@@ -5282,10 +5922,11 @@ const loadPdfJs = () => {
                         {toolDefs.map(t => {
                           const isActive = tool === t.key;
                           const isObs = t.key === "obs";
+                          const isFree = t.key === "free";
                           return (
                             <button
                               key={t.key}
-                              ref={isObs ? obsButtonRef : undefined}
+                              ref={isObs ? obsButtonRef : isFree ? drawButtonRef : undefined}
                               className={"toolBtn iconLabel " + t.cls + " " + (isActive ? "active" : "")}
                               type="button"
                               onClick={() => handleToolSelect(t.key)}
@@ -5354,6 +5995,124 @@ const loadPdfJs = () => {
                 </div>
               )}
 
+              {/* Draw palette — the DRAW toolbar button opens this
+                  pop-up the same way the OBS button opens its
+                  palette. Colors, stroke presets, fine-tune slider,
+                  shape sub-tools and an eraser all live here so
+                  the sidebar is free of drawing controls. */}
+              {tool === "free" && drawPaletteOpen && (
+                <div
+                  className="drawPalette"
+                  style={{ left: drawPalettePos.left, top: drawPalettePos.top }}
+                  ref={drawPaletteRef}
+                  role="group"
+                  aria-label="Draw tools"
+                >
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Shape</div>
+                    <div className="drawPaletteShapes">
+                      {[
+                        { key: "freehand", icon: "free", label: "Freehand" },
+                        { key: "line", icon: "line", label: "Line" },
+                        { key: "rect", icon: "square", label: "Rectangle" },
+                        { key: "circle", icon: "circle", label: "Circle" },
+                        { key: "triangle", icon: "triangle", label: "Triangle" },
+                        { key: "arrow", icon: "arrowRight", label: "Arrow" },
+                      ].map(s => (
+                        <button
+                          key={s.key}
+                          type="button"
+                          className={"drawShapeBtn" + (freeShape === s.key ? " active" : "")}
+                          onClick={() => { setFreeShape(s.key); setEraserMode(false); }}
+                          aria-label={s.label}
+                          title={s.label}
+                        >
+                          <Icon name={s.icon} />
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className={"drawShapeBtn danger" + (eraserMode ? " active" : "")}
+                        onClick={() => { setEraserMode(prev => !prev); }}
+                        aria-label="Eraser"
+                        title="Eraser — tap a stroke to delete it"
+                      >
+                        <Icon name="trash" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Color</div>
+                    <div className="drawPaletteColors">
+                      {[
+                        "#FFFFFF", "#000000", "#DC2626", "#2563EB", "#16A34A",
+                        "#F97316", "#EAB308", "#9333EA", "#EC4899", "#92400E",
+                      ].map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={"drawColorDot" + (freeDrawColor.toUpperCase() === c.toUpperCase() ? " active" : "")}
+                          style={{ background: c }}
+                          onClick={() => setFreeDrawColor(c)}
+                          aria-label={`Color ${c}`}
+                          title={c}
+                        />
+                      ))}
+                      <label className="drawColorDot drawColorCustom" title="Custom color">
+                        <input
+                          type="color"
+                          value={freeDrawColor}
+                          onChange={(e) => setFreeDrawColor(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="drawPaletteSection">
+                    <div className="drawPaletteLabel">Stroke</div>
+                    <div className="drawStrokeRow">
+                      {[
+                        { key: "fine", pt: 1, label: "Fine" },
+                        { key: "small", pt: 2, label: "Small" },
+                        { key: "med", pt: 4, label: "Medium" },
+                        { key: "large", pt: 7, label: "Large" },
+                      ].map(preset => (
+                        <button
+                          key={preset.key}
+                          type="button"
+                          className={"drawStrokePreset" + (Math.round(freeDrawWidth) === preset.pt ? " active" : "")}
+                          onClick={() => setFreeDrawWidth(preset.pt)}
+                          aria-label={`${preset.label} stroke`}
+                          title={`${preset.label} (${preset.pt} pt)`}
+                        >
+                          <span
+                            className="drawStrokeDot"
+                            style={{ width: Math.max(4, preset.pt * 2), height: Math.max(4, preset.pt * 2), background: freeDrawColor }}
+                          />
+                          <span className="drawStrokeLabel">{preset.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="drawStrokeSliderRow">
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="12"
+                        step="0.5"
+                        value={freeDrawWidth}
+                        onChange={(e) => setFreeDrawWidth(parseFloat(e.target.value) || 2)}
+                        aria-label="Stroke width"
+                      />
+                      <span className="drawStrokeValue">{freeDrawWidth} pt</span>
+                    </div>
+                  </div>
+                  {eraserMode && (
+                    <div className="drawPaletteHint">
+                      Eraser on — tap any stroke on the diagram to remove it.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* VIEWPORT */}
               <div
                 className="viewport"
@@ -5386,26 +6145,42 @@ const loadPdfJs = () => {
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
-                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
+                        <pattern id="grid" width={gridSettings.spacing} height={gridSettings.spacing} patternUnits="userSpaceOnUse">
+                          <path
+                            d={`M ${gridSettings.spacing} 0 L 0 0 0 ${gridSettings.spacing}`}
+                            fill="none"
+                            stroke={gridSettings.color}
+                            strokeWidth={gridSettings.thickness}
+                          />
                         </pattern>
                       </defs>
 
-                      <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      {gridEnabled && (
+                        <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                      )}
+                      <defs>
+                        <marker id="freeArrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                          <path d="M0 0 L10 5 L0 10 z" fill="context-stroke" />
+                        </marker>
+                      </defs>
                       {dashVisibleItems.filter(i => i.type === "free" && i.data.points?.length > 1).map(i => {
                         const pts = i.data.points;
                         const isSel = selectedId === i.id;
+                        const shape = i.data.shape;
+                        const color = i.data.color || "#0EA5E9";
+                        const sw = (i.data.strokeWidth || 2) * (isSel ? 1.5 : 1);
                         const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ") + (i.data.closed ? " Z" : "");
                         return (
                           <path
                             key={i.id}
                             d={d}
-                            fill={i.data.closed ? "rgba(14,165,233,0.10)" : "none"}
-                            stroke={i.data.color || "#0EA5E9"}
-                            strokeWidth={(i.data.strokeWidth || 2) * (isSel ? 1.5 : 1)}
+                            fill={i.data.closed ? `${color}1a` : "none"}
+                            stroke={color}
+                            strokeWidth={sw}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             opacity={isSel ? 1 : 0.95}
+                            markerEnd={shape === "arrow" ? "url(#freeArrowHead)" : undefined}
                             style={{ cursor: "pointer" }}
                           />
                         );
@@ -5470,7 +6245,94 @@ const loadPdfJs = () => {
                           strokeWidth="2"
                         />
                       )}
+                      {drag && (drag as any).mode === "free-shape-draw" && (() => {
+                        const s = drag.start, c = drag.cur;
+                        const shape = (drag as any).shape;
+                        const x1 = Math.min(s.x, c.x) * sheetWidth;
+                        const y1 = Math.min(s.y, c.y) * sheetHeight;
+                        const x2 = Math.max(s.x, c.x) * sheetWidth;
+                        const y2 = Math.max(s.y, c.y) * sheetHeight;
+                        const stroke = freeDrawColor;
+                        const sw = freeDrawWidth;
+                        if(shape === "line"){
+                          return (
+                            <line x1={s.x * sheetWidth} y1={s.y * sheetHeight}
+                                  x2={c.x * sheetWidth} y2={c.y * sheetHeight}
+                                  stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4" strokeLinecap="round"/>
+                          );
+                        }
+                        if(shape === "arrow"){
+                          return (
+                            <line x1={s.x * sheetWidth} y1={s.y * sheetHeight}
+                                  x2={c.x * sheetWidth} y2={c.y * sheetHeight}
+                                  stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4" strokeLinecap="round"
+                                  markerEnd="url(#freeArrowHead)"/>
+                          );
+                        }
+                        if(shape === "rect"){
+                          return (
+                            <rect x={x1} y={y1} width={x2-x1} height={y2-y1}
+                                  fill={`${stroke}1a`} stroke={stroke} strokeWidth={sw}
+                                  strokeDasharray="6,4"/>
+                          );
+                        }
+                        if(shape === "circle"){
+                          const cx = (x1 + x2) / 2;
+                          const cy = (y1 + y2) / 2;
+                          const rx = Math.abs(x2 - x1) / 2;
+                          const ry = Math.abs(y2 - y1) / 2;
+                          return (
+                            <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+                                     fill={`${stroke}1a`} stroke={stroke} strokeWidth={sw}
+                                     strokeDasharray="6,4"/>
+                          );
+                        }
+                        if(shape === "triangle"){
+                          const path = `M${(x1+x2)/2},${y1} L${x2},${y2} L${x1},${y2} Z`;
+                          return (
+                            <path d={path} fill={`${stroke}1a`} stroke={stroke}
+                                  strokeWidth={sw} strokeDasharray="6,4"
+                                  strokeLinejoin="round"/>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Calibrated scale reference. Drawn on top
+                          of the drawing layer so it stays visible
+                          but purely informational. */}
+                      {scaleRef && (
+                        <g pointerEvents="none">
+                          <line
+                            x1={scaleRef.a.x * sheetWidth}
+                            y1={scaleRef.a.y * sheetHeight}
+                            x2={scaleRef.b.x * sheetWidth}
+                            y2={scaleRef.b.y * sheetHeight}
+                            stroke="#0EA5E9"
+                            strokeWidth={3}
+                            strokeDasharray="8,6"
+                            strokeLinecap="round"
+                          />
+                          <circle cx={scaleRef.a.x * sheetWidth} cy={scaleRef.a.y * sheetHeight} r="6" fill="#0EA5E9" stroke="#fff" strokeWidth="2" />
+                          <circle cx={scaleRef.b.x * sheetWidth} cy={scaleRef.b.y * sheetHeight} r="6" fill="#0EA5E9" stroke="#fff" strokeWidth="2" />
+                        </g>
+                      )}
                     </svg>
+
+                    {scaleRef && (
+                      <div
+                        className="scaleBadge"
+                        style={{
+                          left: ((scaleRef.a.x + scaleRef.b.x) / 2) * sheetWidth,
+                          top: ((scaleRef.a.y + scaleRef.b.y) / 2) * sheetHeight,
+                          transform: "translate(-50%, -140%)",
+                        }}
+                      >
+                        Scale: {scaleRef.realDistance} {scaleRef.unit}
+                      </div>
+                    )}
 
                     {dashVisibleItems.filter(i => i.type !== "ts" && i.type !== "free" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                       const isSel = selectedId === i.id;
@@ -5500,6 +6362,17 @@ const loadPdfJs = () => {
                   <Icon name="reset" />
                   Reset view
                 </button>
+              )}
+
+              {scaleCaptureStep !== "idle" && (
+                <div className="scaleBanner" role="status">
+                  {scaleCaptureStep === "first"
+                    ? "Tap the first end of a known-length line on the diagram…"
+                    : "Tap the other end of the known-length line…"}
+                  <button type="button" className="scaleBannerCancel" onClick={cancelScaleCapture}>
+                    Cancel
+                  </button>
+                </div>
               )}
 
               {!hasBackground && (
@@ -5840,65 +6713,6 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
-                    {/* Draw quick tools — always visible so Draw/Erase/Color
-                        are one tap away regardless of which group is open. */}
-                    <div className="drawToolbar" role="group" aria-label="Drawing tools">
-                      <div className="drawToolbarLabel">Drawing</div>
-                      <div className="drawToolbarActions">
-                        <button
-                          type="button"
-                          className={"drawToolBtn" + (tool === "free" && !eraserMode ? " active" : "")}
-                          onClick={() => {
-                            setEraserMode(false);
-                            setTool(prev => (prev === "free" ? null : "free"));
-                          }}
-                          title="Free draw (Apple Pencil / stylus / touch / mouse)"
-                        >
-                          <Icon name="free" />
-                          <span>Draw</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={"drawToolBtn danger" + (eraserMode ? " active" : "")}
-                          onClick={() => {
-                            setEraserMode(prev => {
-                              const next = !prev;
-                              if(next) setTool(null);
-                              return next;
-                            });
-                          }}
-                          title="Eraser: tap a stroke to delete it"
-                        >
-                          <Icon name="trash" />
-                          <span>Erase</span>
-                        </button>
-                        <label className="drawColorBtn" title="Stroke color">
-                          <span className="drawColorSwatch" style={{ background: freeDrawColor }} />
-                          <span>Color</span>
-                          <input
-                            type="color"
-                            value={freeDrawColor}
-                            onChange={(e) => setFreeDrawColor(e.target.value)}
-                          />
-                        </label>
-                        <div className="drawWidthRow" title="Stroke width">
-                          <Icon name="minus" />
-                          <input
-                            type="range"
-                            min="1"
-                            max="8"
-                            step="1"
-                            value={freeDrawWidth}
-                            onChange={(e) => setFreeDrawWidth(parseInt(e.target.value, 10) || 2)}
-                            aria-label="Stroke width"
-                          />
-                          <Icon name="plus" />
-                        </div>
-                      </div>
-                      {eraserMode && (
-                        <div className="drawToolbarHint">Eraser mode on — tap a stroke on the diagram to remove it.</div>
-                      )}
-                    </div>
                     {["ts","apt","ds","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
@@ -6738,7 +7552,20 @@ const loadPdfJs = () => {
                       </div>
                       <div>
                         <div className="lbl">Number of Stories</div>
-                        <input className="inp" value={reportData.description.stories} onChange={(e)=>updateReportSection("description", "stories", e.target.value)} placeholder="e.g., 1, 2" />
+                        <div className="storyChipRow" role="radiogroup" aria-label="Number of stories">
+                          {["1","1.5","2","2.5","3","3+"].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.stories === val}
+                              className={"storyChip" + (reportData.description.stories === val ? " active" : "")}
+                              onClick={() => updateReportSection("description", "stories", val)}
+                            >
+                              {val}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div>
                         <div className="lbl">Framing Type</div>
@@ -7006,7 +7833,7 @@ const loadPdfJs = () => {
                     </div>
                     <div className="reportGrid">
                       <div>
-                        <div className="lbl">Reported Date of Loss</div>
+                        <div className="lbl">Provided Date</div>
                         <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
                       </div>
                       <div>
@@ -7045,12 +7872,31 @@ const loadPdfJs = () => {
                           <option value="Partial">Partial</option>
                         </select>
                       </div>
-                      <div>
-                        <div className="lbl">Areas Not Inspected</div>
-                        <input className="inp" value={reportData.background.limitations.join(", ")} onChange={(e)=>updateReportSection("background", "limitations", e.target.value.split(",").map(v => v.trim()).filter(Boolean))} placeholder="e.g., rear slope (wet), garage roof (locked)" />
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Reason(s) for Limited / No Access</div>
+                      <div className="chipList">
+                        {ACCESS_LIMITATION_REASONS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.background.limitations.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("background", "limitations", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="sectionHint">Separate areas with commas. Reasons can be included inline.</div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Other / Notes on Limitation</div>
+                      <textarea
+                        className="inp"
+                        value={reportData.background.limitationsOther}
+                        onChange={(e)=>updateReportSection("background", "limitationsOther", e.target.value)}
+                        placeholder="Describe anything else — red tape, attorney involvement, construction in progress, hazardous conditions, safety tie-off limits, etc."
+                      />
+                    </div>
+                    <div className="sectionHint">Tap chips for common reasons. Use the notes area for anything a chip doesn't cover.</div>
                   </div>
                 </>
               )}
@@ -7445,7 +8291,7 @@ const loadPdfJs = () => {
               <div className="printSection">
                 <h3>Background</h3>
                 <div className="printKeyValue">
-                  <div className="lbl">Date of Loss</div>
+                  <div className="lbl">Provided Date</div>
                   <div>{valueOrDash(reportData.background.dateOfLoss)}</div>
                   <div className="lbl">Source</div>
                   <div>{valueOrDash(reportData.background.source)}</div>

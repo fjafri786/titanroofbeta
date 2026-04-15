@@ -165,55 +165,10 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
       </div>
       {!isMobile && (
         <div className="propertiesCenter">
-          <div className="propertiesActions">
-            <button
-              className="hdrBtn ghost withIcon"
-              type="button"
-              onClick={onSave}
-              title="Save (local)"
-            >
-              <IconSave />
-              <span>Save</span>
-            </button>
-            <button
-              className="hdrBtn ghost withIcon"
-              type="button"
-              onClick={onSaveAs}
-              title="Save As (download JSON)"
-            >
-              <IconSaveAs />
-              <span>Save As</span>
-            </button>
-            <button
-              className="hdrBtn ghost withIcon"
-              type="button"
-              onClick={onOpen}
-              title="Open project file"
-            >
-              <IconOpen />
-              <span>Open</span>
-            </button>
-            <button
-              className="hdrBtn ghost withIcon"
-              type="button"
-              onClick={onRecover}
-              title="Recover from autosave"
-            >
-              <IconRecover />
-              <span>Recover</span>
-            </button>
-            <button
-              className="hdrBtn ghost withIcon"
-              type="button"
-              onClick={onExport}
-              disabled={exportDisabled}
-              title="Export report as PDF"
-            >
-              <IconExport />
-              <span>Export</span>
-            </button>
-            {lastSavedAt && <div className="saveNotice">Saved {lastSavedAt.time}</div>}
-          </div>
+          {/* Save / Save As / Open / Recover / Export buttons now
+              live in the File menu (MenuBar). The PropertiesBar
+              keeps only the view-mode toggle so the header stays
+              light on tablets. */}
           <div className="modeToggle" role="tablist" aria-label="View mode" data-active={viewMode}>
             <button
               type="button"
@@ -267,7 +222,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             </svg>
             Menu
           </button>
-        ) : (
+        ) : viewMode === "diagram" ? (
           <button
             className="hdrBtn iconOnly collapseHdrBtn"
             type="button"
@@ -288,7 +243,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
               {toolbarCollapsed ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
             </svg>
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
