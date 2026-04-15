@@ -98,19 +98,83 @@ const loadPdfJs = () => {
       const LETTER_ASPECT_RATIO = 8.5 / 11;
 
       const SHINGLE_KIND = [
-        { code: "LAM", label: "Laminate Shingles" },
-        { code: "3TB", label: "3-Tab Shingles" },
+        { code: "LAM", label: "Laminate / Architectural" },
+        { code: "3TB", label: "3-Tab" },
+        { code: "DIM", label: "Dimensional" },
+        { code: "DES", label: "Designer / Luxury" },
+        { code: "IMP", label: "Impact-Resistant" },
+        { code: "WDS", label: "Wood Shingle" },
+        { code: "WDK", label: "Wood Shake" },
+        { code: "SLT", label: "Slate" },
+        { code: "SYN", label: "Synthetic / Composite" },
+        { code: "OTH", label: "Other / Unknown" },
       ];
-      const SHINGLE_LENGTHS = ["36 inch width", "Other / Unknown"];
-      const SHINGLE_EXPOSURES = ["5 inch exposure", "5-5/8 inch exposure", "6 inch exposure", "Other / Unknown"];
+      const SHINGLE_LENGTHS = [
+        "36 inch width",
+        "39-3/8 inch width",
+        "40 inch width",
+        "12 inch length",
+        "18 inch length",
+        "Other / Unknown",
+      ];
+      const SHINGLE_EXPOSURES = [
+        "4 inch exposure",
+        "4-1/2 inch exposure",
+        "5 inch exposure",
+        "5-1/8 inch exposure",
+        "5-5/8 inch exposure",
+        "5-3/4 inch exposure",
+        "6 inch exposure",
+        "7 inch exposure",
+        "Other / Unknown",
+      ];
 
       const METAL_KIND = [
         { code: "SS", label: "Standing Seam" },
         { code: "RP", label: "R-Panel" },
         { code: "COR", label: "Corrugated" },
+        { code: "ALM", label: "Metal Shingle" },
+        { code: "STONE", label: "Stone-Coated Steel" },
+        { code: "COPPER", label: "Copper" },
+        { code: "ZINC", label: "Zinc" },
         { code: "OTH", label: "Other" },
       ];
-      const METAL_PANEL_WIDTHS = ["12 inch", "16 inch", "24 inch", "Other / Unknown"];
+      const METAL_PANEL_WIDTHS = ["12 inch", "16 inch", "18 inch", "21 inch", "24 inch", "26 inch", "36 inch", "Other / Unknown"];
+
+      /**
+       * Secondary roof coverings — used when the primary covering
+       * doesn't fully describe the roof (e.g. main area is laminate
+       * shingle but a bay window is copper, or a partial deck has
+       * acrylic). The user can add as many as they need in the
+       * Project Properties > Roof tab.
+       */
+      const ROOF_COVERING_CATEGORIES = [
+        "Shingle",
+        "Metal",
+        "Tile",
+        "Slate",
+        "Built-Up (BUR)",
+        "Modified Bitumen",
+        "TPO",
+        "EPDM",
+        "PVC",
+        "Wood Shake",
+        "Acrylic / Polycarbonate",
+        "Copper (bay / decorative)",
+        "Other",
+      ];
+      const ROOF_COVERING_SCOPES = [
+        "Main roof",
+        "Bay window",
+        "Porch / Patio cover",
+        "Carport",
+        "Covered deck",
+        "Dormer",
+        "Sunroom",
+        "Awning",
+        "Shed / Outbuilding",
+        "Other",
+      ];
 
       const DS_MATERIALS = ["Aluminum", "Steel", "Other / Unknown"];
       const DS_STYLES = ["Box", "Round", "Other / Unknown"];
@@ -204,6 +268,20 @@ const loadPdfJs = () => {
       const ROOF_GEOMETRIES = ["Gable", "Hip", "Gable/Hip Combination", "Flat", "Other"];
       const ROOF_APPURTENANCES = ["Vent Stacks", "Roof Vents", "Ridge Vents", "Chimney", "Skylights", "Solar", "Other"];
       const BACKGROUND_CONCERNS = ["Hail", "Wind", "Water Intrusion", "Interior Staining", "Other"];
+      const ACCESS_LIMITATION_REASONS = [
+        "Steep pitch — safety",
+        "Wet / icy roof",
+        "Height — no safe tie-off",
+        "Under construction",
+        "Hazardous conditions",
+        "Attorney / legal hold",
+        "Red tape / access denied",
+        "Occupied / tenant refusal",
+        "Locked section (garage, shed, etc.)",
+        "Solar array coverage",
+        "Vegetation obstruction",
+        "No ladder access",
+      ];
       const OBSERVED_CONDITIONS = ["Spatter Marks", "Dents", "Creases", "Tears", "Displaced Elements", "Other"];
 
       const INSPECTION_COMPONENTS = [
@@ -286,7 +364,8 @@ const loadPdfJs = () => {
           concerns: [],
           notes: "",
           accessObtained: "",
-          limitations: []
+          limitations: [],
+          limitationsOther: ""
         },
         writer: {
           letterhead: "",
@@ -344,7 +423,8 @@ const loadPdfJs = () => {
             ...defaults.background,
             ...(source.background || {}),
             concerns: normalizeList(source.background?.concerns),
-            limitations: normalizeList(source.background?.limitations)
+            limitations: normalizeList(source.background?.limitations),
+            limitationsOther: typeof source.background?.limitationsOther === "string" ? source.background.limitationsOther : ""
           },
           writer: {
             ...defaults.writer,
@@ -543,19 +623,57 @@ const loadPdfJs = () => {
           return (<svg {...common}><path d="M9 18l6-6-6-6"/></svg>);
         }
         if(name === "ts"){
-          return (<svg {...common}><rect x="6" y="6" width="12" height="12" rx="2"/></svg>);
+          // Test Square: a square marker with a small crosshair inside.
+          return (
+            <svg {...common}>
+              <rect x="5" y="5" width="14" height="14" rx="2"/>
+              <path d="M12 9v6"/>
+              <path d="M9 12h6"/>
+            </svg>
+          );
         }
         if(name === "apt"){
-          return (<svg {...common}><circle cx="12" cy="12" r="6"/></svg>);
+          // Appurtenance: a roof penetration / vent-pipe with a cap.
+          return (
+            <svg {...common}>
+              <rect x="9" y="10" width="6" height="10" rx="1"/>
+              <path d="M7 10h10"/>
+              <path d="M12 10V4"/>
+              <circle cx="12" cy="4" r="1.4" fill="currentColor" stroke="none"/>
+            </svg>
+          );
         }
         if(name === "ds"){
-          return (<svg {...common}><path d="M12 5v10"/><path d="M9 12l3 3 3-3"/></svg>);
+          // Downspout: rectangular channel with a down arrow inside it.
+          return (
+            <svg {...common}>
+              <rect x="9" y="3" width="6" height="16" rx="1"/>
+              <path d="M12 7v6"/>
+              <path d="M10 11l2 2 2-2"/>
+              <path d="M9 19l-2 2"/>
+              <path d="M15 19l2 2"/>
+            </svg>
+          );
         }
         if(name === "wind"){
-          return (<svg {...common}><path d="M3 8h10a3 3 0 1 0-3-3"/><path d="M3 14h14a3 3 0 1 1-3 3"/></svg>);
+          // Wind: three stacked wind streaks with a loop on one end.
+          return (
+            <svg {...common}>
+              <path d="M3 8h11a3 3 0 1 0-3-3"/>
+              <path d="M3 12h15"/>
+              <path d="M3 16h11a3 3 0 1 1-3 3"/>
+            </svg>
+          );
         }
         if(name === "obs"){
-          return (<svg {...common}><path d="M12 21s6-6 6-10a6 6 0 1 0-12 0c0 4 6 10 6 10z"/><circle cx="12" cy="11" r="2.5"/></svg>);
+          // Observation: an eye (forensic observation marker), more
+          // scannable than the previous map-pin which read as "pin".
+          return (
+            <svg {...common}>
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          );
         }
         if(name === "panel"){
           return (
@@ -720,9 +838,11 @@ const loadPdfJs = () => {
           );
         }
         if(name === "free"){
+          // Angled pencil — reads as "draw", not a squiggle.
           return (
             <svg {...common}>
-              <path d="M3 17c3-6 6-9 9-9s5 3 4 6-3 3-3 0 2-3 4-3 5 2 5 5" />
+              <path d="M14.5 4.5l5 5L8 21H3v-5z"/>
+              <path d="M12.5 6.5l5 5"/>
             </svg>
           );
         }
@@ -732,6 +852,57 @@ const loadPdfJs = () => {
               <path d="M3 6h18" />
               <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
+            </svg>
+          );
+        }
+        if(name === "line"){
+          return (<svg {...common}><path d="M4 20L20 4"/></svg>);
+        }
+        if(name === "square"){
+          return (<svg {...common}><rect x="4" y="4" width="16" height="16" rx="1"/></svg>);
+        }
+        if(name === "circle"){
+          return (<svg {...common}><circle cx="12" cy="12" r="8"/></svg>);
+        }
+        if(name === "triangle"){
+          return (<svg {...common}><path d="M12 4l9 16H3z"/></svg>);
+        }
+        if(name === "arrowRight"){
+          return (
+            <svg {...common}>
+              <path d="M4 12h14"/>
+              <path d="M14 6l6 6-6 6"/>
+            </svg>
+          );
+        }
+        if(name === "ruler"){
+          return (
+            <svg {...common}>
+              <rect x="2" y="9" width="20" height="6" rx="1"/>
+              <path d="M6 9v3"/>
+              <path d="M10 9v4"/>
+              <path d="M14 9v3"/>
+              <path d="M18 9v4"/>
+            </svg>
+          );
+        }
+        if(name === "grid"){
+          return (
+            <svg {...common}>
+              <rect x="4" y="4" width="16" height="16" rx="1"/>
+              <path d="M4 10h16"/>
+              <path d="M4 16h16"/>
+              <path d="M10 4v16"/>
+              <path d="M16 4v16"/>
+            </svg>
+          );
+        }
+        if(name === "menu"){
+          return (
+            <svg {...common}>
+              <path d="M3 6h18"/>
+              <path d="M3 12h18"/>
+              <path d="M3 18h18"/>
             </svg>
           );
         }
@@ -5117,7 +5288,7 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="TitanRoof Beta v4.2.3" />
+          <TopBar label="BETA" />
           {headerContent}
           <input
             ref={trpInputRef}
@@ -6738,7 +6909,20 @@ const loadPdfJs = () => {
                       </div>
                       <div>
                         <div className="lbl">Number of Stories</div>
-                        <input className="inp" value={reportData.description.stories} onChange={(e)=>updateReportSection("description", "stories", e.target.value)} placeholder="e.g., 1, 2" />
+                        <div className="storyChipRow" role="radiogroup" aria-label="Number of stories">
+                          {["1","1.5","2","2.5","3","3+"].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.stories === val}
+                              className={"storyChip" + (reportData.description.stories === val ? " active" : "")}
+                              onClick={() => updateReportSection("description", "stories", val)}
+                            >
+                              {val}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div>
                         <div className="lbl">Framing Type</div>
@@ -7006,7 +7190,7 @@ const loadPdfJs = () => {
                     </div>
                     <div className="reportGrid">
                       <div>
-                        <div className="lbl">Reported Date of Loss</div>
+                        <div className="lbl">Provided Date</div>
                         <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
                       </div>
                       <div>
@@ -7045,12 +7229,31 @@ const loadPdfJs = () => {
                           <option value="Partial">Partial</option>
                         </select>
                       </div>
-                      <div>
-                        <div className="lbl">Areas Not Inspected</div>
-                        <input className="inp" value={reportData.background.limitations.join(", ")} onChange={(e)=>updateReportSection("background", "limitations", e.target.value.split(",").map(v => v.trim()).filter(Boolean))} placeholder="e.g., rear slope (wet), garage roof (locked)" />
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Reason(s) for Limited / No Access</div>
+                      <div className="chipList">
+                        {ACCESS_LIMITATION_REASONS.map(option => (
+                          <div
+                            key={option}
+                            className={"chip " + (reportData.background.limitations.includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("background", "limitations", option)}
+                          >
+                            {option}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="sectionHint">Separate areas with commas. Reasons can be included inline.</div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Other / Notes on Limitation</div>
+                      <textarea
+                        className="inp"
+                        value={reportData.background.limitationsOther}
+                        onChange={(e)=>updateReportSection("background", "limitationsOther", e.target.value)}
+                        placeholder="Describe anything else — red tape, attorney involvement, construction in progress, hazardous conditions, safety tie-off limits, etc."
+                      />
+                    </div>
+                    <div className="sectionHint">Tap chips for common reasons. Use the notes area for anything a chip doesn't cover.</div>
                   </div>
                 </>
               )}
@@ -7445,7 +7648,7 @@ const loadPdfJs = () => {
               <div className="printSection">
                 <h3>Background</h3>
                 <div className="printKeyValue">
-                  <div className="lbl">Date of Loss</div>
+                  <div className="lbl">Provided Date</div>
                   <div>{valueOrDash(reportData.background.dateOfLoss)}</div>
                   <div className="lbl">Source</div>
                   <div>{valueOrDash(reportData.background.source)}</div>

@@ -2983,6 +2983,34 @@
         color: var(--sub);
         margin-top:8px;
       }
+      .storyChipRow{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+      }
+      .storyChip{
+        flex: 1 1 72px;
+        min-height: 44px;
+        padding: 8px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(148,163,184,0.3);
+        background:#fff;
+        font-size: 16px;
+        font-weight: 1300;
+        color:#0B1220;
+        cursor: pointer;
+        transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+      }
+      .storyChip:hover{
+        background:#F1F5F9;
+        transform: translateY(-1px);
+      }
+      .storyChip.active{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.65);
+        color:#fff;
+        box-shadow: 0 8px 18px -12px rgba(14,165,233,0.7);
+      }
       .personRow{
         display:grid;
         gap:10px;
@@ -3597,15 +3625,15 @@
       .projectCard{
         position: relative;
         background:#fff;
-        border-radius: 18px;
+        border-radius: 16px;
         border: 1px solid rgba(148,163,184,0.22);
-        box-shadow: 0 16px 32px -22px rgba(2,6,23,0.22);
+        box-shadow: 0 6px 18px -14px rgba(2,6,23,0.18);
         overflow: hidden;
         transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
       }
       .projectCard:hover{
-        transform: translateY(-2px);
-        box-shadow: 0 22px 42px -20px rgba(2,6,23,0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px -14px rgba(2,6,23,0.22);
         border-color: rgba(14,165,233,0.35);
       }
       .projectCardOpen{

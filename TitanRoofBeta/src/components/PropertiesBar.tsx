@@ -267,7 +267,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
             </svg>
             Menu
           </button>
-        ) : (
+        ) : viewMode === "diagram" ? (
           <button
             className="hdrBtn iconOnly collapseHdrBtn"
             type="button"
@@ -288,7 +288,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
               {toolbarCollapsed ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
             </svg>
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
