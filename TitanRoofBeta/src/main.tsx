@@ -1035,6 +1035,12 @@ const loadPdfJs = () => {
         const [exteriorPhotos, setExteriorPhotos] = useState([]);
 
         // Roof properties
+        // `additionalCoverings` covers the multi-roof case: e.g. a
+        // laminate shingle main roof with a copper bay window and
+        // a partial acrylic patio deck. Each entry carries a
+        // category (Shingle / Metal / TPO / ...), the scope it
+        // applies to (Main / Bay window / Porch / ...), and a free
+        // notes field for anything the enums don't cover.
         const [roof, setRoof] = useState({
           covering: "SHINGLE",
           shingleKind: "LAM",
@@ -1042,8 +1048,17 @@ const loadPdfJs = () => {
           shingleExposure: "5 inch exposure",
           metalKind: "SS",
           metalPanelWidth: "24 inch",
-          otherDesc: ""
+          otherDesc: "",
+          additionalCoverings: [] as Array<{
+            id: string;
+            category: string;
+            scope: string;
+            notes: string;
+          }>,
         });
+
+        // Project-properties modal tab (general | roof).
+        const [headerEditTab, setHeaderEditTab] = useState<"general" | "roof">("general");
 
         const initialPage = useMemo(() => ({
           id: uid(),
@@ -4938,7 +4953,30 @@ const loadPdfJs = () => {
           />
         );
 
-        const headerEditForm = (
+        // Helpers for the roof-properties multi-covering list.
+        const addAdditionalCovering = () => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: [
+              ...(p.additionalCoverings || []),
+              { id: uid(), category: "Copper (bay / decorative)", scope: "Bay window", notes: "" },
+            ],
+          }));
+        };
+        const updateAdditionalCovering = (id: string, patch: Partial<{category: string; scope: string; notes: string}>) => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: (p.additionalCoverings || []).map(c => c.id === id ? { ...c, ...patch } : c),
+          }));
+        };
+        const removeAdditionalCovering = (id: string) => {
+          setRoof(p => ({
+            ...p,
+            additionalCoverings: (p.additionalCoverings || []).filter(c => c.id !== id),
+          }));
+        };
+
+        const headerEditGeneralTab = (
           <>
             <div className="rowTop" style={{marginBottom:10}}>
               <div style={{flex:1}}>
@@ -4996,67 +5034,6 @@ const loadPdfJs = () => {
                 </div>
               </div>
             </div>
-
-            <div className="rowTop" style={{marginBottom:10}}>
-              <div style={{flex:1}}>
-                <div className="lbl">Roof Covering</div>
-                <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
-                  <option value="SHINGLE">Shingle</option>
-                  <option value="METAL">Metal</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-            </div>
-
-            {roof.covering==="SHINGLE" && (
-              <div className="rowTop" style={{marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div className="lbl">Shingle Type</div>
-                  <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
-                    {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <div className="lbl">Length</div>
-                  <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
-                    {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {roof.covering==="SHINGLE" && (
-              <div style={{marginBottom:10}}>
-                <div className="lbl">Exposure</div>
-                <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
-                  {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-            )}
-
-            {roof.covering==="METAL" && (
-              <div className="rowTop" style={{marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div className="lbl">Metal Type</div>
-                  <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
-                    {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div style={{flex:1}}>
-                  <div className="lbl">Panel Width</div>
-                  <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
-                    {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {roof.covering==="OTHER" && (
-              <div style={{marginBottom:10}}>
-                <div className="lbl">Describe</div>
-                <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, etc."/>
-              </div>
-            )}
 
             <div className="card" style={{marginBottom:10}}>
               <div className="lbl">Diagram Source</div>
@@ -5171,6 +5148,149 @@ const loadPdfJs = () => {
                 </div>
               )}
             </div>
+
+            <div className="card" style={{marginBottom:10}}>
+              <div className="row" style={{alignItems:"center"}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Pages</div>
+                  <div className="tiny">
+                    {pages.length} page{pages.length === 1 ? "" : "s"}. Add a blank page to start a fresh sheet (roof plan, elevation, detail, etc.) without uploading a background.
+                  </div>
+                </div>
+                <button
+                  className="btn btnPrimary"
+                  type="button"
+                  onClick={() => { insertBlankPageAfter(); }}
+                  style={{flex:"0 0 auto"}}
+                >
+                  + Add Blank Page
+                </button>
+              </div>
+            </div>
+          </>
+        );
+
+        const headerEditRoofTab = (
+          <>
+            <div className="reportCard tone-roof" style={{marginBottom:10}}>
+              <div className="reportSectionTitle">Primary Roof Covering</div>
+              <div className="rowTop" style={{marginBottom:10}}>
+                <div style={{flex:1}}>
+                  <div className="lbl">Covering</div>
+                  <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
+                    <option value="SHINGLE">Shingle</option>
+                    <option value="METAL">Metal</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {roof.covering==="SHINGLE" && (
+                <>
+                  <div className="rowTop" style={{marginBottom:10}}>
+                    <div style={{flex:1}}>
+                      <div className="lbl">Shingle Type</div>
+                      <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
+                        {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                      </select>
+                    </div>
+                    <div style={{flex:1}}>
+                      <div className="lbl">Length</div>
+                      <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
+                        {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div className="lbl">Exposure</div>
+                    <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
+                      {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {roof.covering==="METAL" && (
+                <div className="rowTop" style={{marginBottom:10}}>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Metal Type</div>
+                    <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
+                      {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div className="lbl">Panel Width</div>
+                    <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
+                      {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {roof.covering==="OTHER" && (
+                <div style={{marginBottom:10}}>
+                  <div className="lbl">Describe</div>
+                  <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, slate, wood shake, built-up, acrylic…"/>
+                </div>
+              )}
+            </div>
+
+            <div className="reportCard tone-roof" style={{marginBottom:10}}>
+              <div className="reportSectionTitle">Additional Coverings</div>
+              <div className="tiny" style={{marginBottom:10}}>
+                Add more entries when the structure has multiple covering materials — for example, laminate shingles on the main roof, copper on a bay window, or acrylic on a patio deck.
+              </div>
+              {(roof.additionalCoverings || []).map(c => (
+                <div key={c.id} className="card" style={{marginBottom:10}}>
+                  <div className="reportGrid">
+                    <div>
+                      <div className="lbl">Covering Category</div>
+                      <select
+                        className="inp"
+                        value={c.category}
+                        onChange={(e) => updateAdditionalCovering(c.id, { category: e.target.value })}
+                      >
+                        {ROOF_COVERING_CATEGORIES.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <div className="lbl">Applies To</div>
+                      <select
+                        className="inp"
+                        value={c.scope}
+                        onChange={(e) => updateAdditionalCovering(c.id, { scope: e.target.value })}
+                      >
+                        {ROOF_COVERING_SCOPES.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{marginTop:10}}>
+                    <div className="lbl">Notes</div>
+                    <input
+                      className="inp"
+                      value={c.notes}
+                      onChange={(e) => updateAdditionalCovering(c.id, { notes: e.target.value })}
+                      placeholder="e.g., copper standing seam over kitchen bay, 18 inch pans"
+                    />
+                  </div>
+                  <div style={{marginTop:10, textAlign:"right"}}>
+                    <button className="btn btnDanger" type="button" onClick={() => removeAdditionalCovering(c.id)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {(!roof.additionalCoverings || roof.additionalCoverings.length === 0) && (
+                <div className="tiny">No additional coverings yet.</div>
+              )}
+              <button className="btn btnPrimary" type="button" onClick={addAdditionalCovering} style={{marginTop:10}}>
+                + Add Covering
+              </button>
+            </div>
           </>
         );
 
@@ -5179,13 +5299,35 @@ const loadPdfJs = () => {
             className="modalBackdrop"
             onClick={(e)=>{ if(e.target === e.currentTarget) setHdrEditOpen(false); }}
           >
-            <div className="modalCard" onClick={(e)=>e.stopPropagation()}>
+            <div className="modalCard projectPropsCard" onClick={(e)=>e.stopPropagation()}>
               <div className="modalHeader">
-                <div className="modalTitle">Project properties</div>
+                <div className="projectPropsTitleRow">
+                  <div className="modalTitle">Project properties</div>
+                  <div className="projectPropsTabs" role="tablist" aria-label="Project properties sections">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={headerEditTab === "general"}
+                      className={"projectPropsTab" + (headerEditTab === "general" ? " active" : "")}
+                      onClick={() => setHeaderEditTab("general")}
+                    >
+                      General
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={headerEditTab === "roof"}
+                      className={"projectPropsTab" + (headerEditTab === "roof" ? " active" : "")}
+                      onClick={() => setHeaderEditTab("roof")}
+                    >
+                      Roof
+                    </button>
+                  </div>
+                </div>
                 <button className="btn" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
               </div>
               <div className="modalBody">
-                {headerEditForm}
+                {headerEditTab === "general" ? headerEditGeneralTab : headerEditRoofTab}
               </div>
               <div className="modalActions">
                 <button className="btn btnPrimary" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>

@@ -190,6 +190,43 @@
         letter-spacing: 0.2px;
       }
 
+      /* Project properties modal tabs */
+      .modalCard.projectPropsCard{
+        max-width: 820px;
+      }
+      .projectPropsTitleRow{
+        display:flex;
+        align-items:center;
+        gap:16px;
+        flex:1;
+      }
+      .projectPropsTabs{
+        display:inline-flex;
+        align-items:center;
+        gap:4px;
+        padding:3px;
+        background:#F1F5F9;
+        border:1px solid rgba(148,163,184,0.3);
+        border-radius:999px;
+      }
+      .projectPropsTab{
+        padding:6px 16px;
+        font-size:11px;
+        font-weight:1300;
+        letter-spacing:0.2px;
+        color:#64748B;
+        background:transparent;
+        border:none;
+        border-radius:999px;
+        cursor:pointer;
+        transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+      }
+      .projectPropsTab.active{
+        background:#FFFFFF;
+        color:#0B1220;
+        box-shadow: 0 6px 12px -8px rgba(2,6,23,0.25);
+      }
+
       /* Grid settings modal */
       .gridSettingsBody{
         display: flex;
