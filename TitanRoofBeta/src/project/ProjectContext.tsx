@@ -3,6 +3,7 @@ import {
   projectStore,
   createBlankProjectRecord,
   cryptoRandomId,
+  approximateSize,
   type EngineName,
   type ProjectRecord,
   type ProjectSummary,
@@ -181,7 +182,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.warn("Could not generate dashboard thumbnail", err);
     }
 
-    const updated: ProjectRecord = {
+    const base: ProjectRecord = {
       ...currentProject,
       updatedAt: new Date().toISOString(),
       thumbnailDataUrl,
@@ -191,6 +192,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       name: extractResidenceName(legacyState) || currentProject.name,
       claimNumber: extractClaimNumber(legacyState) ?? currentProject.claimNumber,
       address: extractAddress(legacyState) ?? currentProject.address,
+      inspectionDate:
+        extractInspectionDate(legacyState) ?? currentProject.inspectionDate,
       sections: currentProject.sections.map((section, si) =>
         si === 0
           ? {
@@ -209,6 +212,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
           : section,
       ),
+    };
+    // Cache the JSON size once per save so the dashboard does not
+    // need to re-serialize the full record on every render.
+    const updated: ProjectRecord = {
+      ...base,
+      approxSizeBytes: approximateSize(base),
     };
 
     try {
@@ -279,4 +288,14 @@ function extractClaimNumber(legacy: unknown): string | undefined {
   if (!project) return undefined;
   const claim = project.reportNumber;
   return typeof claim === "string" && claim.trim() ? claim.trim() : undefined;
+}
+
+function extractInspectionDate(legacy: unknown): string | undefined {
+  if (!legacy || typeof legacy !== "object") return undefined;
+  const rec = legacy as Record<string, unknown>;
+  const report = rec.reportData as Record<string, unknown> | undefined;
+  const project = report?.project as Record<string, unknown> | undefined;
+  if (!project) return undefined;
+  const date = project.inspectionDate;
+  return typeof date === "string" && date.trim() ? date.trim() : undefined;
 }

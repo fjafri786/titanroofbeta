@@ -1,5 +1,6 @@
 import React, { Suspense } from "react";
 import Dashboard from "../dashboard/Dashboard";
+import ErrorBoundary from "../components/ErrorBoundary";
 import { useProject } from "../project/ProjectContext";
 import { engineNameFor } from "../storage";
 
@@ -27,26 +28,36 @@ const AppShell: React.FC<AppShellProps> = ({ WorkspaceComponent }) => {
   const { route, currentProject } = useProject();
 
   if (route === "dashboard" || !currentProject) {
-    return <Dashboard />;
+    return (
+      <ErrorBoundary scope="Dashboard">
+        <Dashboard />
+      </ErrorBoundary>
+    );
   }
 
   const engine = engineNameFor(currentProject);
 
   if (engine === "tldraw") {
     return (
-      <Suspense
-        fallback={
-          <div className="workspaceV2Loading" role="status" aria-busy="true">
-            Loading tldraw workspace…
-          </div>
-        }
-      >
-        <WorkspaceV2 key={currentProject.projectId} />
-      </Suspense>
+      <ErrorBoundary scope="Workspace" key={currentProject.projectId}>
+        <Suspense
+          fallback={
+            <div className="workspaceV2Loading" role="status" aria-busy="true">
+              Loading tldraw workspace…
+            </div>
+          }
+        >
+          <WorkspaceV2 key={currentProject.projectId} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
-  return <WorkspaceComponent key={currentProject.projectId} />;
+  return (
+    <ErrorBoundary scope="Workspace" key={currentProject.projectId}>
+      <WorkspaceComponent key={currentProject.projectId} />
+    </ErrorBoundary>
+  );
 };
 
 export default AppShell;
