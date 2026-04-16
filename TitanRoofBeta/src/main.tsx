@@ -188,11 +188,21 @@ const loadPdfJs = () => {
       ];
 
       const REPORT_TABS = [
+        { key: "preview", label: "Preview" },
         { key: "project", label: "Project" },
         { key: "description", label: "Description" },
         { key: "background", label: "Background" },
         { key: "inspection", label: "Inspection" }
       ];
+
+      // Maps a Preview section key to the form tab that edits it.
+      const PREVIEW_EDIT_TAB = {
+        coverLetter: "project",
+        description: "description",
+        background: "background",
+        inspection: "inspection",
+        conclusions: "inspection"
+      };
 
       const INSPECTION_PARAGRAPH_ORDER = [
         { key: "scope", label: "1. Inspection Scope", optional: false },
@@ -387,6 +397,13 @@ const loadPdfJs = () => {
           roofCondition: "fair",
           components: buildInspectionDefaults(),
           paragraphs: buildInspectionParagraphDefaults()
+        },
+        overrides: {
+          coverLetter: "",
+          description: "",
+          background: "",
+          inspection: "",
+          conclusions: ""
         }
       });
       const normalizeList = (value) => Array.isArray(value) ? value : [];
@@ -443,6 +460,10 @@ const loadPdfJs = () => {
               ...defaults.inspection.paragraphs,
               ...(source.inspection?.paragraphs || {})
             }
+          },
+          overrides: {
+            ...defaults.overrides,
+            ...(source.overrides || {})
           }
         };
       };
@@ -1029,7 +1050,9 @@ const loadPdfJs = () => {
         const [residenceName, setResidenceName] = useState("");
         const [frontFaces, setFrontFaces] = useState("North"); // display "Primary facing direction: North"
         const [viewMode, setViewMode] = useState("diagram");
-        const [reportTab, setReportTab] = useState("project");
+        const [reportTab, setReportTab] = useState("preview");
+        const [previewEditing, setPreviewEditing] = useState(null);
+        const [previewDraft, setPreviewDraft] = useState("");
         const [diagramSource, setDiagramSource] = useState("upload");
         const [reportData, setReportData] = useState(() => buildReportDefaults());
         const [exteriorPhotos, setExteriorPhotos] = useState([]);
@@ -2473,9 +2496,14 @@ const loadPdfJs = () => {
             reportData.description.occupancy &&
             reportData.description.roofGeometry
           );
+          const backgroundComplete = Boolean(
+            reportData.background.dateOfLoss &&
+            (reportData.background.concerns?.length || (reportData.background.notes || "").trim())
+          );
           return {
             project: projectComplete,
-            description: descriptionComplete
+            description: descriptionComplete,
+            background: backgroundComplete
           };
         }, [reportData]);
 
@@ -4457,6 +4485,239 @@ const loadPdfJs = () => {
           return parts.length ? parts.join(", ") : "—";
         };
         const formatBlock = (value) => value?.trim() ? value.trim() : "Not provided.";
+
+        // === Preview paragraph generators ===================================
+        // These functions assemble Haag-style paragraphs from the existing
+        // reportData + diagram items so the engineer can see the final report
+        // take shape as they capture. Kept deliberately simple; the
+        // engineer's QC pass still reviews every line.
+        const formatPartiesSentence = (parties = []) => {
+          const people = parties
+            .filter(p => p?.name?.trim())
+            .map(p => {
+              const name = p.name.trim();
+              const role = (p.role || "").trim();
+              const company = (p.company || "").trim();
+              const qualifier = [role, company].filter(Boolean).join(", ");
+              return qualifier ? `${name} (${qualifier})` : name;
+            });
+          if(!people.length) return "";
+          return `Persons met on site included ${joinReadableList(people)}.`;
+        };
+        const backgroundParagraph = () => {
+          const sentences = [];
+          const partiesSentence = formatPartiesSentence(reportData.project.parties);
+          if(partiesSentence) sentences.push(partiesSentence);
+          if(reportData.background.dateOfLoss){
+            const source = reportData.background.source?.trim();
+            const sourceClause = source ? `, as reported by the ${source.toLowerCase()}` : "";
+            sentences.push(`The reported date of loss was ${reportData.background.dateOfLoss}${sourceClause}.`);
+          } else if(reportData.background.source?.trim()){
+            sentences.push(`Background information was obtained from the ${reportData.background.source.trim().toLowerCase()}.`);
+          }
+          if((reportData.background.concerns || []).length){
+            sentences.push(`Reported concerns included ${joinReadableList(reportData.background.concerns.map(c => c.toLowerCase()))}.`);
+          }
+          const notes = reportData.background.notes?.trim();
+          if(notes) sentences.push(notes);
+          const access = reportData.background.accessObtained?.trim();
+          if(access === "Yes"){
+            sentences.push("Roof access was obtained during the inspection.");
+          } else if(access === "No"){
+            sentences.push("Roof access was not obtained during the inspection.");
+          } else if(access === "Partial"){
+            sentences.push("Partial roof access was obtained during the inspection.");
+          }
+          if((reportData.background.limitations || []).length){
+            sentences.push(`Reported access limitations included ${joinReadableList(reportData.background.limitations.map(l => l.toLowerCase()))}.`);
+          }
+          const limitationsOther = reportData.background.limitationsOther?.trim();
+          if(limitationsOther) sentences.push(limitationsOther);
+          return sentences.join(" ");
+        };
+        const coverLetterParagraph = () => {
+          const writer = reportData.writer;
+          const project = reportData.project;
+          const inspectionDate = project.inspectionDate?.trim();
+          const addressLine = formatAddressLine(project);
+          const letterhead = writer.letterhead?.trim();
+          const attention = writer.attention?.trim();
+          const reference = writer.reference?.trim();
+          const subject = writer.subject?.trim();
+          const clientFile = writer.clientFile?.trim();
+          const haagFile = writer.haagFile?.trim();
+          const lines = [];
+          if(letterhead) lines.push(letterhead);
+          if(attention) lines.push(`Attention: ${attention}`);
+          if(reference) lines.push(`Re: ${reference}`);
+          if(subject) lines.push(subject);
+          if(addressLine && addressLine !== "—") lines.push(addressLine);
+          const fileLine = [clientFile ? `Client File: ${clientFile}` : "", haagFile ? `Haag File: ${haagFile}` : ""].filter(Boolean).join("    ");
+          if(fileLine) lines.push(fileLine);
+          const scopeName = project.projectName?.trim() || residenceName?.trim() || "captioned residence";
+          const dateClause = inspectionDate ? ` Our inspection was conducted on ${inspectionDate}.` : "";
+          lines.push("");
+          lines.push(`Complying with your request, we inspected the ${scopeName} to determine the extent of damage caused by wind and/or hail. Our procedures have included an on-site inspection and review of pertinent documents.${dateClause}`);
+          lines.push("");
+          lines.push("This engineering report has been written for your sole use and purpose. The findings and conclusions are based upon the inspection described herein and the information available at the time of writing.");
+          return lines.join("\n");
+        };
+        const conclusionsParagraph = () => {
+          const items = [];
+          const tsItems = pageItems.filter(item => item.type === "ts");
+          const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
+          const windItems = pageItems.filter(item => item.type === "wind");
+          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
+          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
+          const aptWithDamage = pageItems
+            .filter(item => item.type === "apt" || item.type === "ds")
+            .filter(item => ((item.data?.damageEntries || []).length > 0));
+          if(creasedTotal > 0 || tornTotal > 0){
+            const bits = [];
+            if(creasedTotal) bits.push(`${creasedTotal} creased`);
+            if(tornTotal) bits.push(`${tornTotal} torn or missing`);
+            items.push(`The residence roof sustained wind damage: ${bits.join(" and ")} shingles were identified.`);
+          } else {
+            items.push("There were no torn or creased shingles on the residence roof consistent with wind forces. No roof repairs are needed for wind-caused damage.");
+          }
+          if(tsBruiseTotal > 0){
+            items.push(`The residence roof sustained damage from hailstone impact. ${tsBruiseTotal} bruise${tsBruiseTotal === 1 ? "" : "s"} characteristic of hailstone impact ${tsBruiseTotal === 1 ? "was" : "were"} identified in the test areas.`);
+          } else if(tsItems.length){
+            items.push("The residence roof was not damaged by hailstone impact.");
+          } else {
+            items.push("No test squares were documented for this inspection; hail impact to roofing cannot be assessed from the diagram items alone.");
+          }
+          if(aptWithDamage.length){
+            items.push(`Roof appurtenances and soft metals exhibited ${aptWithDamage.length} location${aptWithDamage.length === 1 ? "" : "s"} of hail-caused damage.`);
+          } else {
+            items.push("Roof appurtenances did not exhibit damage consistent with hailstone impact.");
+          }
+          items.push("No exterior repairs are needed for wind-caused damage.");
+          return items.map((t, i) => `${i + 1}. ${t}`).join("\n");
+        };
+        const previewSectionStatus = (key) => {
+          if(key === "coverLetter"){
+            const ok = Boolean(
+              (reportData.writer.attention || "").trim() ||
+              (reportData.writer.reference || "").trim()
+            ) && Boolean((reportData.project.projectName || residenceName || "").trim());
+            return ok ? "ready" : (reportData.project.inspectionDate ? "partial" : "empty");
+          }
+          if(key === "description"){
+            const d = reportData.description;
+            const filled = Boolean(d.occupancy && d.roofGeometry && d.stories);
+            const started = Boolean(d.occupancy || d.roofGeometry || d.stories);
+            return filled ? "ready" : started ? "partial" : "empty";
+          }
+          if(key === "background"){
+            const b = reportData.background;
+            const filled = Boolean(b.dateOfLoss && (b.concerns?.length || b.notes?.trim()));
+            const started = Boolean(b.dateOfLoss || b.source || b.notes?.trim() || b.concerns?.length);
+            return filled ? "ready" : started ? "partial" : "empty";
+          }
+          if(key === "inspection"){
+            const hasDiagramItems = pageItems.length > 0;
+            const hasTs = pageItems.some(it => it.type === "ts");
+            return hasTs ? "ready" : hasDiagramItems ? "partial" : "empty";
+          }
+          if(key === "conclusions"){
+            const tsItems = pageItems.filter(item => item.type === "ts");
+            return tsItems.length ? "ready" : "partial";
+          }
+          return "empty";
+        };
+        const buildPreviewSections = () => {
+          const overrides = reportData.overrides;
+          const inspectionBody = inspectionGeneratedSections
+            .map(group => {
+              const body = group.sections
+                .map(s => `  ${s.title}: ${s.text}`)
+                .join("\n");
+              return `${group.label}\n${body}`;
+            })
+            .join("\n\n");
+          return [
+            {
+              key: "coverLetter",
+              label: "Cover Letter",
+              tone: "project",
+              editTab: PREVIEW_EDIT_TAB.coverLetter,
+              generated: coverLetterParagraph(),
+              override: overrides.coverLetter || "",
+              status: previewSectionStatus("coverLetter")
+            },
+            {
+              key: "description",
+              label: "Description",
+              tone: "description",
+              editTab: PREVIEW_EDIT_TAB.description,
+              generated: descriptionParagraph(),
+              override: overrides.description || "",
+              status: previewSectionStatus("description")
+            },
+            {
+              key: "background",
+              label: "Background",
+              tone: "background",
+              editTab: PREVIEW_EDIT_TAB.background,
+              generated: backgroundParagraph() || "No background information has been entered yet.",
+              override: overrides.background || "",
+              status: previewSectionStatus("background")
+            },
+            {
+              key: "inspection",
+              label: "Inspection",
+              tone: "inspection",
+              editTab: PREVIEW_EDIT_TAB.inspection,
+              generated: inspectionBody || "No inspection data available yet.",
+              override: overrides.inspection || "",
+              status: previewSectionStatus("inspection")
+            },
+            {
+              key: "conclusions",
+              label: "Conclusions",
+              tone: "roof",
+              editTab: PREVIEW_EDIT_TAB.conclusions,
+              generated: conclusionsParagraph(),
+              override: overrides.conclusions || "",
+              status: previewSectionStatus("conclusions")
+            }
+          ];
+        };
+        const startPreviewEdit = (section) => {
+          setPreviewEditing(section.key);
+          setPreviewDraft(section.override || section.generated || "");
+        };
+        const savePreviewEdit = () => {
+          if(!previewEditing) return;
+          const key = previewEditing;
+          setReportData(prev => ({
+            ...prev,
+            overrides: {
+              ...prev.overrides,
+              [key]: previewDraft
+            }
+          }));
+          setPreviewEditing(null);
+          setPreviewDraft("");
+        };
+        const cancelPreviewEdit = () => {
+          setPreviewEditing(null);
+          setPreviewDraft("");
+        };
+        const clearPreviewOverride = (key) => {
+          setReportData(prev => ({
+            ...prev,
+            overrides: {
+              ...prev.overrides,
+              [key]: ""
+            }
+          }));
+          if(previewEditing === key){
+            setPreviewEditing(null);
+            setPreviewDraft("");
+          }
+        };
 
         const collectTsPhotos = (ts) => {
           const photos = [];
@@ -7442,10 +7703,107 @@ const loadPdfJs = () => {
                   {tab.key === "description" && (
                     <span className={"statusDot " + (completeness.description ? "ready" : "")} />
                   )}
+                  {tab.key === "background" && (
+                    <span className={"statusDot " + (completeness.background ? "ready" : "")} />
+                  )}
                 </button>
               ))}
             </div>
             <div className="reportContent">
+              {reportTab === "preview" && (
+                <>
+                  <div className="reportCard tone-inspection">
+                    <div className="reportSectionTitle">Live Report Preview</div>
+                    <div className="reportCardSubtitle">
+                      Each section below is assembled from your diagram items and Report fields. Use <b>Edit</b> to jump to the form for that section, <b>Override</b> to lock a custom paragraph, or <b>Regenerate</b> to clear the override and pull the latest data.
+                    </div>
+                  </div>
+                  {buildPreviewSections().map(section => {
+                    const active = section.override && !previewEditing;
+                    const bodyText = section.override || section.generated;
+                    const statusLabel = section.status === "ready" ? "Ready" : section.status === "partial" ? "Needs review" : "Empty";
+                    const isEditing = previewEditing === section.key;
+                    return (
+                      <div className={`reportCard tone-${section.tone}`} key={section.key}>
+                        <div className="previewSectionHeader">
+                          <div className="previewSectionTitle">
+                            <span className={`previewStatusDot status-${section.status}`} aria-hidden="true" />
+                            <span>{section.label}</span>
+                            <span className="previewStatusLabel">{statusLabel}</span>
+                            {active && <span className="previewOverrideBadge">Override active</span>}
+                          </div>
+                          <div className="previewSectionActions">
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => setReportTab(section.editTab)}
+                              title="Jump to the form fields that feed this section"
+                            >
+                              Edit fields
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() => startPreviewEdit(section)}
+                              title="Lock a custom paragraph that takes priority over the generated text"
+                            >
+                              {section.override ? "Edit override" : "Override"}
+                            </button>
+                            {section.override && (
+                              <button
+                                type="button"
+                                className="btn"
+                                onClick={() => clearPreviewOverride(section.key)}
+                                title="Remove the override so this section regenerates from data"
+                              >
+                                Regenerate
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {isEditing ? (
+                          <div className="previewOverrideEditor">
+                            <textarea
+                              className="inp previewOverrideTextarea"
+                              value={previewDraft}
+                              onChange={(e) => setPreviewDraft(e.target.value)}
+                              placeholder="Type the paragraph you want to lock in for this section…"
+                            />
+                            <div className="previewOverrideEditorActions">
+                              <button type="button" className="btn btnPrimary" onClick={savePreviewEdit}>
+                                Save override
+                              </button>
+                              <button type="button" className="btn" onClick={cancelPreviewEdit}>
+                                Cancel
+                              </button>
+                              {section.override && (
+                                <button type="button" className="btn" onClick={() => clearPreviewOverride(section.key)}>
+                                  Clear override
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="previewBody">
+                            {(bodyText || "").split(/\n\n+/).map((para, i) => (
+                              <p key={i} className="previewParagraph">
+                                {para.split("\n").map((line, j, arr) => (
+                                  <React.Fragment key={j}>
+                                    {line}
+                                    {j < arr.length - 1 && <br />}
+                                  </React.Fragment>
+                                ))}
+                              </p>
+                            ))}
+                            {!bodyText && <div className="previewEmptyHint">No content yet for this section.</div>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
               {reportTab === "project" && (
                 <>
                   <div className="reportCard tone-project">

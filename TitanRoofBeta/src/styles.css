@@ -2805,6 +2805,97 @@
         margin-left:6px;
       }
       .statusDot.ready{ background: #16A34A; }
+
+      .previewSectionHeader{
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin: 14px 0 12px 0;
+      }
+      .previewSectionTitle{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:13px;
+        font-weight:1300;
+        color:#0B1220;
+        letter-spacing:0.2px;
+      }
+      .previewStatusDot{
+        width:10px;
+        height:10px;
+        border-radius:999px;
+        display:inline-block;
+        flex-shrink:0;
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 3px rgba(148,163,184,0.2);
+      }
+      .previewStatusDot.status-ready{ background:#16A34A; }
+      .previewStatusDot.status-partial{ background:#F59E0B; }
+      .previewStatusDot.status-empty{ background:#DC2626; }
+      .previewStatusLabel{
+        text-transform: uppercase;
+        font-size: 10px;
+        font-weight: 1300;
+        letter-spacing: 0.6px;
+        color: #64748B;
+      }
+      .previewOverrideBadge{
+        font-size: 10px;
+        font-weight: 1300;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.35);
+        color: #4338CA;
+      }
+      .previewSectionActions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:6px;
+      }
+      .previewSectionActions .btn{
+        font-size: 11px;
+        padding: 6px 12px;
+      }
+      .previewBody{
+        padding: 4px 2px 6px 2px;
+        color: #0B1220;
+        line-height: 1.55;
+      }
+      .previewParagraph{
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+      .previewParagraph:last-child{
+        margin-bottom: 0;
+      }
+      .previewEmptyHint{
+        font-size: 12px;
+        color: #94A3B8;
+        font-style: italic;
+      }
+      .previewOverrideEditor{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        padding: 4px 0 8px 0;
+      }
+      .previewOverrideTextarea{
+        min-height: 180px;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .previewOverrideEditorActions{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+      }
       .reportContent{
         flex:1;
         overflow:auto;
@@ -4162,6 +4253,259 @@
       .projectCard.listMode .projectCardBody{
         padding: 12px 16px 12px 0;
         flex: 1;
+      }
+
+      .projectCardThumbHost{
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .projectCardInspected{
+        margin-top: 2px;
+        font-size: 10.5px;
+        color: #64748B;
+        font-weight: 1100;
+      }
+      .projectCardStats{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .projectCardStat{
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #F1F5F9;
+        border: 1px solid rgba(148,163,184,0.25);
+        font-size: 10.5px;
+        font-weight: 1200;
+        color: #475569;
+      }
+      .projectCardStat svg{
+        opacity: 0.75;
+      }
+      .projectCardDamage{
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 1300;
+        letter-spacing: 0.2px;
+        border: 1px solid transparent;
+      }
+      .projectCardDamage.damage-none{
+        background: rgba(22,163,74,0.12);
+        border-color: rgba(22,163,74,0.35);
+        color: #15803D;
+      }
+      .projectCardDamage.damage-wind{
+        background: rgba(245,158,11,0.12);
+        border-color: rgba(245,158,11,0.35);
+        color: #B45309;
+      }
+      .projectCardDamage.damage-hail{
+        background: rgba(239,68,68,0.12);
+        border-color: rgba(239,68,68,0.35);
+        color: #B91C1C;
+      }
+      .projectCardDamage.damage-wind\+hail{
+        background: rgba(139,92,246,0.14);
+        border-color: rgba(139,92,246,0.38);
+        color: #6D28D9;
+      }
+      .projectCardDamage.damage-unknown{
+        background: #F1F5F9;
+        border-color: rgba(148,163,184,0.3);
+        color: #64748B;
+      }
+      .projectCardBreakdown{
+        margin-top: 6px;
+        font-size: 10.5px;
+        color: #64748B;
+        letter-spacing: 0.2px;
+      }
+      .projectCardReportStatus{
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        font-size: 9.5px;
+        font-weight: 1300;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.92);
+        border: 1px solid rgba(148,163,184,0.35);
+        color: #475569;
+        backdrop-filter: blur(6px);
+      }
+      .projectCardReportStatus.status-generated{
+        background: rgba(14,165,233,0.12);
+        border-color: rgba(14,165,233,0.45);
+        color: #0369A1;
+      }
+      .projectCardReportStatus.status-exported{
+        background: rgba(22,163,74,0.12);
+        border-color: rgba(22,163,74,0.45);
+        color: #15803D;
+      }
+
+      .projectCardSkeleton{
+        background: #fff;
+        border-radius: 16px;
+        border: 1px solid rgba(148,163,184,0.2);
+        overflow: hidden;
+        box-shadow: 0 6px 18px -14px rgba(2,6,23,0.15);
+      }
+      .projectCardSkeletonThumb{
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: linear-gradient(90deg, #EEF2F7 0%, #F8FAFC 50%, #EEF2F7 100%);
+        background-size: 200% 100%;
+        animation: dashSkeletonShimmer 1.4s ease-in-out infinite;
+      }
+      .projectCardSkeletonBody{
+        padding: 14px 16px 18px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .projectCardSkeletonLine{
+        height: 10px;
+        border-radius: 6px;
+        background: linear-gradient(90deg, #EEF2F7 0%, #F8FAFC 50%, #EEF2F7 100%);
+        background-size: 200% 100%;
+        animation: dashSkeletonShimmer 1.4s ease-in-out infinite;
+      }
+      .projectCardSkeletonLine.lg{ width: 60%; }
+      .projectCardSkeletonLine.md{ width: 80%; }
+      .projectCardSkeletonLine.sm{ width: 40%; }
+      @keyframes dashSkeletonShimmer{
+        0%{ background-position: 200% 0; }
+        100%{ background-position: -200% 0; }
+      }
+
+      .projectCard.projectCardBroken{
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        border-color: rgba(220,38,38,0.4);
+        background: rgba(254,242,242,0.75);
+      }
+      .projectCardBrokenTitle{
+        font-size: 12px;
+        font-weight: 1300;
+        color: #991B1B;
+      }
+      .projectCardBrokenMeta{
+        font-size: 11px;
+        color: #7F1D1D;
+      }
+      .projectCardBrokenActions{
+        display: flex;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .projectCardBrokenActions button{
+        font-size: 11px;
+        font-weight: 1200;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(220,38,38,0.35);
+        background: #fff;
+        color: #991B1B;
+        cursor: pointer;
+      }
+      .projectCardBrokenActions button:hover{
+        background: rgba(254,226,226,0.8);
+      }
+
+      .dashLoadMore{
+        display: flex;
+        justify-content: center;
+        padding: 16px 0 4px 0;
+      }
+      .dashTableLoadMore{
+        text-align: center;
+        padding: 12px !important;
+      }
+
+      .errorBoundaryFallback{
+        margin: 24px auto;
+        max-width: 520px;
+        padding: 20px 22px;
+        background: #fff;
+        border-radius: 16px;
+        border: 1px solid rgba(220,38,38,0.3);
+        box-shadow: 0 14px 28px -20px rgba(2,6,23,0.25);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .errorBoundaryTitle{
+        font-size: 14px;
+        font-weight: 1300;
+        color: #991B1B;
+      }
+      .errorBoundaryMessage{
+        font-size: 12px;
+        color: #0B1220;
+        line-height: 1.5;
+      }
+      .errorBoundaryDetails{
+        font-size: 11px;
+        color: #64748B;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        word-break: break-word;
+      }
+      .errorBoundaryActions{
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .errorBoundaryRetry,
+      .errorBoundaryReload{
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 1200;
+        cursor: pointer;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: #fff;
+        color: #0B1220;
+      }
+      .errorBoundaryRetry{
+        background: #0B2A3A;
+        color: #fff;
+        border-color: #0B2A3A;
+      }
+      .errorBoundaryInline{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: rgba(254,242,242,0.8);
+        border: 1px solid rgba(220,38,38,0.3);
+        color: #991B1B;
+        font-size: 11px;
+      }
+      .errorBoundaryInline button{
+        font-size: 11px;
+        font-weight: 1200;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(220,38,38,0.35);
+        background: #fff;
+        color: #991B1B;
+        cursor: pointer;
       }
 
       .dashTableWrap{

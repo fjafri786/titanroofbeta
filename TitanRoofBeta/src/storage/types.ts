@@ -66,6 +66,8 @@ export interface ProjectAttachment {
   createdAt: string;
 }
 
+export type ReportStatus = "draft" | "generated" | "exported";
+
 export interface ProjectRecord {
   projectId: string;
   userId: string;
@@ -78,6 +80,16 @@ export interface ProjectRecord {
   createdAt: string;
   updatedAt: string;
   status: ProjectStatus;
+  /** Set by the workspace when a report has been generated or
+   *  exported. Used by the dashboard card to show where the
+   *  engineer left off. */
+  reportStatus?: ReportStatus;
+  /** ISO date string of the on-site inspection. Promoted from
+   *  the legacy workspace state when the project is closed. */
+  inspectionDate?: string;
+  /** Optional cached size estimate captured at save time so the
+   *  dashboard does not need to re-serialize on every render. */
+  approxSizeBytes?: number;
 
   sections: ProjectSection[];
 
@@ -88,6 +100,8 @@ export interface ProjectRecord {
 
   schemaVersion: 1;
 }
+
+export type DamageSummary = "none" | "wind" | "hail" | "wind+hail" | "unknown";
 
 /** Lightweight record shape the dashboard reads. */
 export interface ProjectSummary {
@@ -104,6 +118,19 @@ export interface ProjectSummary {
    *  badge while base64 photo mode is in effect (docs/architecture
    *  §8.1). */
   approxSizeBytes?: number;
+  /** Count of photos across the legacy workspace state (items +
+   *  exterior gallery). Derived at list time. */
+  photoCount?: number;
+  /** Count of diagram items placed across all pages. */
+  itemCount?: number;
+  /** Breakdown of item counts by type, e.g. { TS: 4, APT: 2 }. */
+  itemCountsByType?: Record<string, number>;
+  /** Coarse damage summary derived from diagram items. */
+  damageSummary?: DamageSummary;
+  /** Report status captured at save time. */
+  reportStatus?: ReportStatus;
+  /** Inspection date promoted from legacy workspace state. */
+  inspectionDate?: string;
 }
 
 export type ProjectSort = "recent" | "name" | "created" | "status";
@@ -213,6 +240,9 @@ export function cryptoRandomId(): string {
 
 /** Build a summary from a full record. */
 export function summarize(record: ProjectRecord): ProjectSummary {
+  const legacy = legacyStateFor(record);
+  const itemCounts = countItemsByType(legacy);
+  const itemCount = Object.values(itemCounts).reduce((n, v) => n + v, 0);
   return {
     projectId: record.projectId,
     name: record.name,
@@ -223,7 +253,13 @@ export function summarize(record: ProjectRecord): ProjectSummary {
     updatedAt: record.updatedAt,
     status: record.status,
     thumbnailDataUrl: record.thumbnailDataUrl,
-    approxSizeBytes: approximateSize(record),
+    approxSizeBytes: record.approxSizeBytes ?? approximateSize(record),
+    photoCount: countPhotos(legacy),
+    itemCount,
+    itemCountsByType: itemCounts,
+    damageSummary: computeDamageSummary(legacy),
+    reportStatus: record.reportStatus,
+    inspectionDate: record.inspectionDate ?? extractInspectionDate(legacy),
   };
 }
 
@@ -235,4 +271,108 @@ export function approximateSize(record: ProjectRecord): number {
   } catch {
     return 0;
   }
+}
+
+// --- summary derivation helpers ------------------------------------
+
+function legacyStateFor(record: ProjectRecord): Record<string, unknown> | null {
+  const state = record.sections?.[0]?.pages?.[0]?.engine?.state;
+  if (!state || typeof state !== "object") return null;
+  return state as Record<string, unknown>;
+}
+
+function countPhotos(legacy: Record<string, unknown> | null): number {
+  if (!legacy) return 0;
+  let total = 0;
+  const items = Array.isArray(legacy.items) ? (legacy.items as unknown[]) : [];
+  for (const raw of items) {
+    total += photosOnLegacyItem(raw);
+  }
+  const exterior = Array.isArray(legacy.exteriorPhotos)
+    ? (legacy.exteriorPhotos as unknown[])
+    : [];
+  for (const entry of exterior) {
+    const photo = (entry as { photo?: { dataUrl?: string; url?: string } })?.photo;
+    if (photo?.dataUrl || photo?.url) total += 1;
+  }
+  return total;
+}
+
+function photosOnLegacyItem(raw: unknown): number {
+  if (!raw || typeof raw !== "object") return 0;
+  const data = (raw as { data?: Record<string, unknown> }).data;
+  if (!data) return 0;
+  let n = 0;
+  const singletons = ["overviewPhoto", "detailPhoto", "photo", "creasedPhoto", "tornMissingPhoto"];
+  for (const key of singletons) {
+    const candidate = data[key] as { dataUrl?: string; url?: string } | undefined;
+    if (candidate?.dataUrl || candidate?.url) n += 1;
+  }
+  const arrayFields = ["bruises", "conditions", "damageEntries", "photos"];
+  for (const key of arrayFields) {
+    const arr = data[key];
+    if (!Array.isArray(arr)) continue;
+    for (const entry of arr) {
+      const candidate = (entry as { photo?: { dataUrl?: string; url?: string } })?.photo;
+      if (candidate?.dataUrl || candidate?.url) n += 1;
+      if ((entry as { dataUrl?: string; url?: string })?.dataUrl) n += 1;
+    }
+  }
+  return n;
+}
+
+function countItemsByType(legacy: Record<string, unknown> | null): Record<string, number> {
+  const counts: Record<string, number> = {};
+  if (!legacy) return counts;
+  const items = Array.isArray(legacy.items) ? (legacy.items as unknown[]) : [];
+  for (const raw of items) {
+    const kind = (raw as { kind?: string })?.kind;
+    if (typeof kind !== "string") continue;
+    counts[kind] = (counts[kind] || 0) + 1;
+  }
+  return counts;
+}
+
+function computeDamageSummary(legacy: Record<string, unknown> | null): DamageSummary {
+  if (!legacy) return "unknown";
+  const items = Array.isArray(legacy.items) ? (legacy.items as unknown[]) : [];
+  if (items.length === 0) return "unknown";
+  let hail = false;
+  let wind = false;
+  for (const raw of items) {
+    if (!raw || typeof raw !== "object") continue;
+    const kind = (raw as { kind?: string }).kind;
+    const data = (raw as { data?: Record<string, unknown> }).data;
+    if (!kind || !data) continue;
+    if (kind === "TS") {
+      const bruises = Array.isArray(data.bruises) ? data.bruises : [];
+      if (bruises.length > 0) hail = true;
+    }
+    if (kind === "APT") {
+      const entries = Array.isArray(data.damageEntries) ? data.damageEntries : [];
+      if (entries.length > 0) hail = true;
+    }
+    if (kind === "WIND") {
+      const creased = Number(data.creasedCount || 0);
+      const torn = Number(data.tornMissingCount || 0);
+      if (creased > 0 || torn > 0) wind = true;
+    }
+    if (kind === "DS") {
+      const entries = Array.isArray(data.damageEntries) ? data.damageEntries : [];
+      if (entries.length > 0) hail = true;
+    }
+  }
+  if (hail && wind) return "wind+hail";
+  if (hail) return "hail";
+  if (wind) return "wind";
+  return "none";
+}
+
+function extractInspectionDate(legacy: Record<string, unknown> | null): string | undefined {
+  if (!legacy) return undefined;
+  const report = legacy.reportData as Record<string, unknown> | undefined;
+  const project = report?.project as Record<string, unknown> | undefined;
+  const date = project?.inspectionDate;
+  if (typeof date === "string" && date.trim()) return date;
+  return undefined;
 }

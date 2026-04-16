@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectSort, ProjectSummary, ProjectStatus } from "../storage";
 import { projectStore, cryptoRandomId } from "../storage";
 import { useProject } from "../project/ProjectContext";
@@ -6,6 +6,9 @@ import { useAuth } from "../auth/AuthContext";
 import ProjectCard from "./ProjectCard";
 
 type ViewMode = "grid" | "list" | "table";
+
+const PAGE_SIZE = 20;
+const SKELETON_COUNT = 6;
 
 const SORT_OPTIONS: { key: ProjectSort; label: string }[] = [
   { key: "recent", label: "Recently updated" },
@@ -29,6 +32,8 @@ const Dashboard: React.FC = () => {
   const [sort, setSort] = useState<ProjectSort>("recent");
   const [view, setView] = useState<ViewMode>("grid");
   const [statusFilter, setStatusFilter] = useState<"active" | "archived" | "all">("active");
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo<ProjectSummary[]>(() => {
     const needle = query.trim().toLowerCase();
@@ -62,6 +67,38 @@ const Dashboard: React.FC = () => {
     });
     return sorted;
   }, [summaries, query, sort, statusFilter]);
+
+  // Reset pagination when the filter / sort / search changes.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [query, sort, statusFilter, view]);
+
+  const visible = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  );
+  const hasMore = visible.length < filtered.length;
+
+  // Auto-load more when the sentinel scrolls into view.
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length));
+            return;
+          }
+        }
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, filtered.length]);
 
   const handleCreate = useCallback(() => {
     const name = window.prompt("New project name", "Untitled Project");
@@ -283,7 +320,18 @@ const Dashboard: React.FC = () => {
 
       <main className="dashBody">
         {isLoadingSummaries ? (
-          <div className="dashEmpty">Loading projects…</div>
+          <div className="dashGrid" aria-busy="true" aria-label="Loading projects">
+            {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+              <div key={i} className="projectCardSkeleton" aria-hidden="true">
+                <div className="projectCardSkeletonThumb" />
+                <div className="projectCardSkeletonBody">
+                  <div className="projectCardSkeletonLine lg" />
+                  <div className="projectCardSkeletonLine md" />
+                  <div className="projectCardSkeletonLine sm" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="dashEmpty">
             <div className="dashEmptyTitle">
@@ -301,36 +349,60 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         ) : view === "grid" ? (
-          <div className="dashGrid">
-            {filtered.map((p) => (
-              <ProjectCard
-                key={p.projectId}
-                summary={p}
-                onOpen={() => { void openProject(p.projectId); }}
-                onRename={() => handleRename(p)}
-                onDuplicate={() => handleDuplicate(p)}
-                onArchive={() => handleArchive(p)}
-                onDelete={() => handleDelete(p)}
-                onDownload={() => handleDownload(p)}
+          <>
+            <div className="dashGrid">
+              {visible.map((p) => (
+                <ProjectCard
+                  key={p.projectId}
+                  summary={p}
+                  onOpen={() => { void openProject(p.projectId); }}
+                  onRename={() => handleRename(p)}
+                  onDuplicate={() => handleDuplicate(p)}
+                  onArchive={() => handleArchive(p)}
+                  onDelete={() => handleDelete(p)}
+                  onDownload={() => handleDownload(p)}
+                />
+              ))}
+            </div>
+            {hasMore && (
+              <LoadMore
+                sentinelRef={loadMoreRef}
+                shown={visible.length}
+                total={filtered.length}
+                onClick={() =>
+                  setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length))
+                }
               />
-            ))}
-          </div>
+            )}
+          </>
         ) : view === "list" ? (
-          <div className="dashList">
-            {filtered.map((p) => (
-              <ProjectCard
-                key={p.projectId}
-                summary={p}
-                listMode
-                onOpen={() => { void openProject(p.projectId); }}
-                onRename={() => handleRename(p)}
-                onDuplicate={() => handleDuplicate(p)}
-                onArchive={() => handleArchive(p)}
-                onDelete={() => handleDelete(p)}
-                onDownload={() => handleDownload(p)}
+          <>
+            <div className="dashList">
+              {visible.map((p) => (
+                <ProjectCard
+                  key={p.projectId}
+                  summary={p}
+                  listMode
+                  onOpen={() => { void openProject(p.projectId); }}
+                  onRename={() => handleRename(p)}
+                  onDuplicate={() => handleDuplicate(p)}
+                  onArchive={() => handleArchive(p)}
+                  onDelete={() => handleDelete(p)}
+                  onDownload={() => handleDownload(p)}
+                />
+              ))}
+            </div>
+            {hasMore && (
+              <LoadMore
+                sentinelRef={loadMoreRef}
+                shown={visible.length}
+                total={filtered.length}
+                onClick={() =>
+                  setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length))
+                }
               />
-            ))}
-          </div>
+            )}
+          </>
         ) : (
           <div className="dashTableWrap">
             <table className="dashTable">
@@ -346,7 +418,7 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => (
+                {visible.map((p) => (
                   <tr
                     key={p.projectId}
                     className="dashTableRow"
@@ -369,6 +441,23 @@ const Dashboard: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                {hasMore && (
+                  <tr ref={(el) => { loadMoreRef.current = el as unknown as HTMLDivElement; }}>
+                    <td colSpan={7} className="dashTableLoadMore">
+                      <button
+                        type="button"
+                        className="dashSecondaryBtn"
+                        onClick={() =>
+                          setVisibleCount((n) =>
+                            Math.min(n + PAGE_SIZE, filtered.length),
+                          )
+                        }
+                      >
+                        Show more ({filtered.length - visible.length} remaining)
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -377,6 +466,19 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+const LoadMore: React.FC<{
+  sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
+  shown: number;
+  total: number;
+  onClick: () => void;
+}> = ({ sentinelRef, shown, total, onClick }) => (
+  <div ref={sentinelRef} className="dashLoadMore">
+    <button type="button" className="dashSecondaryBtn" onClick={onClick}>
+      Show more ({total - shown} remaining)
+    </button>
+  </div>
+);
 
 export default Dashboard;
 
