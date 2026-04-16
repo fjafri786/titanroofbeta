@@ -51,22 +51,44 @@
         left: 0;
         width: 100%;
         height: var(--topbar-height);
-        background: #DC2626;
+        background: #FFFFFF;
         z-index: 200;
-        box-shadow: 0 2px 6px rgba(220,38,38,0.35);
+        box-shadow: 0 1px 0 rgba(148,163,184,0.2);
+        border-bottom: 1px solid rgba(148,163,184,0.18);
         display:flex;
         align-items:center;
-        justify-content:center;
-        font-size:11px;
-        font-weight:1100;
-        letter-spacing:0.8px;
-        text-transform:uppercase;
+        justify-content:flex-start;
+        font-size:10px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        color:#0B1220;
+        padding: 0 14px;
+        gap: 10px;
+      }
+      .topBarBadge{
+        display:inline-flex;
+        align-items:center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
         color:#fff;
-        padding: 0 12px;
+        font-size:9px;
+        font-weight:1300;
+        letter-spacing:0.6px;
+        text-transform:uppercase;
+        line-height:1.1;
       }
       .topBarLabel{
         flex:1;
-        text-align:center;
+        text-align:left;
+        color:#64748B;
+        font-size:10px;
+        font-weight:1100;
+        letter-spacing:0.2px;
+        text-transform:none;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
       }
       /* ========= MENU BAR (File / Edit / View / Tools / Help) ========= */
       :root{
@@ -285,33 +307,33 @@
       .topBarBackBtn{
         font-size:10px;
         font-weight:1200;
-        color:#fff;
-        background: rgba(255,255,255,0.18);
-        border:1px solid rgba(255,255,255,0.35);
+        color:#0B1220;
+        background: rgba(14,165,233,0.1);
+        border:1px solid rgba(14,165,233,0.3);
         border-radius:999px;
         padding:2px 10px;
         cursor:pointer;
         text-transform:none;
         letter-spacing:0.2px;
-        margin-right: auto;
         transition: background 0.12s ease, border-color 0.12s ease;
       }
       .topBarBackBtn:hover{
-        background: rgba(255,255,255,0.3);
-        border-color: rgba(255,255,255,0.55);
+        background: rgba(14,165,233,0.18);
+        border-color: rgba(14,165,233,0.5);
       }
       .topBarUser{
         display:flex;
         align-items:center;
         gap:8px;
         flex: 0 0 auto;
+        margin-left:auto;
         text-transform:none;
         letter-spacing:0.2px;
       }
       .topBarUserName{
         font-size:10px;
         font-weight:1200;
-        opacity:0.92;
+        color:#64748B;
         max-width:140px;
         overflow:hidden;
         text-overflow:ellipsis;
@@ -320,9 +342,9 @@
       .topBarSignOut{
         font-size:10px;
         font-weight:1200;
-        color:#fff;
-        background: rgba(255,255,255,0.18);
-        border:1px solid rgba(255,255,255,0.35);
+        color:#0B1220;
+        background: rgba(148,163,184,0.12);
+        border:1px solid rgba(148,163,184,0.3);
         border-radius:999px;
         padding:2px 10px;
         cursor:pointer;
@@ -331,8 +353,8 @@
         transition: background 0.12s ease, border-color 0.12s ease;
       }
       .topBarSignOut:hover{
-        background: rgba(255,255,255,0.3);
-        border-color: rgba(255,255,255,0.55);
+        background: rgba(148,163,184,0.22);
+        border-color: rgba(148,163,184,0.55);
       }
 
       .propertiesBar{
@@ -361,6 +383,30 @@
         min-width:0;
         flex:1 1 0;
         flex-wrap:nowrap;
+      }
+      .propertiesDashboardBtn{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 12px 6px 10px;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,0.35);
+        background: rgba(255,255,255,0.16);
+        color:#fff;
+        font-size:11px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        cursor:pointer;
+        flex:0 0 auto;
+        transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+      }
+      .propertiesDashboardBtn:hover{
+        background: rgba(255,255,255,0.28);
+        border-color: rgba(255,255,255,0.55);
+      }
+      .propertiesDashboardBtn svg{
+        width:14px;
+        height:14px;
       }
       .propertiesCenter{
         display:flex;
@@ -822,13 +868,16 @@
       }
       .drawPaletteColors{
         display:grid;
-        grid-template-columns: repeat(11, 1fr);
-        gap:6px;
+        grid-template-columns: repeat(5, 1fr);
+        grid-auto-rows: 1fr;
+        gap:8px;
+        width: 100%;
       }
       .drawColorDot{
         position: relative;
-        width: 20px;
-        height: 20px;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        min-height: 28px;
         border-radius:999px;
         border:1px solid rgba(15,23,42,0.2);
         cursor:pointer;
@@ -852,6 +901,56 @@
         cursor: pointer;
         border: none;
         padding: 0;
+      }
+      .drawPaletteCustomRow{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin-top: 4px;
+      }
+      .drawColorCustomBtn{
+        position:relative;
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:6px 10px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.4);
+        background:#FFFFFF;
+        cursor:pointer;
+        font-size:11px;
+        font-weight:1200;
+        color:#0B1220;
+        flex:1 1 auto;
+      }
+      .drawColorCustomBtn input[type="color"]{
+        position:absolute;
+        inset:0;
+        opacity:0;
+        cursor:pointer;
+        border:none;
+        padding:0;
+      }
+      .drawColorCustomSwatch{
+        width:18px;
+        height:18px;
+        border-radius:999px;
+        border:1px solid rgba(15,23,42,0.2);
+        background: conic-gradient(from 0deg, red, orange, yellow, green, blue, indigo, violet, red);
+      }
+      .drawColorCustomLabel{
+        font-size:10px;
+        font-weight:1300;
+        letter-spacing:0.4px;
+        text-transform:uppercase;
+        color: var(--sub);
+      }
+      .drawColorCurrent{
+        width:24px;
+        height:24px;
+        border-radius:999px;
+        border:1px solid rgba(15,23,42,0.18);
+        box-shadow: inset 0 0 0 2px #FFFFFF, 0 1px 2px rgba(2,6,23,0.1);
       }
       .drawStrokeRow{
         display:grid;
@@ -1096,6 +1195,14 @@
       .iconBtn.nav{
         border-color: rgba(107,114,128,0.65);
         color: rgba(55,65,81,0.9);
+      }
+      .iconBtn.nav.danger{
+        border-color: rgba(220,38,38,0.55);
+        color: rgba(185,28,28,0.95);
+      }
+      .iconBtn.nav.danger:hover:not(:disabled){
+        background: rgba(254,226,226,0.55);
+        border-color: rgba(220,38,38,0.8);
       }
 
       .toolBtn{
@@ -1776,6 +1883,70 @@
         display:flex;
         flex-direction:column;
       }
+      .modalCard.pdfImportCard{
+        width: min(640px, 96vw);
+      }
+      .pdfImportSummary{
+        display:flex;
+        align-items:baseline;
+        justify-content:space-between;
+        gap:10px;
+        margin-bottom:10px;
+      }
+      .pdfImportFile{
+        font-size:13px;
+        font-weight:1300;
+        color:#0B1220;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        flex:1 1 auto;
+      }
+      .pdfImportControls{
+        display:flex;
+        gap:8px;
+        margin-bottom:12px;
+      }
+      .pdfImportGrid{
+        display:grid;
+        grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+        gap:8px;
+        max-height: 320px;
+        overflow-y: auto;
+        padding: 4px 2px;
+      }
+      .pdfImportChip{
+        position:relative;
+        aspect-ratio: 3 / 4;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:10px;
+        border:1px solid rgba(148,163,184,0.4);
+        background:#F8FAFC;
+        color:#0B1220;
+        font-size:13px;
+        font-weight:1300;
+        cursor:pointer;
+        transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      }
+      .pdfImportChip:hover{
+        border-color: rgba(14,165,233,0.5);
+        background: #fff;
+      }
+      .pdfImportChip.active{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.7);
+        color:#fff;
+        box-shadow: 0 6px 14px -8px rgba(14,165,233,0.55);
+      }
+      .pdfImportChipTick{
+        position:absolute;
+        top:4px;
+        right:4px;
+        font-size:10px;
+        font-weight:1300;
+      }
       .modalHeader{
         padding: 14px 18px;
         display:flex;
@@ -2008,6 +2179,117 @@
         background: rgba(220,38,38,0.06);
       }
       .btnFull{ width:100%; }
+
+      /* ========= UI HOMOGENEITY (properties panel + modals) =========
+         These rules tighten the visual vocabulary so the side panel
+         stops mixing square / squircle / pill buttons, and so every
+         input/select/textarea inside a reportCard or the properties
+         panel has the same border, padding, and radius. They are
+         intentionally scoped to the surfaces that were inconsistent
+         — .panel (right-side properties) and .reportCard (tabs),
+         plus the projectPropsCard modal — to avoid touching the
+         toolbar's pill buttons or the draw palette chips. */
+      .panel .btn,
+      .reportCard .btn,
+      .projectPropsCard .btn{
+        border-radius: 12px;
+        padding: 9px 14px;
+        font-weight: 1200;
+        min-height: 36px;
+      }
+      .panel .btn.btnPrimary,
+      .reportCard .btn.btnPrimary,
+      .projectPropsCard .btn.btnPrimary{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.55);
+        color: #fff;
+        box-shadow: 0 6px 14px -10px rgba(14,165,233,0.7);
+      }
+      .panel .btn.btnPrimary:hover,
+      .reportCard .btn.btnPrimary:hover,
+      .projectPropsCard .btn.btnPrimary:hover{
+        background: linear-gradient(135deg, #0284C7, #2563EB);
+      }
+      .panel .inp,
+      .panel select.inp,
+      .panel textarea.inp,
+      .reportCard .inp,
+      .reportCard select.inp,
+      .reportCard textarea.inp,
+      .projectPropsCard .inp,
+      .projectPropsCard select.inp,
+      .projectPropsCard textarea.inp{
+        border-radius: 10px;
+        border: 1px solid rgba(148,163,184,0.35);
+        padding: 9px 12px;
+        font-size: 12.5px;
+        background: #FFFFFF;
+        transition: border-color 0.12s ease, box-shadow 0.12s ease;
+      }
+      .panel .inp:focus,
+      .reportCard .inp:focus,
+      .projectPropsCard .inp:focus{
+        outline: none;
+        border-color: rgba(14,165,233,0.6);
+        box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+      }
+      .panel .chip,
+      .reportCard .chip,
+      .projectPropsCard .chip{
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 11px;
+        font-weight: 1200;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: #fff;
+        color: #0B1220;
+        cursor: pointer;
+        user-select: none;
+        transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+      }
+      .panel .chip.active,
+      .reportCard .chip.active,
+      .projectPropsCard .chip.active{
+        background: rgba(14,165,233,0.1);
+        border-color: rgba(14,165,233,0.55);
+        color: #0C4A6E;
+      }
+      .panel .radio,
+      .reportCard .radio,
+      .projectPropsCard .radio{
+        border-radius: 10px;
+        padding: 8px 12px;
+        border: 1px solid rgba(148,163,184,0.35);
+        background: #fff;
+        font-size: 12px;
+        font-weight: 1200;
+        cursor: pointer;
+        text-align: center;
+      }
+      .panel .radio.active,
+      .reportCard .radio.active,
+      .projectPropsCard .radio.active{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.65);
+        color: #fff;
+      }
+      .panel input[type="range"],
+      .reportCard input[type="range"],
+      .projectPropsCard input[type="range"]{
+        accent-color: #0EA5E9;
+      }
+      .panel details,
+      .reportCard details,
+      .projectPropsCard details{
+        border-radius: 12px;
+        border: 1px solid rgba(148,163,184,0.28);
+        background: #FBFDFF;
+      }
+      .panel details[open],
+      .reportCard details[open],
+      .projectPropsCard details[open]{
+        background: #FFFFFF;
+      }
 
       .fileMeta{
         font-size:12px;
@@ -2977,7 +3259,47 @@
       .reportGrid{
         display:grid;
         gap:14px 18px;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+      }
+      /* Report / description responsive tightening.
+         On narrow viewports (tablet portrait / phone), the report
+         sections were leaving a lot of whitespace and letting child
+         inputs overflow. These rules collapse the grid to a single
+         column, keep content within its card, and tighten the outer
+         padding so more of the form is visible at once. */
+      @media (max-width: 900px){
+        .reportContent{
+          padding: 14px 14px 24px;
+          gap: 12px;
+        }
+        .reportCard{
+          padding: 0 14px 14px 14px;
+        }
+        .reportTabs{
+          padding: 10px 14px;
+          gap: 6px;
+        }
+        .reportTabBtn{
+          padding: 7px 12px;
+          font-size: 11px;
+        }
+        .reportGrid{
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .reportSectionTitle{
+          margin: 14px 0 10px;
+        }
+      }
+      .reportCard input.inp,
+      .reportCard select.inp,
+      .reportCard textarea.inp{
+        max-width: 100%;
+        min-width: 0;
+        width: 100%;
+      }
+      .reportCard .reportGrid > *{
+        min-width: 0;
       }
       .reportCard .lbl{
         font-size:10px;
@@ -3475,6 +3797,113 @@
       .personActions{
         display:flex;
         justify-content:flex-end;
+      }
+      /* ========= Present Parties (Background tab) ========= */
+      .partyToolbar{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        margin-bottom:12px;
+      }
+      .partyList{
+        display:flex;
+        flex-direction:column;
+        gap:12px;
+      }
+      .partyCard{
+        border:1px solid rgba(148,163,184,0.28);
+        border-radius:14px;
+        padding:14px 14px 12px;
+        background: #FBFDFF;
+        box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 4px 10px -8px rgba(2,6,23,0.1);
+      }
+      .partyCardHeader{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-bottom:10px;
+        flex-wrap:wrap;
+      }
+      .partyCardIndex{
+        font-size:10px;
+        font-weight:1300;
+        letter-spacing:0.4px;
+        color:#64748B;
+        background: rgba(148,163,184,0.15);
+        border-radius:999px;
+        padding:2px 8px;
+      }
+      .partyCardTitle{
+        font-size:13px;
+        font-weight:1300;
+        color:#0B1220;
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        flex:1 1 auto;
+      }
+      .partyCardRoleChip{
+        font-size:10px;
+        font-weight:1200;
+        padding:2px 8px;
+        border-radius:999px;
+        background: rgba(20,184,166,0.15);
+        color:#0F766E;
+        letter-spacing:0.2px;
+      }
+      .partyRemoveBtn{
+        margin-left:auto;
+        font-size:11px;
+        padding:4px 10px;
+      }
+      .partyGrid{
+        display:grid;
+        gap:10px;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+      .partyExcludeToggle{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        margin-top:10px;
+        padding:8px 10px;
+        border-radius:10px;
+        background: rgba(245,158,11,0.08);
+        border:1px dashed rgba(245,158,11,0.45);
+        font-size:11px;
+        color:#92400E;
+        cursor:pointer;
+        line-height:1.4;
+      }
+      .partyExcludeToggle input{
+        accent-color:#F59E0B;
+        flex:0 0 auto;
+      }
+      .partyEmpty{
+        padding:16px;
+        border:1px dashed rgba(148,163,184,0.4);
+        border-radius:12px;
+        text-align:center;
+        color:#64748B;
+        font-size:12px;
+        background: rgba(248,250,252,0.6);
+      }
+      .lblHint{
+        color:#94A3B8;
+        font-weight:1000;
+        margin-left:4px;
+        letter-spacing:0;
+      }
+      .btnGhostDanger{
+        background: transparent;
+        border:1px solid rgba(220,38,38,0.4);
+        color:#B91C1C;
+      }
+      .btnGhostDanger:hover{
+        background: rgba(254,226,226,0.6);
+        border-color: rgba(220,38,38,0.6);
       }
 
       /* ========= EXPORT / PRINT ========= */
@@ -4634,6 +5063,85 @@
         font-size:11px;
         color:#94A3B8;
         line-height:1.5;
+      }
+      .loginForm{
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        margin-bottom:14px;
+      }
+      .loginFieldLabel{
+        font-size:11px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        color:#0B1220;
+        margin-top:6px;
+      }
+      .loginInput{
+        appearance:none;
+        width:100%;
+        padding:10px 12px;
+        border-radius:10px;
+        border:1px solid rgba(148,163,184,0.4);
+        background:#F8FAFC;
+        font-size:13px;
+        color:#0B1220;
+        transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+      }
+      .loginInput:focus{
+        outline:none;
+        border-color:#0EA5E9;
+        background:#fff;
+        box-shadow: 0 0 0 3px rgba(14,165,233,0.18);
+      }
+      .loginInput:disabled{
+        opacity:0.6;
+        cursor:not-allowed;
+      }
+      .loginForm .loginPrimaryBtn{
+        margin-top:14px;
+      }
+      .loginDivider{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin:14px 0;
+        color:#94A3B8;
+        font-size:11px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        text-transform:uppercase;
+      }
+      .loginDivider::before,
+      .loginDivider::after{
+        content:"";
+        flex:1;
+        height:1px;
+        background: rgba(148,163,184,0.3);
+      }
+      .loginSecondaryBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:100%;
+        padding:11px 16px;
+        border-radius:12px;
+        border:1px solid rgba(148,163,184,0.4);
+        cursor:pointer;
+        font-size:13px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        color:#0B1220;
+        background:#F8FAFC;
+        transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+      }
+      .loginSecondaryBtn:hover:not(:disabled){
+        background:#F1F5F9;
+        border-color: rgba(14,165,233,0.5);
+      }
+      .loginSecondaryBtn:disabled{
+        opacity:0.6;
+        cursor:not-allowed;
       }
 
       .authOverlay{

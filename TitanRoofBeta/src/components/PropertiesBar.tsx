@@ -1,4 +1,5 @@
 import React from "react";
+import { useProject } from "../project/ProjectContext";
 
 interface PropertiesBarProps {
   viewMode: "diagram" | "report" | "photos";
@@ -135,9 +136,24 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onMobileMenuToggle,
 }) => {
   const activePageIndex = Math.max(0, pages.findIndex((page) => page.id === activePageId));
+  const { route, returnToDashboard } = useProject();
   return (
     <div className={`propertiesBar${isMobile ? " isMobile" : ""}`}>
       <div className="propertiesLeft">
+        {route === "workspace" && (
+          <button
+            type="button"
+            className="propertiesDashboardBtn"
+            onClick={() => { void returnToDashboard(); }}
+            title="Save and return to dashboard"
+            aria-label="Back to dashboard"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            <span>Dashboard</span>
+          </button>
+        )}
         <div className="propertiesInfo">
           <div className="propertiesTitleRow">
             <div className="propertiesTitle">{residenceName || "Project Name"}</div>

@@ -1,14 +1,18 @@
-import type { AuthProviderAdapter, AuthUser } from "./types";
+import type { AuthProviderAdapter, AuthUser, LoginCredentials } from "./types";
 
 /**
- * Test User auth provider.
+ * Local auth provider used while the app still ships without a real
+ * identity backend.
  *
- * Phase 2 ships this stub so that the rest of the app (dashboard,
- * workspace, storage) can be built against a real auth interface
- * without depending on a live identity provider. Swap this module
- * for a Netlify Identity / Auth0 / Supabase / Firebase adapter by
- * implementing the AuthProviderAdapter interface — no caller code
- * has to change.
+ * Two sign-in paths are supported:
+ *   1. Credentialed: validates username/password against a local
+ *      allowlist and returns a password-provider user record.
+ *   2. Test user: called with no arguments, returns the shared
+ *      development account so existing flows keep working.
+ *
+ * Swap this module for a Netlify Identity / Auth0 / Supabase /
+ * Firebase adapter by implementing the AuthProviderAdapter interface
+ * — no caller code has to change.
  */
 
 const STORAGE_KEY = "titanroof.auth.testUser";
@@ -20,26 +24,74 @@ const TEST_USER: AuthUser = {
   provider: "test",
 };
 
+/**
+ * Development credential list. In production this is replaced by a
+ * real provider; until then, credentials stay local so the app can
+ * run fully offline (iPad / remote sites).
+ */
+const LOCAL_CREDENTIALS: Array<{ username: string; password: string; user: AuthUser }> = [
+  {
+    username: "admin",
+    password: "titan2025",
+    user: {
+      userId: "user-admin",
+      displayName: "Admin",
+      email: "admin@titanroof.local",
+      provider: "password",
+    },
+  },
+  {
+    username: "inspector",
+    password: "roof2025",
+    user: {
+      userId: "user-inspector",
+      displayName: "Inspector",
+      email: "inspector@titanroof.local",
+      provider: "password",
+    },
+  },
+];
+
+function readStored(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthUser;
+    if (!parsed?.userId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(user: AuthUser) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  } catch {
+    // localStorage may be unavailable (private mode, quota); the
+    // session will simply not persist across reloads.
+  }
+}
+
 export const testUserProvider: AuthProviderAdapter = {
   async restore() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as AuthUser;
-      if (!parsed?.userId) return null;
-      return parsed;
-    } catch {
-      return null;
-    }
+    return readStored();
   },
 
-  async login() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(TEST_USER));
-    } catch {
-      // localStorage may be unavailable (e.g. private mode); the
-      // session will simply not persist across reloads.
+  async login(credentials?: LoginCredentials) {
+    if (credentials) {
+      const match = LOCAL_CREDENTIALS.find(
+        (entry) =>
+          entry.username.toLowerCase() === credentials.username.toLowerCase() &&
+          entry.password === credentials.password,
+      );
+      if (!match) {
+        throw new Error("Invalid username or password.");
+      }
+      writeStored(match.user);
+      return match.user;
     }
+    writeStored(TEST_USER);
     return TEST_USER;
   },
 

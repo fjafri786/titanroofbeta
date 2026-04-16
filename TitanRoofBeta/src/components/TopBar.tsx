@@ -7,23 +7,22 @@ interface TopBarProps {
   label: string;
 }
 
+/**
+ * Thin top strip rendered above the menu bar.
+ *
+ * The earlier design used a bold red BETA bar that dominated the
+ * header; it has been replaced by a compact "Beta v4.0" badge on the
+ * left so the menu bar owns the visual weight. The Dashboard button
+ * moved alongside the project name (PropertiesBar), so it is no
+ * longer rendered here.
+ */
 const TopBar: React.FC<TopBarProps> = ({ label }) => {
   const { user, logout } = useAuth();
-  const { route, returnToDashboard } = useProject();
+  const { route } = useProject();
 
   return (
     <div className="topBar">
-      {route === "workspace" && (
-        <button
-          type="button"
-          className="topBarBackBtn"
-          onClick={() => { void returnToDashboard(); }}
-          title="Save and return to dashboard"
-          aria-label="Back to dashboard"
-        >
-          ← Dashboard
-        </button>
-      )}
+      <span className="topBarBadge">Beta v4.0</span>
       <span className="topBarLabel">{label}</span>
       {route === "workspace" && <SaveIndicator />}
       {user && (
