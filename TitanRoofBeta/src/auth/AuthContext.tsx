@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { AuthProviderAdapter, AuthState, AuthUser } from "./types";
+import type { AuthProviderAdapter, AuthState, AuthUser, LoginCredentials } from "./types";
 import { testUserProvider } from "./testUserProvider";
 
 /**
@@ -12,7 +12,7 @@ import { testUserProvider } from "./testUserProvider";
  */
 
 interface AuthContextValue extends AuthState {
-  login: () => Promise<void>;
+  login: (credentials?: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -58,10 +58,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ adapter = testUserPr
     };
   }, [adapter]);
 
-  const login = useCallback(async () => {
-    setState((prev) => ({ ...prev, error: null }));
+  const login = useCallback(async (credentials?: LoginCredentials) => {
+    setState((prev) => ({ ...prev, status: "loading", error: null }));
     try {
-      const user: AuthUser = await adapter.login();
+      const user: AuthUser = await adapter.login(credentials);
       setState({ status: "signed-in", user, error: null });
     } catch (err) {
       setState({

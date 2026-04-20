@@ -260,7 +260,21 @@ const loadPdfJs = () => {
         }
       });
 
-      const PARTY_ROLES = ["Homeowner", "Insured", "Contractor", "Public Adjuster", "Engineer", "Other"];
+      const PARTY_ROLES = [
+        "Homeowner",
+        "Insured",
+        "Contractor",
+        "Subcontractor",
+        "Public Adjuster",
+        "Insurance Adjuster",
+        "Engineer",
+        "Property Manager",
+        "Attorney / Lawyer",
+        "Tenant",
+        "Witness",
+        "Inspector",
+        "Other"
+      ];
       const OCCUPANCY_TYPES = ["Single-family", "Multi-family", "Commercial", "Industrial", "Other"];
       const FRAMING_TYPES = ["Wood", "Steel", "Masonry", "Other"];
       const FOUNDATION_TYPES = ["Slab", "Pier & Beam", "Basement", "Other"];
@@ -412,7 +426,9 @@ const loadPdfJs = () => {
         name: person?.name || "",
         role: person?.role || "",
         company: person?.company || "",
-        contact: person?.contact || ""
+        contact: person?.contact || "",
+        notes: person?.notes || "",
+        excludeFromNarrative: Boolean(person?.excludeFromNarrative)
       }));
       const normalizeReportData = (reportData) => {
         const defaults = buildReportDefaults();
@@ -562,7 +578,7 @@ const loadPdfJs = () => {
         return type === "application/pdf" || type === "application/x-pdf" || name.endsWith(".pdf");
       };
 
-      async function renderPdfBufferToPages(buffer, baseName = "PDF"){
+      async function renderPdfBufferToPages(buffer, baseName = "PDF", pageFilter = null){
         let pdfjsLib;
         try {
           pdfjsLib = await loadPdfJs();
@@ -577,8 +593,12 @@ const loadPdfJs = () => {
         let doc = null;
         try{
           doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+          const allowed = Array.isArray(pageFilter) && pageFilter.length
+            ? new Set(pageFilter.filter(n => Number.isFinite(n) && n >= 1 && n <= doc.numPages))
+            : null;
           const pages = [];
           for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
+            if(allowed && !allowed.has(pageNum)) continue;
             const page = await doc.getPage(pageNum);
             const viewport = page.getViewport({ scale: 2 });
             const canvas = document.createElement("canvas");
@@ -589,6 +609,7 @@ const loadPdfJs = () => {
             await page.render({ canvasContext: ctx, viewport }).promise;
             const dataUrl = canvas.toDataURL("image/png");
             pages.push({
+              sourcePageNumber: pageNum,
               background: buildImageObj(dataUrl, `${baseName.replace(/\.[^/.]+$/, "")} page ${pageNum}`, "image/png"),
               aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : LETTER_ASPECT_RATIO
             });
@@ -602,14 +623,33 @@ const loadPdfJs = () => {
           if(doc?.destroy) doc.destroy();
         }
       }
-      async function renderPdfToPages(file){
+      async function renderPdfToPages(file, pageFilter = null){
         const buffer = await file.arrayBuffer();
-        return renderPdfBufferToPages(buffer, file.name || "PDF");
+        return renderPdfBufferToPages(buffer, file.name || "PDF", pageFilter);
       }
-      async function renderPdfDataUrlToPages(dataUrl, name = "PDF"){
+      async function renderPdfDataUrlToPages(dataUrl, name = "PDF", pageFilter = null){
         const buffer = dataUrlToArrayBuffer(dataUrl);
         if(!buffer) return [];
-        return renderPdfBufferToPages(buffer, name);
+        return renderPdfBufferToPages(buffer, name, pageFilter);
+      }
+      async function peekPdfPageCount(buffer){
+        let pdfjsLib;
+        try {
+          pdfjsLib = await loadPdfJs();
+        } catch {
+          return 0;
+        }
+        if(!pdfjsLib?.getDocument) return 0;
+        let doc = null;
+        try{
+          doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+          return doc.numPages || 0;
+        } catch {
+          return 0;
+        } finally {
+          if(doc?.cleanup) doc.cleanup();
+          if(doc?.destroy) doc.destroy();
+        }
       }
 
       const Icon = ({name, className=""}) => {
@@ -655,25 +695,30 @@ const loadPdfJs = () => {
           );
         }
         if(name === "apt"){
-          // Appurtenance: a roof penetration / vent-pipe with a cap.
+          // Appurtenance: a roof-mounted unit with a vent cap. Drawn
+          // to fill the 24x24 viewBox so it reads at the same visual
+          // weight as the other tool icons.
           return (
             <svg {...common}>
-              <rect x="9" y="10" width="6" height="10" rx="1"/>
-              <path d="M7 10h10"/>
+              <rect x="4" y="10" width="16" height="10" rx="1.5"/>
+              <path d="M2 10h20"/>
               <path d="M12 10V4"/>
-              <circle cx="12" cy="4" r="1.4" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="4" r="2" fill="currentColor" stroke="none"/>
+              <path d="M7 14h2"/>
+              <path d="M15 14h2"/>
             </svg>
           );
         }
         if(name === "ds"){
-          // Downspout: rectangular channel with a down arrow inside it.
+          // Downspout: wider rectangular channel with a down arrow —
+          // sized to match the other 24x24 tool icons at a glance.
           return (
             <svg {...common}>
-              <rect x="9" y="3" width="6" height="16" rx="1"/>
-              <path d="M12 7v6"/>
-              <path d="M10 11l2 2 2-2"/>
-              <path d="M9 19l-2 2"/>
-              <path d="M15 19l2 2"/>
+              <rect x="7" y="3" width="10" height="17" rx="1.5"/>
+              <path d="M12 7v7"/>
+              <path d="M9 12l3 3 3-3"/>
+              <path d="M5 20l-2 2"/>
+              <path d="M19 20l2 2"/>
             </svg>
           );
         }
@@ -1225,7 +1270,7 @@ const loadPdfJs = () => {
               ...prev.project,
               parties: [
                 ...prev.project.parties,
-                { id: uid(), name: "", role: "", company: "", contact: "" }
+                { id: uid(), name: "", role: "", company: "", contact: "", notes: "", excludeFromNarrative: false }
               ]
             }
           }));
@@ -2765,16 +2810,16 @@ const loadPdfJs = () => {
           rotation
         }), []);
 
-        const buildPagesFromFile = async (file, pageIndexBase) => {
+        const buildPagesFromFile = async (file, pageIndexBase, pdfPageFilter = null) => {
           if(isPdfFile(file)){
-            const renderedPages = await renderPdfToPages(file);
+            const renderedPages = await renderPdfToPages(file, pdfPageFilter);
             if(!renderedPages.length){
               console.warn("PDF render returned no pages.");
               return [];
             }
             return renderedPages.map((entry, idx) => buildPageEntry({
               name: renderedPages.length > 1
-                ? `${file.name.replace(/\.[^/.]+$/, "")} • ${idx + 1}`
+                ? `${file.name.replace(/\.[^/.]+$/, "")} • ${entry.sourcePageNumber ?? (idx + 1)}`
                 : file.name.replace(/\.[^/.]+$/, "") || `Page ${pageIndexBase + idx + 1}`,
               background: entry.background,
               aspectRatio: entry.aspectRatio || LETTER_ASPECT_RATIO
@@ -2826,18 +2871,8 @@ const loadPdfJs = () => {
           )));
         };
 
-        const addPagesFromFiles = async (files) => {
-          if(!files?.length) return;
-          const fileList = Array.from(files);
-          let pageOffset = pages.length;
-          const prepared = [];
-          for(const file of fileList){
-            const entries = await buildPagesFromFile(file, pageOffset);
-            prepared.push(...entries);
-            pageOffset += entries.length;
-          }
+        const commitPreparedPages = (prepared) => {
           if(!prepared.length) return;
-
           const activeHasContent = activePage?.background?.url
             || activePage?.map?.enabled
             || items.some(item => item.pageId === activePageId);
@@ -2871,6 +2906,127 @@ const loadPdfJs = () => {
             });
             setActivePageId(prepared[0].id);
           }
+        };
+
+        const addPagesFromFiles = async (files) => {
+          if(!files?.length) return;
+          const fileList = Array.from(files);
+
+          // Process in order. When we hit a multi-page PDF, pause and
+          // open the page-selection dialog; queued files resume once
+          // the user confirms their selection (or skips the PDF).
+          const runQueue = async (queue, initialPrepared, pageOffset) => {
+            const prepared = initialPrepared;
+            for(let i = 0; i < queue.length; i++){
+              const file = queue[i];
+              if(isPdfFile(file)){
+                try{
+                  const buffer = await file.arrayBuffer();
+                  const count = await peekPdfPageCount(buffer.slice(0));
+                  if(count > 1){
+                    // Pause the queue, show the dialog. Defer
+                    // remaining files until the user picks pages.
+                    setPdfImportState({
+                      file,
+                      fileName: file.name || "PDF",
+                      pageCount: count,
+                      selected: Array.from({ length: count }, (_, idx) => idx + 1),
+                      pendingBefore: prepared,
+                      pendingAfter: queue.slice(i + 1),
+                      pageOffset,
+                    });
+                    return;
+                  }
+                } catch {
+                  // Fall through to normal import on any peek error.
+                }
+              }
+              const entries = await buildPagesFromFile(file, pageOffset);
+              prepared.push(...entries);
+              pageOffset += entries.length;
+            }
+            commitPreparedPages(prepared);
+          };
+
+          await runQueue(fileList, [], pages.length);
+        };
+
+        const togglePdfImportPage = (pageNum) => {
+          setPdfImportState(prev => {
+            if(!prev) return prev;
+            const set = new Set<number>(prev.selected as number[]);
+            if(set.has(pageNum)) set.delete(pageNum);
+            else set.add(pageNum);
+            return { ...prev, selected: Array.from(set).sort((a, b) => a - b) };
+          });
+        };
+        const setAllPdfImportPages = (all) => {
+          setPdfImportState(prev => {
+            if(!prev) return prev;
+            if(!all) return { ...prev, selected: [] };
+            return {
+              ...prev,
+              selected: Array.from({ length: prev.pageCount }, (_, idx) => idx + 1),
+            };
+          });
+        };
+        const cancelPdfImport = () => {
+          const state = pdfImportState;
+          setPdfImportState(null);
+          if(!state) return;
+          // Skip this PDF entirely, but still process anything queued
+          // after it — this matches the user's expectation that
+          // picking Cancel drops only the PDF they paused on.
+          (async () => {
+            const prepared = [...state.pendingBefore];
+            let pageOffset = state.pageOffset;
+            for(const file of state.pendingAfter){
+              const entries = await buildPagesFromFile(file, pageOffset);
+              prepared.push(...entries);
+              pageOffset += entries.length;
+            }
+            commitPreparedPages(prepared);
+          })();
+        };
+        const confirmPdfImport = async () => {
+          const state = pdfImportState;
+          if(!state) return;
+          setPdfImportState(null);
+          const prepared = [...state.pendingBefore];
+          let pageOffset = state.pageOffset;
+          const filter = state.selected.length ? state.selected : null;
+          const entries = filter ? await buildPagesFromFile(state.file, pageOffset, filter) : [];
+          prepared.push(...entries);
+          pageOffset += entries.length;
+          for(const file of state.pendingAfter){
+            if(isPdfFile(file)){
+              // A second PDF in the queue — re-open the dialog for it
+              // rather than silently importing every page.
+              try{
+                const buffer = await file.arrayBuffer();
+                const count = await peekPdfPageCount(buffer.slice(0));
+                if(count > 1){
+                  const remaining = state.pendingAfter.slice(state.pendingAfter.indexOf(file) + 1);
+                  setPdfImportState({
+                    file,
+                    fileName: file.name || "PDF",
+                    pageCount: count,
+                    selected: Array.from({ length: count }, (_, idx) => idx + 1),
+                    pendingBefore: prepared,
+                    pendingAfter: remaining,
+                    pageOffset,
+                  });
+                  return;
+                }
+              } catch {
+                // fall through
+              }
+            }
+            const more = await buildPagesFromFile(file, pageOffset);
+            prepared.push(...more);
+            pageOffset += more.length;
+          }
+          commitPreparedPages(prepared);
         };
 
         useEffect(() => {
@@ -3412,6 +3568,12 @@ const loadPdfJs = () => {
           // If no hit:
           if(tool === "free"){
             e.preventDefault();
+            // Close the draw palette as soon as the user starts a
+            // stroke so the popup does not obscure the diagram; it
+            // reopens when the user taps the DRAW toolbar button.
+            if(drawPaletteOpen){
+              setDrawPaletteOpen(false);
+            }
             // Shape sub-tool decides whether this is a freehand
             // stroke (current behavior) or a drag-to-define shape
             // (line, rect, circle, triangle, arrow).
@@ -4493,7 +4655,7 @@ const loadPdfJs = () => {
         // engineer's QC pass still reviews every line.
         const formatPartiesSentence = (parties = []) => {
           const people = parties
-            .filter(p => p?.name?.trim())
+            .filter(p => p?.name?.trim() && !p?.excludeFromNarrative)
             .map(p => {
               const name = p.name.trim();
               const role = (p.role || "").trim();
@@ -5101,6 +5263,10 @@ const loadPdfJs = () => {
         const [nameDraft, setNameDraft] = useState("");
         const [pageNameModalOpen, setPageNameModalOpen] = useState(false);
         const [pageNameDraft, setPageNameDraft] = useState("");
+        // PDF page-selection dialog state. When a multi-page PDF is
+        // picked we queue the remaining files here, prompt the user
+        // for which PDF pages to import, then resume the queue.
+        const [pdfImportState, setPdfImportState] = useState(null);
 
         useEffect(() => {
           if(activeItem){
@@ -5170,6 +5336,39 @@ const loadPdfJs = () => {
           if(!activePage) return;
           const nextRotation = ((activePage.rotation || 0) + 90) % 360;
           updateActivePage({ rotation: nextRotation });
+        };
+        const goToPrevPage = () => {
+          if(!canGoPrevPage) return;
+          const target = pages[activePageIndex - 1];
+          if(target) setActivePageId(target.id);
+        };
+        const goToNextPage = () => {
+          if(!canGoNextPage) return;
+          const target = pages[activePageIndex + 1];
+          if(target) setActivePageId(target.id);
+        };
+        const deleteActivePage = () => {
+          if(!activePage) return;
+          if(pages.length <= 1){
+            window.alert("You can't delete the only page. Add another page first.");
+            return;
+          }
+          const confirmed = window.confirm(
+            `Delete "${activePage.name || `Page ${activePageIndex + 1}`}"? Items on this page will be removed too. This can't be undone.`,
+          );
+          if(!confirmed) return;
+          const removedId = activePage.id;
+          setItems(prev => prev.filter(item => item.pageId !== removedId));
+          setPages(prev => {
+            const next = prev.filter(page => page.id !== removedId);
+            const fallbackIndex = Math.max(0, Math.min(activePageIndex, next.length - 1));
+            const fallback = next[fallbackIndex];
+            if(fallback){
+              setActivePageId(fallback.id);
+            }
+            return next;
+          });
+          revokeFileObj(activePage.background);
         };
 
         const selectItemFromList = (id) => {
@@ -5688,6 +5887,62 @@ const loadPdfJs = () => {
             </div>
           </div>
         );
+        const pdfImportModal = pdfImportState && (
+          <div
+            className="modalBackdrop"
+            onClick={(e)=>{ if(e.target === e.currentTarget) cancelPdfImport(); }}
+          >
+            <div className="modalCard pdfImportCard" onClick={(e)=>e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">Select pages to import</div>
+                <button className="btn" type="button" onClick={cancelPdfImport}>Close</button>
+              </div>
+              <div className="modalBody">
+                <div className="pdfImportSummary">
+                  <div className="pdfImportFile">{pdfImportState.fileName}</div>
+                  <div className="tiny">
+                    {pdfImportState.pageCount} pages total — {pdfImportState.selected.length} selected
+                  </div>
+                </div>
+                <div className="pdfImportControls">
+                  <button className="btn" type="button" onClick={() => setAllPdfImportPages(true)}>Select all</button>
+                  <button className="btn" type="button" onClick={() => setAllPdfImportPages(false)}>Clear</button>
+                </div>
+                <div className="pdfImportGrid">
+                  {Array.from({ length: pdfImportState.pageCount }, (_, idx) => idx + 1).map(pageNum => {
+                    const active = pdfImportState.selected.includes(pageNum);
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        className={"pdfImportChip" + (active ? " active" : "")}
+                        onClick={() => togglePdfImportPage(pageNum)}
+                        aria-pressed={active}
+                      >
+                        <span className="pdfImportChipNum">{pageNum}</span>
+                        {active && <span className="pdfImportChipTick" aria-hidden="true">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="tiny" style={{marginTop:10}}>
+                  Only the selected pages will be rasterized and added as diagram pages.
+                </div>
+              </div>
+              <div className="modalActions">
+                <button className="btn" type="button" onClick={cancelPdfImport}>Cancel</button>
+                <button
+                  className="btn btnPrimary"
+                  type="button"
+                  disabled={!pdfImportState.selected.length}
+                  onClick={() => { void confirmPdfImport(); }}
+                >
+                  Import {pdfImportState.selected.length || 0} page{pdfImportState.selected.length === 1 ? "" : "s"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
         const photoLightboxModal = photoLightbox && (
           <div
             className="photoLightbox"
@@ -6032,6 +6287,7 @@ const loadPdfJs = () => {
           {headerEditModal}
           {gridSettingsModal}
           {pageNameModal}
+          {pdfImportModal}
           {photoLightboxModal}
           {saveNotice && (
             <div className="saveToast" role="status">Saved {saveNotice}</div>
@@ -6156,14 +6412,44 @@ const loadPdfJs = () => {
                             <Icon name="chevDown" className="pageSelectChevron" />
                           </div>
                           <div className="tbPageTools">
+                            <button
+                              className="iconBtn nav"
+                              type="button"
+                              onClick={goToPrevPage}
+                              disabled={!canGoPrevPage}
+                              title="Previous page"
+                              aria-label="Previous page"
+                            >
+                              <Icon name="chevLeft" />
+                            </button>
+                            <button
+                              className="iconBtn nav"
+                              type="button"
+                              onClick={goToNextPage}
+                              disabled={!canGoNextPage}
+                              title="Next page"
+                              aria-label="Next page"
+                            >
+                              <Icon name="chevRight" />
+                            </button>
                             <button className="iconBtn nav" type="button" onClick={insertBlankPageAfter} title="Add Page">
                               <Icon name="plus" />
                             </button>
-                            <button className="iconBtn nav" type="button" onClick={startPageNameEdit} title="Edit Page">
+                            <button className="iconBtn nav" type="button" onClick={startPageNameEdit} title="Rename Page">
                               <Icon name="pencil" />
                             </button>
                             <button className="iconBtn nav" type="button" onClick={rotateActivePage} title="Rotate Page">
                               <Icon name="rotate" />
+                            </button>
+                            <button
+                              className="iconBtn nav danger"
+                              type="button"
+                              onClick={deleteActivePage}
+                              disabled={pages.length <= 1}
+                              title="Delete Page"
+                              aria-label="Delete page"
+                            >
+                              <Icon name="trash" />
                             </button>
                             <label className="iconBtn nav" title="Upload pages">
                               <Icon name="upload" />
@@ -6319,13 +6605,18 @@ const loadPdfJs = () => {
                           title={c}
                         />
                       ))}
-                      <label className="drawColorDot drawColorCustom" title="Custom color">
+                    </div>
+                    <div className="drawPaletteCustomRow">
+                      <label className="drawColorCustomBtn" title="Pick a custom color">
+                        <span className="drawColorCustomSwatch" style={{ background: freeDrawColor }} />
+                        <span className="drawColorCustomLabel">Custom</span>
                         <input
                           type="color"
                           value={freeDrawColor}
                           onChange={(e) => setFreeDrawColor(e.target.value)}
                         />
                       </label>
+                      <span className="drawColorCurrent" style={{ background: freeDrawColor }} aria-hidden="true" />
                     </div>
                   </div>
                   <div className="drawPaletteSection">
@@ -6450,8 +6741,8 @@ const loadPdfJs = () => {
                         <path
                           d={freeStroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ")}
                           fill="none"
-                          stroke="#0EA5E9"
-                          strokeWidth="2"
+                          stroke={freeDrawColor}
+                          strokeWidth={freeDrawWidth}
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -8184,6 +8475,79 @@ const loadPdfJs = () => {
 
               {reportTab === "background" && (
                 <>
+                  <div className="reportCard tone-parties">
+                    <div className="reportSectionTitle">Present Parties / Contacts</div>
+                    <div className="reportCardSubtitle">
+                      Anyone present at the inspection or a contact relevant to the claim — homeowner, contractor, adjuster, attorney, witness, etc. Add as many as needed.
+                    </div>
+                    <div className="partyToolbar">
+                      <div className="tiny">{reportData.project.parties.length} {reportData.project.parties.length === 1 ? "person" : "people"} listed</div>
+                      <button className="btn btnPrimary" type="button" onClick={addParty}>+ Add person</button>
+                    </div>
+                    <div className="partyList">
+                      {reportData.project.parties.map((person, idx) => (
+                        <div key={person.id} className="partyCard">
+                          <div className="partyCardHeader">
+                            <span className="partyCardIndex">#{idx + 1}</span>
+                            <span className="partyCardTitle">{person.name?.trim() || "Unnamed"}</span>
+                            {person.role ? <span className="partyCardRoleChip">{person.role}</span> : null}
+                            <button
+                              className="btn btnGhostDanger partyRemoveBtn"
+                              type="button"
+                              onClick={() => removeParty(person.id)}
+                              aria-label="Remove person"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="partyGrid">
+                            <div>
+                              <div className="lbl">Name</div>
+                              <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Full name" />
+                            </div>
+                            <div>
+                              <div className="lbl">Role</div>
+                              <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
+                                <option value="">Select role…</option>
+                                {PARTY_ROLES.map(role => (
+                                  <option key={role} value={role}>{role}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Company <span className="lblHint">optional</span></div>
+                              <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company / firm" />
+                            </div>
+                            <div>
+                              <div className="lbl">Contact <span className="lblHint">optional</span></div>
+                              <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone / email" />
+                            </div>
+                          </div>
+                          <div style={{marginTop:10}}>
+                            <div className="lbl">Notes for this person <span className="lblHint">not merged into the narrative unless you say so</span></div>
+                            <textarea
+                              className="inp"
+                              rows={2}
+                              value={person.notes || ""}
+                              onChange={(e)=>updateParty(person.id, "notes", e.target.value)}
+                              placeholder="Statements from this contact only — kept separate to avoid mixing conflicting accounts."
+                            />
+                          </div>
+                          <label className="partyExcludeToggle">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(person.excludeFromNarrative)}
+                              onChange={(e)=>updateParty(person.id, "excludeFromNarrative", e.target.checked)}
+                            />
+                            <span>Exclude this person's account from the auto-generated final paragraph (avoids conflicts)</span>
+                          </label>
+                        </div>
+                      ))}
+                      {!reportData.project.parties.length && (
+                        <div className="partyEmpty">No parties added yet. Click <strong>Add person</strong> to begin.</div>
+                      )}
+                    </div>
+                  </div>
                   <div className="reportCard tone-background">
                     <div className="reportSectionTitle">Reported Background</div>
                     <div className="reportCardSubtitle">

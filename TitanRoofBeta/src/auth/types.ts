@@ -17,17 +17,23 @@ export interface AuthUser {
   email?: string;
   /** Where this session came from; helps us tell test sessions
    *  apart from real ones once multiple providers are wired up. */
-  provider: "test" | "netlify" | "auth0" | "supabase" | "firebase";
+  provider: "test" | "netlify" | "auth0" | "supabase" | "firebase" | "password";
+}
+
+export interface LoginCredentials {
+  username: string;
+  password: string;
 }
 
 export interface AuthProviderAdapter {
   /** Called once on mount. Returns the current user if there is an
    *  active session, or null if the user needs to log in. */
   restore(): Promise<AuthUser | null>;
-  /** Start a login flow. For the Test User adapter this is the
-   *  synchronous stub; for a real provider it would redirect or
-   *  open a popup. */
-  login(): Promise<AuthUser>;
+  /** Start a login flow. When credentials are supplied the adapter
+   *  should validate them and return the signed-in user; when no
+   *  arguments are passed the adapter may fall back to a default
+   *  (e.g. test-user) sign-in path. */
+  login(credentials?: LoginCredentials): Promise<AuthUser>;
   /** Clear the active session. */
   logout(): Promise<void>;
 }

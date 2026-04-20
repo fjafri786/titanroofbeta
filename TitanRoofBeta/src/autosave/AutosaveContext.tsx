@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { projectStore, type ProjectRecord } from "../storage";
+import { type ProjectRecord, putWithRedundancy } from "../storage";
 import { useProject } from "../project/ProjectContext";
 
 /**
@@ -33,13 +33,16 @@ import { useProject } from "../project/ProjectContext";
  * saving locally.
  */
 
-export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "error";
+export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "backup" | "error";
 
 interface AutosaveContextValue {
   status: SaveStatus;
   lastSavedAt: string | null;
   isOnline: boolean;
   pendingCount: number;
+  /** Human-readable explanation attached to "backup" or "error"
+   *  states so the indicator can offer the user a useful next step. */
+  lastErrorMessage: string | null;
   /** Register a function that returns the latest engine snapshot.
    *  Returns an unregister function. */
   registerEngineSnapshot: (fn: () => unknown) => () => void;
@@ -66,6 +69,7 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
   const [pendingCount, setPendingCount] = useState<number>(0);
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
 
   const engineSnapshotRef = useRef<(() => unknown) | null>(null);
   const dirtyRef = useRef<boolean>(false);
@@ -158,16 +162,30 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             : section,
         ),
       };
-      await projectStore.put(updated);
+      const writeResult = await putWithRedundancy(updated);
 
       lastSerializedRef.current = serialized;
       dirtyRef.current = false;
       currentProjectRef.current = updated;
       setLastSavedAt(new Date().toISOString());
       setPendingCount(isOnline ? 0 : 1);
-      setStatus(isOnline ? "saved" : "offline");
+
+      if (writeResult.primary) {
+        setLastErrorMessage(null);
+        setStatus(isOnline ? "saved" : "offline");
+      } else {
+        // Backup-only save — the project is safe on this device but
+        // the primary store is unhappy; surface that without
+        // pretending everything is normal.
+        const reason = writeResult.error?.message || "Primary store unavailable";
+        setLastErrorMessage(`Saved to backup only (${reason}).`);
+        setStatus("backup");
+      }
     } catch (err) {
       console.warn("Autosave write failed", err);
+      setLastErrorMessage(
+        err instanceof Error ? err.message : "Unknown storage error.",
+      );
       setStatus("error");
     }
   }, [isOnline]);
@@ -214,11 +232,12 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       lastSavedAt,
       isOnline,
       pendingCount,
+      lastErrorMessage,
       registerEngineSnapshot,
       markDirty,
       forceSave,
     }),
-    [status, lastSavedAt, isOnline, pendingCount, registerEngineSnapshot, markDirty, forceSave],
+    [status, lastSavedAt, isOnline, pendingCount, lastErrorMessage, registerEngineSnapshot, markDirty, forceSave],
   );
 
   return <AutosaveContext.Provider value={value}>{children}</AutosaveContext.Provider>;

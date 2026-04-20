@@ -1,43 +1,99 @@
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
 
 /**
- * Login screen shown whenever there is no active session.
+ * Login screen with username/password form and a test-user bypass.
  *
- * Phase 2 is deliberately a one-click Test User flow. Later phases
- * will add real provider buttons here (Netlify Identity / Auth0 /
- * Supabase / Firebase) without changing the surrounding layout or
- * the AuthGate component.
+ * The real provider can be swapped in via AuthContext; credentials
+ * are forwarded through `login({ username, password })`. The test
+ * user path calls `login()` with no arguments and continues to work
+ * for offline / development use.
  */
 export const LoginScreen: React.FC = () => {
   const { login, error, status } = useAuth();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
   const isBusy = status === "loading";
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    const u = username.trim();
+    if (!u || !password) {
+      setLocalError("Enter both a username and a password.");
+      return;
+    }
+    void login({ username: u, password });
+  };
+
+  const handleTestUser = () => {
+    setLocalError(null);
+    void login();
+  };
+
+  const shownError = localError || error;
 
   return (
     <div className="loginRoot" role="dialog" aria-labelledby="loginHeading">
       <div className="loginCard">
-        <div className="loginBrand">TitanRoof Beta</div>
+        <div className="loginBrand">TitanRoof Beta v4.0</div>
         <h1 id="loginHeading" className="loginTitle">Sign in to continue</h1>
         <p className="loginHint">
-          Phase 2 uses a lightweight test login. A real identity
-          provider (Netlify Identity, Auth0, Supabase, Firebase) can be
-          swapped in later without changing the rest of the app.
+          Use your TitanRoof credentials, or continue with the test
+          account for offline / development access.
         </p>
+
+        <form className="loginForm" onSubmit={handleSubmit}>
+          <label className="loginFieldLabel" htmlFor="login-username">Username</label>
+          <input
+            id="login-username"
+            className="loginInput"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={isBusy}
+            placeholder="your.name"
+          />
+          <label className="loginFieldLabel" htmlFor="login-password">Password</label>
+          <input
+            id="login-password"
+            className="loginInput"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isBusy}
+            placeholder="••••••••"
+          />
+
+          <button
+            type="submit"
+            className="loginPrimaryBtn"
+            disabled={isBusy}
+          >
+            {isBusy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+
+        <div className="loginDivider"><span>or</span></div>
 
         <button
           type="button"
-          className="loginPrimaryBtn"
-          onClick={() => { void login(); }}
+          className="loginSecondaryBtn"
+          onClick={handleTestUser}
           disabled={isBusy}
         >
           {isBusy ? "Loading…" : "Continue as Test User"}
         </button>
 
-        {error && <div className="loginError" role="alert">{error}</div>}
+        {shownError && <div className="loginError" role="alert">{shownError}</div>}
 
         <div className="loginFootnote">
-          Your session is stored locally on this device for development
-          testing only.
+          Your session is stored locally on this device. Password
+          credentials are validated against the configured auth
+          provider.
         </div>
       </div>
     </div>
