@@ -3148,6 +3148,16 @@
         color: #0B1220;
         line-height: 1.55;
       }
+      .previewBodyClamped{
+        position: relative;
+        max-height: calc(1.55em * 10 + 12px); /* ~10 lines */
+        overflow: hidden;
+        -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+                mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+      }
+      .previewBodyExpanded{
+        max-height: none;
+      }
       .previewParagraph{
         margin: 0 0 12px 0;
         font-size: 13px;
@@ -3160,6 +3170,38 @@
         font-size: 12px;
         color: #94A3B8;
         font-style: italic;
+      }
+      .previewCard{
+        transition: box-shadow 0.15s ease;
+      }
+      .previewExpandToggle{
+        margin: 6px auto 0;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,184,0.3);
+        background: #FFFFFF;
+        color: #475569;
+        cursor: pointer;
+        box-shadow: 0 2px 6px -2px rgba(2,6,23,0.15);
+        transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+      }
+      .previewExpandToggle:hover{
+        border-color: rgba(99,102,241,0.6);
+        color: #4338CA;
+        background: #F8FAFF;
+      }
+      .previewExpandToggle.expanded{
+        border-color: rgba(99,102,241,0.6);
+        color: #4338CA;
+        background: rgba(99,102,241,0.08);
+      }
+      .previewExpandToggle svg{
+        width: 16px;
+        height: 16px;
       }
       .previewOverrideEditor{
         display:flex;
@@ -3184,10 +3226,98 @@
         padding:20px 24px 32px;
         display:flex;
         flex-direction:column;
-        gap:18px;
+        gap:22px;
         max-width:1280px;
         width:100%;
         margin:0 auto;
+      }
+      /* Description form sub-navigation.
+         Pill-style icon buttons that filter the visible sub-section
+         (Structure / Garage / Site / Roof) or show all four at once.
+         Each pill carries a status dot so missing inputs are obvious
+         at a glance. */
+      .descriptionSubNav{
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        padding:12px;
+        border-radius:16px;
+        background:#FFFFFF;
+        border:1px solid rgba(148,163,184,0.22);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 8px 20px -16px rgba(2,6,23,0.25);
+        position:sticky;
+        top:0;
+        z-index:5;
+      }
+      .descriptionSubNavBtn{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:8px 14px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.3);
+        background:#F8FAFC;
+        color:#0B1220;
+        cursor:pointer;
+        font-size:12px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+      }
+      .descriptionSubNavBtn:hover{
+        border-color: rgba(14,165,233,0.55);
+        background:#EFF6FF;
+      }
+      .descriptionSubNavBtn.active{
+        background: linear-gradient(135deg, #0EA5E9, #6366F1);
+        border-color: transparent;
+        color:#FFFFFF;
+        box-shadow: 0 10px 20px -12px rgba(14,165,233,0.6);
+      }
+      .descriptionSubNavBtn svg{
+        width:16px;
+        height:16px;
+      }
+      .descriptionSubNavLabel{
+        font-size:12px;
+        font-weight:1300;
+      }
+      .descriptionSubNavDot{
+        width:8px;
+        height:8px;
+        border-radius:999px;
+        display:inline-block;
+        flex-shrink:0;
+        background:#CBD5E1;
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.8);
+      }
+      .descriptionSubNavDot.status-ready{ background:#16A34A; }
+      .descriptionSubNavDot.status-partial{ background:#F59E0B; }
+      .descriptionSubNavDot.status-empty{ background:#DC2626; }
+      .descriptionSubNavBtn.active .descriptionSubNavDot{
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.95);
+      }
+      @media (max-width: 900px){
+        .descriptionSubNav{
+          padding:8px;
+          gap:6px;
+        }
+        .descriptionSubNavBtn{
+          padding:6px 10px;
+          font-size:11px;
+        }
+        .descriptionSubNavLabel{
+          display:none;
+        }
+      }
+      /* Properties panel — match the DRAW palette's look so color +
+         stroke controls read the same whether you opened the palette
+         from the toolbar or selected an existing stroke on the sheet. */
+      .drawPropsSection{
+        margin-bottom: 14px;
+        display:flex;
+        flex-direction:column;
+        gap:8px;
       }
       .reportCard{
         position:relative;

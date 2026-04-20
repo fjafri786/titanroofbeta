@@ -973,6 +973,51 @@ const loadPdfJs = () => {
             </svg>
           );
         }
+        if(name === "home"){
+          return (
+            <svg {...common}>
+              <path d="M3 11l9-7 9 7"/>
+              <path d="M5 10v10h14V10"/>
+              <path d="M10 20v-6h4v6"/>
+            </svg>
+          );
+        }
+        if(name === "garage"){
+          return (
+            <svg {...common}>
+              <path d="M3 10l9-6 9 6"/>
+              <rect x="5" y="10" width="14" height="10" rx="1"/>
+              <path d="M7 14h10"/>
+              <path d="M7 18h10"/>
+            </svg>
+          );
+        }
+        if(name === "tree"){
+          return (
+            <svg {...common}>
+              <path d="M12 3l-6 9h4v7h4v-7h4z"/>
+              <path d="M12 19v2"/>
+            </svg>
+          );
+        }
+        if(name === "roofHouse"){
+          return (
+            <svg {...common}>
+              <path d="M2 12l10-8 10 8"/>
+              <path d="M5 11v8h14v-8"/>
+              <path d="M9 15h6"/>
+            </svg>
+          );
+        }
+        if(name === "layers"){
+          return (
+            <svg {...common}>
+              <path d="M12 3l9 5-9 5-9-5 9-5z"/>
+              <path d="M3 13l9 5 9-5"/>
+              <path d="M3 17l9 5 9-5"/>
+            </svg>
+          );
+        }
         return null;
       };
 
@@ -1098,6 +1143,14 @@ const loadPdfJs = () => {
         const [reportTab, setReportTab] = useState("preview");
         const [previewEditing, setPreviewEditing] = useState(null);
         const [previewDraft, setPreviewDraft] = useState("");
+        // Per-section expand/collapse state for the Live Report Preview.
+        // Preview bubbles clamp their body to ~10 lines by default; this
+        // tracks which sections the user has expanded to see the full text.
+        const [previewExpandedSections, setPreviewExpandedSections] = useState<Record<string, boolean>>({});
+        // Description form sub-navigation. "all" shows every card stacked
+        // (previous behavior); picking a specific sub-tab shows only that
+        // sub-section so the inputs inside never get cut off.
+        const [descriptionSubTab, setDescriptionSubTab] = useState("all");
         const [diagramSource, setDiagramSource] = useState("upload");
         const [reportData, setReportData] = useState(() => buildReportDefaults());
         const [exteriorPhotos, setExteriorPhotos] = useState([]);
@@ -7922,7 +7975,25 @@ const loadPdfJs = () => {
                         )}
 
                         {/* === FREE DRAW === */}
-                        {activeItem.type === "free" && (
+                        {activeItem.type === "free" && (() => {
+                          // Match the draw palette's presets so the
+                          // properties panel exposes the same 10 colors
+                          // and 4 stroke widths as the toolbar popup —
+                          // no more plain <input type="color"> and bare
+                          // range slider.
+                          const drawColors = [
+                            "#FFFFFF", "#000000", "#DC2626", "#2563EB", "#16A34A",
+                            "#F97316", "#EAB308", "#9333EA", "#EC4899", "#92400E",
+                          ];
+                          const strokePresets = [
+                            { key: "fine", pt: 1, label: "Fine" },
+                            { key: "small", pt: 2, label: "Small" },
+                            { key: "med", pt: 4, label: "Medium" },
+                            { key: "large", pt: 7, label: "Large" },
+                          ];
+                          const currentColor = activeItem.data.color || "#0EA5E9";
+                          const currentWidth = activeItem.data.strokeWidth || 2;
+                          return (
                           <>
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Shape</div>
@@ -7936,26 +8007,66 @@ const loadPdfJs = () => {
                                 Input: {activeItem.data.inputType === "pen" ? "Apple Pencil / Stylus" : activeItem.data.inputType === "touch" ? "Touch" : "Mouse"}
                               </div>
                             </div>
-                            <div style={{marginBottom:10}}>
+                            <div className="drawPropsSection">
                               <div className="lbl">Stroke Color</div>
-                              <input
-                                className="inp"
-                                type="color"
-                                value={activeItem.data.color || "#0EA5E9"}
-                                onChange={(e)=>updateItemData("color", e.target.value)}
-                              />
+                              <div className="drawPaletteColors">
+                                {drawColors.map(c => (
+                                  <button
+                                    key={c}
+                                    type="button"
+                                    className={"drawColorDot" + (currentColor.toUpperCase() === c.toUpperCase() ? " active" : "")}
+                                    style={{ background: c }}
+                                    onClick={() => updateItemData("color", c)}
+                                    aria-label={`Color ${c}`}
+                                    title={c}
+                                  />
+                                ))}
+                              </div>
+                              <div className="drawPaletteCustomRow">
+                                <label className="drawColorCustomBtn" title="Pick a custom color">
+                                  <span className="drawColorCustomSwatch" style={{ background: currentColor }} />
+                                  <span className="drawColorCustomLabel">Custom</span>
+                                  <input
+                                    type="color"
+                                    value={currentColor}
+                                    onChange={(e)=>updateItemData("color", e.target.value)}
+                                  />
+                                </label>
+                                <span className="drawColorCurrent" style={{ background: currentColor }} aria-hidden="true" />
+                              </div>
                             </div>
-                            <div style={{marginBottom:10}}>
+                            <div className="drawPropsSection">
                               <div className="lbl">Stroke Width</div>
-                              <input
-                                className="inp"
-                                type="range"
-                                min="1"
-                                max="8"
-                                step="1"
-                                value={activeItem.data.strokeWidth || 2}
-                                onChange={(e)=>updateItemData("strokeWidth", parseInt(e.target.value, 10) || 2)}
-                              />
+                              <div className="drawStrokeRow">
+                                {strokePresets.map(preset => (
+                                  <button
+                                    key={preset.key}
+                                    type="button"
+                                    className={"drawStrokePreset" + (Math.round(currentWidth) === preset.pt ? " active" : "")}
+                                    onClick={() => updateItemData("strokeWidth", preset.pt)}
+                                    aria-label={`${preset.label} stroke`}
+                                    title={`${preset.label} (${preset.pt} pt)`}
+                                  >
+                                    <span
+                                      className="drawStrokeDot"
+                                      style={{ width: Math.max(4, preset.pt * 2), height: Math.max(4, preset.pt * 2), background: currentColor }}
+                                    />
+                                    <span className="drawStrokeLabel">{preset.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="drawStrokeSliderRow">
+                                <input
+                                  type="range"
+                                  min="0.5"
+                                  max="12"
+                                  step="0.5"
+                                  value={currentWidth}
+                                  onChange={(e)=>updateItemData("strokeWidth", parseFloat(e.target.value) || 2)}
+                                  aria-label="Stroke width"
+                                />
+                                <span className="drawStrokeValue">{currentWidth} pt</span>
+                              </div>
                             </div>
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Label</div>
@@ -7968,7 +8079,8 @@ const loadPdfJs = () => {
                             </div>
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Drawing</button>
                           </>
-                        )}
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -8014,8 +8126,18 @@ const loadPdfJs = () => {
                     const bodyText = section.override || section.generated;
                     const statusLabel = section.status === "ready" ? "Ready" : section.status === "partial" ? "Needs review" : "Empty";
                     const isEditing = previewEditing === section.key;
+                    const isExpanded = !!previewExpandedSections[section.key];
+                    // Rough line estimate so we only show the expand
+                    // toggle when a section actually overflows the
+                    // ~10-line clamp. Explicit newlines count as line
+                    // breaks; long paragraphs are approximated by
+                    // character width.
+                    const lineEstimate = (bodyText || "")
+                      .split("\n")
+                      .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 80)), 0);
+                    const isOverflowing = lineEstimate > 10;
                     return (
-                      <div className={`reportCard tone-${section.tone}`} key={section.key}>
+                      <div className={`reportCard tone-${section.tone} previewCard`} key={section.key}>
                         <div className="previewSectionHeader">
                           <div className="previewSectionTitle">
                             <span className={`previewStatusDot status-${section.status}`} aria-hidden="true" />
@@ -8075,19 +8197,38 @@ const loadPdfJs = () => {
                             </div>
                           </div>
                         ) : (
-                          <div className="previewBody">
-                            {(bodyText || "").split(/\n\n+/).map((para, i) => (
-                              <p key={i} className="previewParagraph">
-                                {para.split("\n").map((line, j, arr) => (
-                                  <React.Fragment key={j}>
-                                    {line}
-                                    {j < arr.length - 1 && <br />}
-                                  </React.Fragment>
-                                ))}
-                              </p>
-                            ))}
-                            {!bodyText && <div className="previewEmptyHint">No content yet for this section.</div>}
-                          </div>
+                          <>
+                            <div
+                              className={
+                                "previewBody" +
+                                (isOverflowing && !isExpanded ? " previewBodyClamped" : "") +
+                                (isExpanded ? " previewBodyExpanded" : "")
+                              }
+                            >
+                              {(bodyText || "").split(/\n\n+/).map((para, i) => (
+                                <p key={i} className="previewParagraph">
+                                  {para.split("\n").map((line, j, arr) => (
+                                    <React.Fragment key={j}>
+                                      {line}
+                                      {j < arr.length - 1 && <br />}
+                                    </React.Fragment>
+                                  ))}
+                                </p>
+                              ))}
+                              {!bodyText && <div className="previewEmptyHint">No content yet for this section.</div>}
+                            </div>
+                            {isOverflowing && (
+                              <button
+                                type="button"
+                                className={"previewExpandToggle" + (isExpanded ? " expanded" : "")}
+                                onClick={() => setPreviewExpandedSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                aria-label={isExpanded ? "Collapse section" : "Show full section"}
+                                aria-expanded={isExpanded}
+                              >
+                                <Icon name={isExpanded ? "chevUp" : "chevDown"} />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     );
@@ -8187,8 +8328,71 @@ const loadPdfJs = () => {
                 </>
               )}
 
-              {reportTab === "description" && (
+              {reportTab === "description" && (() => {
+                // Per-sub-section completion status so the nav pills
+                // can show the user exactly which sub-sections still
+                // have missing inputs (empty / partial / ready).
+                const d = reportData.description;
+                const val = (v) => (v != null && String(v).trim() !== "");
+                const structureFields = [
+                  val(d.occupancy), val(d.stories), val(d.framing), val(d.foundation),
+                  val(d.exteriorFinishByElevation?.north),
+                  val(d.exteriorFinishByElevation?.south),
+                  val(d.exteriorFinishByElevation?.east),
+                  val(d.exteriorFinishByElevation?.west),
+                  val(d.windowType), val(d.windowMaterial), val(d.windowScreens),
+                ];
+                const garageFields = [
+                  val(d.garagePresent), val(d.garageBays), val(d.garageDoors),
+                  val(d.garageDoorMaterial), val(d.garageElevation),
+                ];
+                const siteFields = [val(d.terrain), val(d.vegetation)];
+                const roofFields = [
+                  val(d.roofGeometry), val(d.roofCovering),
+                  val(d.shingleLength), val(d.shingleExposure),
+                  val(d.ridgeWidth), val(d.ridgeExposure),
+                  val(d.primarySlope), val(d.guttersPresent), val(d.downspoutsPresent),
+                  val(d.eagleView), val(d.roofArea),
+                ];
+                const groupStatus = (flags) => {
+                  const filled = flags.filter(Boolean).length;
+                  if (filled === 0) return "empty";
+                  if (filled === flags.length) return "ready";
+                  return "partial";
+                };
+                const subNav = [
+                  { key: "all", label: "All", icon: "layers" },
+                  { key: "structure", label: "Structure", icon: "home", status: groupStatus(structureFields) },
+                  { key: "garage", label: "Garage", icon: "garage", status: groupStatus(garageFields) },
+                  { key: "site", label: "Site", icon: "tree", status: groupStatus(siteFields) },
+                  { key: "roof", label: "Roof", icon: "roofHouse", status: groupStatus(roofFields) },
+                ];
+                const showSub = (key) => descriptionSubTab === "all" || descriptionSubTab === key;
+                return (
                 <>
+                  <div className="descriptionSubNav" role="tablist" aria-label="Description sub-sections">
+                    {subNav.map(item => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={descriptionSubTab === item.key}
+                        className={"descriptionSubNavBtn" + (descriptionSubTab === item.key ? " active" : "")}
+                        onClick={() => setDescriptionSubTab(item.key)}
+                        title={item.status ? `${item.label} — ${item.status}` : item.label}
+                      >
+                        <Icon name={item.icon} />
+                        <span className="descriptionSubNavLabel">{item.label}</span>
+                        {item.status && (
+                          <span
+                            className={`descriptionSubNavDot status-${item.status}`}
+                            aria-label={`Status ${item.status}`}
+                          />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                  {showSub("structure") && (
                   <div className="reportCard tone-structure">
                     <div className="reportSectionTitle">Structure</div>
                     <div className="reportGrid">
@@ -8301,7 +8505,9 @@ const loadPdfJs = () => {
                       </div>
                     </div>
                   </div>
+                  )}
 
+                  {showSub("garage") && (
                   <div className="reportCard tone-description">
                     <div className="reportSectionTitle">Garage</div>
                     <div className="reportGrid">
@@ -8343,7 +8549,9 @@ const loadPdfJs = () => {
                       </div>
                     </div>
                   </div>
+                  )}
 
+                  {showSub("site") && (
                   <div className="reportCard tone-site">
                     <div className="reportSectionTitle">Site Conditions</div>
                     <div className="reportGrid">
@@ -8363,7 +8571,9 @@ const loadPdfJs = () => {
                       </div>
                     </div>
                   </div>
+                  )}
 
+                  {showSub("roof") && (
                   <div className="reportCard tone-roof">
                     <div className="reportSectionTitle">Roof Information</div>
                     <div className="reportGrid">
@@ -8470,8 +8680,10 @@ const loadPdfJs = () => {
                       Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
                     </div>
                   </div>
+                  )}
                 </>
-              )}
+                );
+              })()}
 
               {reportTab === "background" && (
                 <>
