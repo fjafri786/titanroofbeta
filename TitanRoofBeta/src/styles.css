@@ -3088,22 +3088,71 @@
       }
       .statusDot.ready{ background: #16A34A; }
 
-      .previewSectionHeader{
+      /* ==== Live Report Preview — "bubble" style ====
+         Each section is a rounded bubble with a tone-colored header
+         bar, clamped body, and a prominent chevron at the bottom. The
+         action buttons (Edit Fields / Override / Regenerate) live in a
+         vertical rail to the right of the bubble so they never crowd
+         the text. */
+      .previewRow{
+        display:grid;
+        grid-template-columns: 1fr auto;
+        gap:18px;
+        align-items:start;
+      }
+      .previewBubble{
+        position:relative;
+        background:#FFFFFF;
+        border-radius:22px;
+        border:1px solid rgba(148,163,184,0.22);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 18px 40px -24px rgba(2,6,23,0.2);
+        overflow:hidden;
         display:flex;
-        flex-wrap:wrap;
+        flex-direction:column;
+      }
+      .previewBubbleHeader{
+        display:flex;
         align-items:center;
         justify-content:space-between;
         gap:12px;
-        margin: 14px 0 12px 0;
+        padding:12px 20px;
+        color:#FFFFFF;
+        /* default tone; per-tone gradients override below */
+        background: linear-gradient(90deg, #60A5FA, #3B82F6);
       }
-      .previewSectionTitle{
-        display:flex;
-        align-items:center;
-        gap:10px;
+      .previewBubbleHeaderTitle{
         font-size:13px;
         font-weight:1300;
-        color:#0B1220;
-        letter-spacing:0.2px;
+        letter-spacing:1.2px;
+        text-transform:uppercase;
+        color:#FFFFFF;
+      }
+      .previewBubbleHeaderMeta{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+      }
+      /* Tone-specific header gradients — roughly match the bubble
+         tones from the attached mock (blue for cover, green for
+         description, orange for background, purple for inspection,
+         red/orange for roof/conclusions). */
+      .previewRow.tone-project .previewBubbleHeader{
+        background: linear-gradient(90deg, #60A5FA, #3B82F6);
+      }
+      .previewRow.tone-description .previewBubbleHeader{
+        background: linear-gradient(90deg, #10B981, #059669);
+      }
+      .previewRow.tone-background .previewBubbleHeader{
+        background: linear-gradient(90deg, #F59E0B, #F97316);
+      }
+      .previewRow.tone-inspection .previewBubbleHeader{
+        background: linear-gradient(90deg, #818CF8, #6366F1);
+      }
+      .previewRow.tone-parties .previewBubbleHeader{
+        background: linear-gradient(90deg, #14B8A6, #0EA5E9);
+      }
+      .previewRow.tone-roof .previewBubbleHeader{
+        background: linear-gradient(90deg, #EF4444, #F59E0B);
       }
       .previewStatusDot{
         width:10px;
@@ -3111,17 +3160,17 @@
         border-radius:999px;
         display:inline-block;
         flex-shrink:0;
-        box-shadow: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 3px rgba(148,163,184,0.2);
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.9);
       }
       .previewStatusDot.status-ready{ background:#16A34A; }
       .previewStatusDot.status-partial{ background:#F59E0B; }
       .previewStatusDot.status-empty{ background:#DC2626; }
       .previewStatusLabel{
-        text-transform: uppercase;
-        font-size: 10px;
-        font-weight: 1300;
-        letter-spacing: 0.6px;
-        color: #64748B;
+        text-transform: capitalize;
+        font-size: 12px;
+        font-weight: 1200;
+        letter-spacing: 0.2px;
+        color: rgba(255,255,255,0.92);
       }
       .previewOverrideBadge{
         font-size: 10px;
@@ -3130,30 +3179,21 @@
         letter-spacing: 0.5px;
         padding: 3px 8px;
         border-radius: 999px;
-        background: rgba(99,102,241,0.12);
-        border: 1px solid rgba(99,102,241,0.35);
-        color: #4338CA;
-      }
-      .previewSectionActions{
-        display:flex;
-        flex-wrap:wrap;
-        gap:6px;
-      }
-      .previewSectionActions .btn{
-        font-size: 11px;
-        padding: 6px 12px;
+        background: rgba(255,255,255,0.2);
+        border: 1px solid rgba(255,255,255,0.4);
+        color: #FFFFFF;
       }
       .previewBody{
-        padding: 4px 2px 6px 2px;
+        padding: 16px 22px 8px;
         color: #0B1220;
         line-height: 1.55;
       }
       .previewBodyClamped{
         position: relative;
-        max-height: calc(1.55em * 10 + 12px); /* ~10 lines */
+        max-height: calc(1.55em * 10 + 24px); /* ~10 lines */
         overflow: hidden;
-        -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
-                mask-image: linear-gradient(to bottom, #000 70%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+                mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
       }
       .previewBodyExpanded{
         max-height: none;
@@ -3171,18 +3211,15 @@
         color: #94A3B8;
         font-style: italic;
       }
-      .previewCard{
-        transition: box-shadow 0.15s ease;
-      }
       .previewExpandToggle{
-        margin: 6px auto 0;
-        width: 36px;
-        height: 36px;
+        margin: 4px auto 14px;
+        width: 34px;
+        height: 34px;
         display: flex;
         align-items: center;
         justify-content: center;
         border-radius: 999px;
-        border: 1px solid rgba(148,163,184,0.3);
+        border: 1px solid rgba(148,163,184,0.4);
         background: #FFFFFF;
         color: #475569;
         cursor: pointer;
@@ -3193,6 +3230,7 @@
         border-color: rgba(99,102,241,0.6);
         color: #4338CA;
         background: #F8FAFF;
+        transform: translateY(-1px);
       }
       .previewExpandToggle.expanded{
         border-color: rgba(99,102,241,0.6);
@@ -3203,11 +3241,58 @@
         width: 16px;
         height: 16px;
       }
+      .previewRowActions{
+        display:flex;
+        flex-direction:column;
+        gap:10px;
+        align-self:center;
+        min-width:118px;
+      }
+      .previewActionBtn{
+        padding:10px 18px;
+        border-radius:999px;
+        background:#F1F5F9;
+        border:1px solid rgba(148,163,184,0.3);
+        color:#0B1220;
+        font-size:12px;
+        font-weight:1200;
+        letter-spacing:0.2px;
+        cursor:pointer;
+        transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+        text-align:center;
+      }
+      .previewActionBtn:hover{
+        background:#FFFFFF;
+        border-color: rgba(99,102,241,0.55);
+        box-shadow: 0 6px 14px -8px rgba(2,6,23,0.2);
+      }
       .previewOverrideEditor{
         display:flex;
         flex-direction:column;
         gap:10px;
-        padding: 4px 0 8px 0;
+        padding:16px 22px 18px;
+      }
+      @media (max-width: 900px){
+        .previewRow{
+          grid-template-columns: 1fr;
+          gap:10px;
+        }
+        .previewRowActions{
+          flex-direction:row;
+          flex-wrap:wrap;
+          min-width:0;
+          align-self:stretch;
+          justify-content:flex-end;
+        }
+        .previewActionBtn{
+          flex:1 1 120px;
+        }
+        .previewBubbleHeader{
+          padding:10px 16px;
+        }
+        .previewBody{
+          padding:12px 16px 6px;
+        }
       }
       .previewOverrideTextarea{
         min-height: 180px;

@@ -8137,99 +8137,101 @@ const loadPdfJs = () => {
                       .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 80)), 0);
                     const isOverflowing = lineEstimate > 10;
                     return (
-                      <div className={`reportCard tone-${section.tone} previewCard`} key={section.key}>
-                        <div className="previewSectionHeader">
-                          <div className="previewSectionTitle">
-                            <span className={`previewStatusDot status-${section.status}`} aria-hidden="true" />
-                            <span>{section.label}</span>
-                            <span className="previewStatusLabel">{statusLabel}</span>
-                            {active && <span className="previewOverrideBadge">Override active</span>}
+                      <div className={`previewRow tone-${section.tone}`} key={section.key}>
+                        <div className="previewBubble">
+                          <div className="previewBubbleHeader">
+                            <span className="previewBubbleHeaderTitle">{section.label}</span>
+                            <span className="previewBubbleHeaderMeta">
+                              <span className={`previewStatusDot status-${section.status}`} aria-hidden="true" />
+                              <span className="previewStatusLabel">{statusLabel}</span>
+                              {active && <span className="previewOverrideBadge">Override</span>}
+                            </span>
                           </div>
-                          <div className="previewSectionActions">
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => setReportTab(section.editTab)}
-                              title="Jump to the form fields that feed this section"
-                            >
-                              Edit fields
-                            </button>
-                            <button
-                              type="button"
-                              className="btn"
-                              onClick={() => startPreviewEdit(section)}
-                              title="Lock a custom paragraph that takes priority over the generated text"
-                            >
-                              {section.override ? "Edit override" : "Override"}
-                            </button>
-                            {section.override && (
-                              <button
-                                type="button"
-                                className="btn"
-                                onClick={() => clearPreviewOverride(section.key)}
-                                title="Remove the override so this section regenerates from data"
+                          {isEditing ? (
+                            <div className="previewOverrideEditor">
+                              <textarea
+                                className="inp previewOverrideTextarea"
+                                value={previewDraft}
+                                onChange={(e) => setPreviewDraft(e.target.value)}
+                                placeholder="Type the paragraph you want to lock in for this section…"
+                              />
+                              <div className="previewOverrideEditorActions">
+                                <button type="button" className="btn btnPrimary" onClick={savePreviewEdit}>
+                                  Save override
+                                </button>
+                                <button type="button" className="btn" onClick={cancelPreviewEdit}>
+                                  Cancel
+                                </button>
+                                {section.override && (
+                                  <button type="button" className="btn" onClick={() => clearPreviewOverride(section.key)}>
+                                    Clear override
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div
+                                className={
+                                  "previewBody" +
+                                  (isOverflowing && !isExpanded ? " previewBodyClamped" : "") +
+                                  (isExpanded ? " previewBodyExpanded" : "")
+                                }
                               >
-                                Regenerate
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {isEditing ? (
-                          <div className="previewOverrideEditor">
-                            <textarea
-                              className="inp previewOverrideTextarea"
-                              value={previewDraft}
-                              onChange={(e) => setPreviewDraft(e.target.value)}
-                              placeholder="Type the paragraph you want to lock in for this section…"
-                            />
-                            <div className="previewOverrideEditorActions">
-                              <button type="button" className="btn btnPrimary" onClick={savePreviewEdit}>
-                                Save override
-                              </button>
-                              <button type="button" className="btn" onClick={cancelPreviewEdit}>
-                                Cancel
-                              </button>
-                              {section.override && (
-                                <button type="button" className="btn" onClick={() => clearPreviewOverride(section.key)}>
-                                  Clear override
+                                {(bodyText || "").split(/\n\n+/).map((para, i) => (
+                                  <p key={i} className="previewParagraph">
+                                    {para.split("\n").map((line, j, arr) => (
+                                      <React.Fragment key={j}>
+                                        {line}
+                                        {j < arr.length - 1 && <br />}
+                                      </React.Fragment>
+                                    ))}
+                                  </p>
+                                ))}
+                                {!bodyText && <div className="previewEmptyHint">No content yet for this section.</div>}
+                              </div>
+                              {isOverflowing && (
+                                <button
+                                  type="button"
+                                  className={"previewExpandToggle" + (isExpanded ? " expanded" : "")}
+                                  onClick={() => setPreviewExpandedSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                  aria-label={isExpanded ? "Collapse section" : "Show full section"}
+                                  aria-expanded={isExpanded}
+                                >
+                                  <Icon name={isExpanded ? "chevUp" : "chevDown"} />
                                 </button>
                               )}
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div
-                              className={
-                                "previewBody" +
-                                (isOverflowing && !isExpanded ? " previewBodyClamped" : "") +
-                                (isExpanded ? " previewBodyExpanded" : "")
-                              }
+                            </>
+                          )}
+                        </div>
+                        <div className="previewRowActions">
+                          <button
+                            type="button"
+                            className="previewActionBtn"
+                            onClick={() => setReportTab(section.editTab)}
+                            title="Jump to the form fields that feed this section"
+                          >
+                            Edit Fields
+                          </button>
+                          <button
+                            type="button"
+                            className="previewActionBtn"
+                            onClick={() => startPreviewEdit(section)}
+                            title="Lock a custom paragraph that takes priority over the generated text"
+                          >
+                            {section.override ? "Edit override" : "Override"}
+                          </button>
+                          {section.override && (
+                            <button
+                              type="button"
+                              className="previewActionBtn"
+                              onClick={() => clearPreviewOverride(section.key)}
+                              title="Remove the override so this section regenerates from data"
                             >
-                              {(bodyText || "").split(/\n\n+/).map((para, i) => (
-                                <p key={i} className="previewParagraph">
-                                  {para.split("\n").map((line, j, arr) => (
-                                    <React.Fragment key={j}>
-                                      {line}
-                                      {j < arr.length - 1 && <br />}
-                                    </React.Fragment>
-                                  ))}
-                                </p>
-                              ))}
-                              {!bodyText && <div className="previewEmptyHint">No content yet for this section.</div>}
-                            </div>
-                            {isOverflowing && (
-                              <button
-                                type="button"
-                                className={"previewExpandToggle" + (isExpanded ? " expanded" : "")}
-                                onClick={() => setPreviewExpandedSections(prev => ({ ...prev, [section.key]: !prev[section.key] }))}
-                                aria-label={isExpanded ? "Collapse section" : "Show full section"}
-                                aria-expanded={isExpanded}
-                              >
-                                <Icon name={isExpanded ? "chevUp" : "chevDown"} />
-                              </button>
-                            )}
-                          </>
-                        )}
+                              Regenerate
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
