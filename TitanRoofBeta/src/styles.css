@@ -3136,23 +3136,95 @@
          tones from the attached mock (blue for cover, green for
          description, orange for background, purple for inspection,
          red/orange for roof/conclusions). */
-      .previewRow.tone-project .previewBubbleHeader{
+      .previewRow.tone-project .previewBubbleHeader,
+      .previewBubble.tone-project > .previewBubbleHeader{
         background: linear-gradient(90deg, #60A5FA, #3B82F6);
       }
-      .previewRow.tone-description .previewBubbleHeader{
+      .previewRow.tone-description .previewBubbleHeader,
+      .previewBubble.tone-description > .previewBubbleHeader{
         background: linear-gradient(90deg, #10B981, #059669);
       }
-      .previewRow.tone-background .previewBubbleHeader{
+      .previewRow.tone-background .previewBubbleHeader,
+      .previewBubble.tone-background > .previewBubbleHeader{
         background: linear-gradient(90deg, #F59E0B, #F97316);
       }
-      .previewRow.tone-inspection .previewBubbleHeader{
+      .previewRow.tone-inspection .previewBubbleHeader,
+      .previewBubble.tone-inspection > .previewBubbleHeader{
         background: linear-gradient(90deg, #818CF8, #6366F1);
       }
-      .previewRow.tone-parties .previewBubbleHeader{
+      .previewRow.tone-parties .previewBubbleHeader,
+      .previewBubble.tone-parties > .previewBubbleHeader{
         background: linear-gradient(90deg, #14B8A6, #0EA5E9);
       }
-      .previewRow.tone-roof .previewBubbleHeader{
+      .previewRow.tone-roof .previewBubbleHeader,
+      .previewBubble.tone-roof > .previewBubbleHeader{
         background: linear-gradient(90deg, #EF4444, #F59E0B);
+      }
+      .previewBubble.tone-structure > .previewBubbleHeader{
+        background: linear-gradient(90deg, #1E3A5F, #2563EB);
+      }
+      .previewBubble.tone-site > .previewBubbleHeader{
+        background: linear-gradient(90deg, #22C55E, #84CC16);
+      }
+      .previewBubble.tone-access > .previewBubbleHeader{
+        background: linear-gradient(90deg, #F59E0B, #F97316);
+      }
+      .previewBubble.tone-weather > .previewBubbleHeader{
+        background: linear-gradient(90deg, #0EA5E9, #38BDF8);
+      }
+      /* Form-bubble variant used by Project/Description/Background/
+         Inspection tabs. Same bubble chassis as the Preview tab's text
+         bubbles, but the body now hosts form inputs instead of
+         generated paragraphs. The title row gains an inline subtitle
+         + a collapse affordance. */
+      .reportFormBubble{
+        margin-bottom: 0;
+      }
+      .reportFormBubble + .reportFormBubble{
+        margin-top: 0; /* reportContent's gap handles spacing */
+      }
+      .reportFormBubbleHeaderTitleGroup{
+        display:flex;
+        flex-direction:column;
+        gap:2px;
+        min-width:0;
+      }
+      .reportFormBubbleHeaderSubtitle{
+        font-size:11px;
+        font-weight:1100;
+        letter-spacing:0.3px;
+        color: rgba(255,255,255,0.85);
+        text-transform:none;
+      }
+      .reportBubbleCollapseBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:28px;
+        height:28px;
+        border-radius:999px;
+        border:1px solid rgba(255,255,255,0.45);
+        background: rgba(255,255,255,0.14);
+        color:#FFFFFF;
+        cursor:pointer;
+        font-size:14px;
+        line-height:1;
+        transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+      }
+      .reportBubbleCollapseBtn:hover{
+        background: rgba(255,255,255,0.26);
+        border-color: rgba(255,255,255,0.75);
+      }
+      .reportBubbleCollapseBtn.collapsed{
+        transform: rotate(-90deg);
+      }
+      .reportFormBubbleBody{
+        padding: 18px 22px 18px;
+      }
+      @media (max-width: 900px){
+        .reportFormBubbleBody{
+          padding: 14px 16px 14px;
+        }
       }
       .previewStatusDot{
         width:10px;

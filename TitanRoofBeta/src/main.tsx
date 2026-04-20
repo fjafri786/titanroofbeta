@@ -192,6 +192,7 @@ const loadPdfJs = () => {
         { key: "project", label: "Project" },
         { key: "description", label: "Description" },
         { key: "background", label: "Background" },
+        { key: "weather", label: "Weather" },
         { key: "inspection", label: "Inspection" }
       ];
 
@@ -257,6 +258,30 @@ const loadPdfJs = () => {
         diagramReference: {
           include: false,
           text: "The approximate locations of the observed conditions were plotted on a roof diagram. Refer to Attachment D – Roof Diagram."
+        },
+        // v4.1 additions: standard Haag phrases that appear in most
+        // reports. Toggle these off if a particular file doesn't need
+        // them. Variants are selected via the Inspection Details tab
+        // (damageFound, bondCondition, etc.).
+        spatterDefinition: {
+          include: true,
+          text: "Spatter marks are spots where grime or oxidation has been cleaned from a surface by the impact of a hailstone. Spatter marks may remain visible for one to two years, or more, depending on surface character and weather exposure."
+        },
+        thresholdDamage: {
+          include: true,
+          text: "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface. The threshold for 3-tab shingles is approximately 1 inch. Standing seam metal roof panels are more resistant to hailstone impact than composition shingles."
+        },
+        bondCondition: {
+          include: true,
+          text: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was found to be in fair condition. Shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age."
+        },
+        weathering: {
+          include: true,
+          text: "The roof exhibited weathering consistent with its estimated age, including granule erosion, surface oxidation, and typical wear along ridges and hips. Observed conditions were distributed across all roof slopes and are characteristic of age-related deterioration rather than a single weather event."
+        },
+        damageSummary: {
+          include: true,
+          text: "Based on our inspection, we found no evidence of hail-caused or wind-caused damage to the roof covering that would necessitate repair or replacement. The observed conditions are consistent with normal aging and weathering of the roof materials."
         }
       });
 
@@ -381,7 +406,27 @@ const loadPdfJs = () => {
           roofAppurtenances: [],
           eagleView: "",
           roofArea: "",
-          attachmentLetter: ""
+          attachmentLetter: "",
+          // v4.1: shingle product details used for the Haag
+          // description paragraph ("surfaced with [color] granules",
+          // threshold paragraph variants, etc.).
+          shingleManufacturer: "",
+          shingleProduct: "",
+          shingleClass: "",        // "Laminated" | "3-Tab" | "Architectural" | other
+          shingleMat: "",          // "Fiberglass" | "Organic"
+          granuleColor: "",
+          roofAge: "",             // free text; e.g., "approximately 8 years"
+          roofLayers: "",          // "1" | "2" | "Unknown"
+          underlayment: "",
+          sidingByElevation: {
+            north: "",
+            south: "",
+            east: "",
+            west: ""
+          },
+          fenceType: "",
+          hvacPresent: "",
+          hvacLocation: ""
         },
         background: {
           dateOfLoss: "",
@@ -390,7 +435,34 @@ const loadPdfJs = () => {
           notes: "",
           accessObtained: "",
           limitations: [],
-          limitationsOther: ""
+          limitationsOther: "",
+          // v4.1: claim and document context captured from insured /
+          // claim file. Feeds the Background paragraph and supports the
+          // "documents reviewed" sentence in the opening narrative.
+          claimNumber: "",
+          carrier: "",
+          policyType: "",
+          priorClaims: "",
+          documentsReviewed: []
+        },
+        weather: {
+          // NCEI Storm Events Database / SPC search results captured
+          // on-site. Feeds the auto-generated Weather Data paragraph.
+          searchRadius: "",          // miles
+          searchStart: "",
+          searchEnd: "",
+          hailReportCount: "",
+          windReportCount: "",
+          nearestHailDistance: "",
+          nearestHailDirection: "",
+          nearestHailSize: "",       // inches
+          nearestHailDate: "",
+          nearestWindDistance: "",
+          nearestWindDirection: "",
+          nearestWindSpeed: "",      // mph / knots
+          nearestWindDate: "",
+          weatherStation: "",
+          notes: ""
         },
         writer: {
           letterhead: "",
@@ -410,7 +482,24 @@ const loadPdfJs = () => {
           performed: "",
           roofCondition: "fair",
           components: buildInspectionDefaults(),
-          paragraphs: buildInspectionParagraphDefaults()
+          paragraphs: buildInspectionParagraphDefaults(),
+          // v4.1: detail fields surfaced in actual Haag reports.
+          // bondCondition feeds the Bond Condition paragraph;
+          // spatterMarks feeds the Spatter Marks observation; the
+          // test-square grid captures per-square bruise/puncture counts
+          // rather than aggregating them.
+          bondCondition: "",           // "good" | "fair" | "poor"
+          spatterMarksObserved: "",    // "yes" | "no" | "not inspected"
+          spatterMarksSurfaces: [],
+          spatterMarksNotes: "",
+          testSquares: {
+            north: { bruises: "", punctures: "", notes: "" },
+            south: { bruises: "", punctures: "", notes: "" },
+            east:  { bruises: "", punctures: "", notes: "" },
+            west:  { bruises: "", punctures: "", notes: "" }
+          },
+          damageFound: "",              // "yes" | "no" | "mixed"
+          variants: {}                  // per-paragraph variant id keyed by paragraph key
         },
         overrides: {
           coverLetter: "",
@@ -449,6 +538,10 @@ const loadPdfJs = () => {
               ...defaults.description.exteriorFinishByElevation,
               ...(source.description?.exteriorFinishByElevation || {})
             },
+            sidingByElevation: {
+              ...defaults.description.sidingByElevation,
+              ...(source.description?.sidingByElevation || {})
+            },
             trimComponents: normalizeList(source.description?.trimComponents),
             additionalSlopes: normalizeList(source.description?.additionalSlopes),
             roofAppurtenances: normalizeList(source.description?.roofAppurtenances)
@@ -458,7 +551,12 @@ const loadPdfJs = () => {
             ...(source.background || {}),
             concerns: normalizeList(source.background?.concerns),
             limitations: normalizeList(source.background?.limitations),
-            limitationsOther: typeof source.background?.limitationsOther === "string" ? source.background.limitationsOther : ""
+            limitationsOther: typeof source.background?.limitationsOther === "string" ? source.background.limitationsOther : "",
+            documentsReviewed: normalizeList(source.background?.documentsReviewed)
+          },
+          weather: {
+            ...defaults.weather,
+            ...(source.weather || {})
           },
           writer: {
             ...defaults.writer,
@@ -475,6 +573,15 @@ const loadPdfJs = () => {
             paragraphs: {
               ...defaults.inspection.paragraphs,
               ...(source.inspection?.paragraphs || {})
+            },
+            spatterMarksSurfaces: normalizeList(source.inspection?.spatterMarksSurfaces),
+            testSquares: {
+              ...defaults.inspection.testSquares,
+              ...(source.inspection?.testSquares || {})
+            },
+            variants: {
+              ...defaults.inspection.variants,
+              ...(source.inspection?.variants || {})
             }
           },
           overrides: {
@@ -1147,6 +1254,11 @@ const loadPdfJs = () => {
         // Preview bubbles clamp their body to ~10 lines by default; this
         // tracks which sections the user has expanded to see the full text.
         const [previewExpandedSections, setPreviewExpandedSections] = useState<Record<string, boolean>>({});
+        // Per-section collapsed state for the Project/Description/
+        // Background/Inspection form bubbles. Keys are stable IDs
+        // ("projectInfo", "parties", "structure", …). Missing keys
+        // default to expanded; toggling collapses/expands the body.
+        const [reportSectionsCollapsed, setReportSectionsCollapsed] = useState<Record<string, boolean>>({});
         // Description form sub-navigation. "all" shows every card stacked
         // (previous behavior); picking a specific sub-tab shows only that
         // sub-section so the inputs inside never get cut off.
@@ -2544,6 +2656,38 @@ const loadPdfJs = () => {
           const scopeName = reportData.project.projectName?.trim() || residenceName?.trim() || "residence";
           const scopeText = `We inspected the ${scopeName} property exterior and roof components, and documented observed conditions paying particular attention to evidence of hailstone impact and wind-related conditions. Photographs of representative conditions are attached to this report.`;
 
+          // v4.1 auto-generated text for the new standard paragraphs.
+          // Each of these pulls from the Inspection Details tab so the
+          // narrative adapts to what the engineer captured on-site.
+          const insp: any = reportData.inspection;
+          const desc: any = reportData.description;
+          const bondLookup: Record<string, string> = {
+            good: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in good condition. Shingles resisted lifting and the sealant strips were intact and adhered.",
+            fair: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in fair condition. Shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age.",
+            poor: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in poor condition. Several shingles could be lifted by hand or with minimal effort, indicating weakened adhesive bonds.",
+            "not-evaluated": "The adhesive bond condition was not evaluated as part of this inspection."
+          };
+          const bondConditionText = bondLookup[insp.bondCondition as string]
+            || (reportData.inspection.paragraphs?.bondCondition?.text)
+            || "";
+          const shingleClass = (desc.shingleClass || "").toLowerCase();
+          const thresholdText = shingleClass === "3-tab"
+            ? "The threshold size for damage to 3-tab composition shingles is a frozen-solid hailstone of approximately 1 inch impacting perpendicular to the roof surface."
+            : shingleClass === "laminated" || shingleClass === "architectural"
+              ? "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface. The threshold for 3-tab shingles is approximately 1 inch."
+              : (reportData.inspection.paragraphs?.thresholdDamage?.text || "");
+          const roofAge = (desc.roofAge || "").trim();
+          const weatheringText = roofAge
+            ? `The roof exhibited weathering consistent with its estimated age of ${roofAge}. Observed conditions included granule erosion, surface oxidation, and typical wear along ridges and hips. These conditions were distributed across all roof slopes and are characteristic of age-related deterioration rather than a single weather event.`
+            : (reportData.inspection.paragraphs?.weathering?.text || "");
+          const damageFound = (insp.damageFound || "").toLowerCase();
+          const damageSummaryText = damageFound === "yes"
+            ? "Based on our inspection, we identified storm-caused conditions to identified components. The affected areas are identified on the attached roof diagram. The observed damage is consistent with the reported weather event."
+            : damageFound === "no"
+              ? "Based on our inspection, we found no evidence of hail-caused or wind-caused damage to the roof covering that would necessitate repair or replacement. The observed conditions are consistent with normal aging and weathering of the roof materials."
+              : (reportData.inspection.paragraphs?.damageSummary?.text || "");
+          const spatterText = (reportData.inspection.paragraphs?.spatterDefinition?.text || "");
+
           return [
             {
               key: "general",
@@ -2569,9 +2713,20 @@ const loadPdfJs = () => {
                 { key: "windRoof", title: "Roof wind findings", text: roofWindText },
                 { key: "testSquares", title: "Test squares", text: testSquaresText }
               ]
+            },
+            {
+              key: "standardPhrases",
+              label: "Standard Phrases",
+              sections: [
+                { key: "spatterDefinition", title: "Spatter mark definition", text: spatterText },
+                { key: "thresholdDamage", title: "Hail damage threshold", text: thresholdText },
+                { key: "bondCondition", title: "Bond condition", text: bondConditionText },
+                { key: "weathering", title: "Weathering", text: weatheringText },
+                { key: "damageSummary", title: "Damage summary", text: damageSummaryText }
+              ]
             }
           ];
-        }, [pageItems, reportData.inspection, reportData.project.projectName, residenceName]);
+        }, [pageItems, reportData.inspection, reportData.description, reportData.project.projectName, residenceName]);
 
         const inspectionParagraphsForExport = useMemo(() => (
           inspectionGeneratedSections.flatMap(group => group.sections.map(section => {
@@ -4645,7 +4800,38 @@ const loadPdfJs = () => {
           if(reportData.description.shingleLength || reportData.description.shingleExposure){
             const length = reportData.description.shingleLength ? reportData.description.shingleLength.replace("width", "length") : "standard length";
             const exposure = reportData.description.shingleExposure ? reportData.description.shingleExposure.replace("exposure", "exposure") : "";
-            roofSentences.push(`The roof was surfaced with laminated asphalt shingles measuring ${length}${exposure ? ` with ${exposure}` : ""}.`);
+            const shingleTypeWord = (reportData.description as any).shingleClass
+              ? (reportData.description as any).shingleClass.toLowerCase() + " asphalt"
+              : "laminated asphalt";
+            roofSentences.push(`The roof was surfaced with ${shingleTypeWord} shingles measuring ${length}${exposure ? ` with ${exposure}` : ""}.`);
+          }
+
+          const shingleManufacturer = (reportData.description as any).shingleManufacturer?.trim();
+          const shingleProduct = (reportData.description as any).shingleProduct?.trim();
+          if(shingleManufacturer || shingleProduct){
+            const parts = [shingleManufacturer, shingleProduct].filter(Boolean).join(" ");
+            roofSentences.push(`The shingles were manufactured by ${parts}.`);
+          }
+          const granuleColor = (reportData.description as any).granuleColor?.trim();
+          if(granuleColor){
+            roofSentences.push(`The shingle surfaces were finished with ${granuleColor.toLowerCase()} granules.`);
+          }
+          const shingleMat = (reportData.description as any).shingleMat?.trim();
+          if(shingleMat && shingleMat !== "Unknown"){
+            roofSentences.push(`The shingles were reinforced with a ${shingleMat.toLowerCase()} mat.`);
+          }
+          const roofAge = (reportData.description as any).roofAge?.trim();
+          if(roofAge){
+            roofSentences.push(`The roof covering was ${roofAge}.`);
+          }
+          const roofLayers = (reportData.description as any).roofLayers?.trim();
+          if(roofLayers && roofLayers !== "Unknown"){
+            const layerPhrase = roofLayers === "1" ? "a single layer" : roofLayers === "2" ? "two layers (overlay)" : `${roofLayers} layers`;
+            roofSentences.push(`We observed ${layerPhrase} of roofing.`);
+          }
+          const underlayment = (reportData.description as any).underlayment?.trim();
+          if(underlayment){
+            roofSentences.push(`The visible underlayment was ${underlayment.toLowerCase()}.`);
           }
 
           if(reportData.description.ridgeWidth || reportData.description.ridgeExposure){
@@ -4748,7 +4934,147 @@ const loadPdfJs = () => {
           }
           const limitationsOther = reportData.background.limitationsOther?.trim();
           if(limitationsOther) sentences.push(limitationsOther);
+          // v4.1 additions: claim identifiers, prior claims, documents
+          // reviewed, and verbatim party statements so the Background
+          // paragraph captures the full claim context.
+          const bg: any = reportData.background;
+          const claimBits: string[] = [];
+          if(bg.claimNumber?.trim()) claimBits.push(`claim number ${bg.claimNumber.trim()}`);
+          if(bg.carrier?.trim()) claimBits.push(`insured by ${bg.carrier.trim()}`);
+          if(bg.policyType?.trim()) claimBits.push(`${bg.policyType.trim()} policy`);
+          if(claimBits.length) sentences.push(`The claim was ${claimBits.join("; ")}.`);
+          if(bg.priorClaims?.trim()) sentences.push(`Prior claims / repairs: ${bg.priorClaims.trim()}`);
+          if((bg.documentsReviewed || []).length){
+            sentences.push(`Documents reviewed included ${joinReadableList(bg.documentsReviewed.map((d: string) => d.toLowerCase()))}.`);
+          }
+          const statementParties = (reportData.project.parties || [])
+            .filter((p: any) => (p?.notes || "").trim() && !p?.excludeFromNarrative);
+          if(statementParties.length){
+            const attributed = statementParties.map((p: any) => {
+              const attribution = [p.name?.trim(), p.role?.trim()].filter(Boolean).join(", ");
+              return `${attribution || "A party"} stated: "${p.notes.trim()}"`;
+            });
+            sentences.push(attributed.join(" "));
+          }
           return sentences.join(" ");
+        };
+        const weatherParagraph = () => {
+          const w: any = (reportData as any).weather || {};
+          const has = (v: unknown) => v != null && String(v).trim() !== "";
+          if(!has(w.searchRadius) && !has(w.searchStart) && !has(w.searchEnd) && !has(w.hailReportCount) && !has(w.windReportCount)){
+            return "";
+          }
+          const parts: string[] = [];
+          const radius = has(w.searchRadius) ? `${w.searchRadius}-mile` : "";
+          const range = has(w.searchStart) && has(w.searchEnd) ? ` for the period ${w.searchStart} through ${w.searchEnd}` : "";
+          parts.push(
+            `We searched the NCEI Storm Events Database${radius ? ` within a ${radius} radius of the property` : " within a reasonable radius of the property"}${range}.`
+          );
+          const hailN = has(w.hailReportCount) ? w.hailReportCount : "0";
+          const windN = has(w.windReportCount) ? w.windReportCount : "0";
+          parts.push(`There were ${hailN} reports of hail and ${windN} reports of thunderstorm wind gusts during this period.`);
+          if(has(w.nearestHailSize) || has(w.nearestHailDistance) || has(w.nearestHailDate)){
+            const size = has(w.nearestHailSize) ? `${w.nearestHailSize} inch` : "hailstones";
+            const dist = has(w.nearestHailDistance) ? ` approximately ${w.nearestHailDistance} miles` : "";
+            const dir = has(w.nearestHailDirection) ? ` ${w.nearestHailDirection}` : "";
+            const date = has(w.nearestHailDate) ? ` on ${w.nearestHailDate}` : "";
+            parts.push(`The nearest hail report was located${dist}${dir} of the residence and documented ${size} hailstones${date}.`);
+          }
+          if(has(w.nearestWindSpeed) || has(w.nearestWindDistance) || has(w.nearestWindDate)){
+            const speed = has(w.nearestWindSpeed) ? `${w.nearestWindSpeed}` : "gusts";
+            const dist = has(w.nearestWindDistance) ? ` approximately ${w.nearestWindDistance} miles` : "";
+            const dir = has(w.nearestWindDirection) ? ` ${w.nearestWindDirection}` : "";
+            const date = has(w.nearestWindDate) ? ` on ${w.nearestWindDate}` : "";
+            parts.push(`The nearest thunderstorm wind report was located${dist}${dir} of the residence and documented ${speed}${has(w.nearestWindSpeed) ? " winds" : ""}${date}.`);
+          }
+          if(has(w.weatherStation)){
+            parts.push(`Local climatological data were reviewed from the ${w.weatherStation} weather station.`);
+          }
+          if(has(w.notes)) parts.push(w.notes.trim());
+          return parts.join(" ");
+        };
+        const executiveSummaryParagraph = () => {
+          // Synthesizes the inspection findings into a short summary
+          // suitable for the opening page of the report. Falls back to
+          // a stub when no diagram items or inspection details exist.
+          const tsItems = pageItems.filter(item => item.type === "ts");
+          const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
+          const windItems = pageItems.filter(item => item.type === "wind");
+          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
+          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
+          const bg: any = reportData.background;
+          const inspectionDate = reportData.project.inspectionDate?.trim();
+          const addressLine = formatAddressLine(reportData.project);
+          const dateOfLoss = bg.dateOfLoss?.trim();
+          const bits: string[] = [];
+          bits.push(
+            `This report summarizes our findings from an engineering inspection of ${addressLine && addressLine !== "—" ? addressLine : "the captioned residence"}${inspectionDate ? ` conducted on ${inspectionDate}` : ""}${dateOfLoss ? ` following a reported weather event on ${dateOfLoss}` : ""}.`
+          );
+          const hailFound = tsBruiseTotal > 0;
+          const windFound = (creasedTotal + tornTotal) > 0;
+          const damage = (reportData.inspection as any).damageFound;
+          if(hailFound || windFound){
+            const found: string[] = [];
+            if(hailFound) found.push(`${tsBruiseTotal} hail-caused bruise${tsBruiseTotal === 1 ? "" : "s"} in our test areas`);
+            if(windFound){
+              const wbits: string[] = [];
+              if(creasedTotal) wbits.push(`${creasedTotal} creased`);
+              if(tornTotal) wbits.push(`${tornTotal} torn or missing`);
+              found.push(`${wbits.join(" and ")} shingle${(creasedTotal + tornTotal) === 1 ? "" : "s"} from wind`);
+            }
+            bits.push(`We identified ${found.join("; and ")}.`);
+          } else if(damage === "no"){
+            bits.push("We did not identify hail- or wind-caused damage to the roof covering that would necessitate repair or replacement.");
+          }
+          return bits.join(" ");
+        };
+        const discussionParagraph = () => {
+          // Bridges the observed conditions to the weather data so the
+          // reader sees the logical link between what the engineer saw
+          // on-site and the NCEI/SPC records. Lightweight by design —
+          // the engineer tailors the final language in Override mode.
+          const w: any = (reportData as any).weather || {};
+          const has = (v: unknown) => v != null && String(v).trim() !== "";
+          const tsItems = pageItems.filter(item => item.type === "ts");
+          const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
+          const damageFound = (reportData.inspection as any).damageFound;
+          const bondCondition = (reportData.inspection as any).bondCondition;
+          const spatter = (reportData.inspection as any).spatterMarksObserved;
+          const lines: string[] = [];
+          // Weather linkage
+          if(has(w.nearestHailSize)){
+            const size = parseFloat(w.nearestHailSize);
+            const threshold = 1.25;
+            if(!isNaN(size)){
+              if(size >= threshold){
+                lines.push(`The nearest documented hail report of ${w.nearestHailSize} inches meets or exceeds the Haag damage threshold of approximately 1-1/4 inches for laminated composition shingles.`);
+              } else {
+                lines.push(`The nearest documented hail report of ${w.nearestHailSize} inches is below the Haag damage threshold of approximately 1-1/4 inches for laminated composition shingles.`);
+              }
+            }
+          }
+          // Inspection synthesis
+          if(tsBruiseTotal > 0){
+            lines.push(`Bruises observed in our test areas exhibited fractured reinforcements consistent with hailstone impact, supporting a finding of hail-caused damage.`);
+          } else if(tsItems.length){
+            lines.push(`No bruises or punctures consistent with hailstone impact were found in our test areas, indicating that the observed surface variations are characteristic of normal weathering rather than impact damage.`);
+          }
+          if(bondCondition === "poor"){
+            lines.push(`The adhesive bond of field shingles was found to be in poor condition; however, weakened bonds alone are not diagnostic of a specific weather event and must be interpreted alongside other evidence.`);
+          } else if(bondCondition === "good"){
+            lines.push(`The adhesive bond of field shingles was intact throughout the sampled areas, indicating the roof covering has not been subjected to a sustained wind uplift event.`);
+          }
+          if(spatter === "yes"){
+            lines.push(`Spatter marks were observed on soft-metal surfaces adjacent to the residence, indicating that hailstones did fall at the property even where shingle-level damage was not evident.`);
+          } else if(spatter === "no"){
+            lines.push(`No spatter marks were observed on soft-metal surfaces, which can indicate that either recent hailstones were insufficient to produce spatter or that any spatter has weathered away.`);
+          }
+          if(damageFound === "no"){
+            lines.push(`On balance, the observed conditions do not support a finding of storm-caused damage to the roof covering.`);
+          } else if(damageFound === "yes"){
+            lines.push(`On balance, the observed conditions support a finding of storm-caused damage to the identified components.`);
+          }
+          return lines.join(" ");
         };
         const coverLetterParagraph = () => {
           const writer = reportData.writer;
@@ -4841,6 +5167,64 @@ const loadPdfJs = () => {
           }
           return "empty";
         };
+        // Shared form-bubble chassis used by the Project / Description /
+        // Background / Inspection tabs. Same visual container as the
+        // Preview tab's text bubbles — gradient header, status dot,
+        // collapse toggle — but the body hosts form inputs instead of
+        // generated paragraphs. Status comes from each tab's existing
+        // completeness logic. Collapsed state is tracked by sectionKey
+        // in reportSectionsCollapsed; missing keys default to expanded.
+        const renderReportBubble = ({
+          tone,
+          title,
+          subtitle,
+          status,
+          sectionKey,
+          children,
+        }: {
+          tone: string;
+          title: React.ReactNode;
+          subtitle?: React.ReactNode;
+          status: "ready" | "partial" | "empty";
+          sectionKey: string;
+          children: React.ReactNode;
+        }) => {
+          const collapsed = !!reportSectionsCollapsed[sectionKey];
+          const statusLabel = status === "ready" ? "Ready" : status === "partial" ? "In progress" : "Empty";
+          const toggle = () =>
+            setReportSectionsCollapsed(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+          return (
+            <div className={`previewBubble reportFormBubble tone-${tone}`}>
+              <div className="previewBubbleHeader">
+                <span className="reportFormBubbleHeaderTitleGroup">
+                  <span className="previewBubbleHeaderTitle">{title}</span>
+                  {subtitle ? (
+                    <span className="reportFormBubbleHeaderSubtitle">{subtitle}</span>
+                  ) : null}
+                </span>
+                <span className="previewBubbleHeaderMeta">
+                  <span className={`previewStatusDot status-${status}`} aria-hidden="true" />
+                  <span className="previewStatusLabel">{statusLabel}</span>
+                  <button
+                    type="button"
+                    className={"reportBubbleCollapseBtn" + (collapsed ? " collapsed" : "")}
+                    onClick={toggle}
+                    aria-expanded={!collapsed}
+                    aria-label={collapsed ? "Expand section" : "Collapse section"}
+                    title={collapsed ? "Expand" : "Collapse"}
+                  >
+                    {collapsed ? "▸" : "▾"}
+                  </button>
+                </span>
+              </div>
+              {!collapsed && (
+                <div className="previewBody reportFormBubbleBody">
+                  {children}
+                </div>
+              )}
+            </div>
+          );
+        };
         const buildPreviewSections = () => {
           const overrides = reportData.overrides;
           const inspectionBody = inspectionGeneratedSections
@@ -4851,6 +5235,9 @@ const loadPdfJs = () => {
               return `${group.label}\n${body}`;
             })
             .join("\n\n");
+          const weatherText = weatherParagraph();
+          const discussionText = discussionParagraph();
+          const executiveSummaryText = executiveSummaryParagraph();
           return [
             {
               key: "coverLetter",
@@ -4860,6 +5247,15 @@ const loadPdfJs = () => {
               generated: coverLetterParagraph(),
               override: overrides.coverLetter || "",
               status: previewSectionStatus("coverLetter")
+            },
+            {
+              key: "executiveSummary",
+              label: "Executive Summary",
+              tone: "project",
+              editTab: PREVIEW_EDIT_TAB.coverLetter,
+              generated: executiveSummaryText,
+              override: (overrides as any).executiveSummary || "",
+              status: executiveSummaryText.trim() ? "ready" : "partial"
             },
             {
               key: "description",
@@ -4880,6 +5276,15 @@ const loadPdfJs = () => {
               status: previewSectionStatus("background")
             },
             {
+              key: "weather",
+              label: "Weather Data",
+              tone: "background",
+              editTab: "weather",
+              generated: weatherText || "No weather data has been entered yet.",
+              override: (overrides as any).weather || "",
+              status: weatherText.trim() ? "ready" : "empty"
+            },
+            {
               key: "inspection",
               label: "Inspection",
               tone: "inspection",
@@ -4887,6 +5292,15 @@ const loadPdfJs = () => {
               generated: inspectionBody || "No inspection data available yet.",
               override: overrides.inspection || "",
               status: previewSectionStatus("inspection")
+            },
+            {
+              key: "discussion",
+              label: "Discussion",
+              tone: "inspection",
+              editTab: PREVIEW_EDIT_TAB.inspection,
+              generated: discussionText || "Discussion will be generated once inspection findings and weather data are entered.",
+              override: (overrides as any).discussion || "",
+              status: discussionText.trim() ? "ready" : "partial"
             },
             {
               key: "conclusions",
@@ -8115,12 +8529,6 @@ const loadPdfJs = () => {
             <div className="reportContent">
               {reportTab === "preview" && (
                 <>
-                  <div className="reportCard tone-inspection">
-                    <div className="reportSectionTitle">Live Report Preview</div>
-                    <div className="reportCardSubtitle">
-                      Each section below is assembled from your diagram items and Report fields. Use <b>Edit</b> to jump to the form for that section, <b>Override</b> to lock a custom paragraph, or <b>Regenerate</b> to clear the override and pull the latest data.
-                    </div>
-                  </div>
                   {buildPreviewSections().map(section => {
                     const active = section.override && !previewEditing;
                     const bodyText = section.override || section.generated;
@@ -8238,97 +8646,125 @@ const loadPdfJs = () => {
                 </>
               )}
 
-              {reportTab === "project" && (
+              {reportTab === "project" && (() => {
+                // Completion signals used by the bubble status dots:
+                // a filled "name + address + date" trio marks the
+                // Project bubble Ready; a single party with name and
+                // role marks Parties Ready. Partial = at least one
+                // input; empty = nothing entered.
+                const p = reportData.project;
+                const has = (v: unknown) => v != null && String(v).trim() !== "";
+                const projectKeys = [has(residenceName), has(p.address), has(p.inspectionDate)];
+                const projectFilled = projectKeys.filter(Boolean).length;
+                const projectStatus: "ready" | "partial" | "empty" =
+                  projectFilled === projectKeys.length ? "ready" :
+                  projectFilled > 0 ? "partial" : "empty";
+                const partiesStatus: "ready" | "partial" | "empty" =
+                  !p.parties.length ? "empty" :
+                  p.parties.some(x => has(x.name) && has(x.role)) ? "ready" : "partial";
+                return (
                 <>
-                  <div className="reportCard tone-project">
-                    <div className="reportSectionTitle">Project Information</div>
-                    <div className="reportCardSubtitle">
-                      Core identifiers used for the title page and file references on the exported Haag-style report.
-                    </div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Report / Claim / Job #</div>
-                        <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateReportSection("project", "reportNumber", e.target.value)} placeholder="Enter number" />
-                      </div>
-                      <div>
-                        <div className="lbl">Project Name</div>
-                        <input className="inp" value={residenceName} onChange={(e)=>updateProjectName(e.target.value)} placeholder="Morris residence" />
-                      </div>
-                      <div>
-                        <div className="lbl">Property Address</div>
-                        <input className="inp" value={reportData.project.address} onChange={(e)=>updateReportSection("project", "address", e.target.value)} placeholder="Street address" />
-                      </div>
-                      <div>
-                        <div className="lbl">City</div>
-                        <input className="inp" value={reportData.project.city} onChange={(e)=>updateReportSection("project", "city", e.target.value)} placeholder="City" />
-                      </div>
-                      <div>
-                        <div className="lbl">State</div>
-                        <input className="inp" value={reportData.project.state} onChange={(e)=>updateReportSection("project", "state", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">ZIP</div>
-                        <input className="inp" value={reportData.project.zip} onChange={(e)=>updateReportSection("project", "zip", e.target.value)} placeholder="Zip" />
-                      </div>
-                      <div>
-                        <div className="lbl">Inspection Date</div>
-                        <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">Primary Facing Direction (from diagram)</div>
-                        <div className="inlineTag">{frontFaces}</div>
-                      </div>
-                      <div>
-                        <div className="lbl">General Orientation</div>
-                        <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
-                          <option value="">Select</option>
-                          {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="reportCard tone-parties">
-                    <div className="reportSectionTitle">Parties Present</div>
-                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
-                      <div className="tiny">List everyone present during the inspection.</div>
-                      <button className="btn btnPrimary" type="button" onClick={addParty}>Add Person</button>
-                    </div>
-                    <div style={{display:"flex", flexDirection:"column", gap:12}}>
-                      {reportData.project.parties.map(person => (
-                        <div key={person.id} className="personRow">
-                          <div>
-                            <div className="lbl">Name</div>
-                            <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Name" />
-                          </div>
-                          <div>
-                            <div className="lbl">Role</div>
-                            <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
-                              <option value="">Select</option>
-                              {PARTY_ROLES.map(role => (
-                                <option key={role} value={role}>{role}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Company</div>
-                            <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company (optional)" />
-                          </div>
-                          <div>
-                            <div className="lbl">Contact</div>
-                            <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone/email (optional)" />
-                          </div>
-                          <div className="personActions">
-                            <button className="btn btnDanger" type="button" onClick={() => removeParty(person.id)}>Remove</button>
-                          </div>
+                  {renderReportBubble({
+                    tone: "project",
+                    title: "Project Information",
+                    subtitle: "Core identifiers used for the title page and file references on the exported Haag-style report.",
+                    status: projectStatus,
+                    sectionKey: "project.info",
+                    children: (
+                      <div className="reportGrid">
+                        <div>
+                          <div className="lbl">Report / Claim / Job #</div>
+                          <input className="inp" value={reportData.project.reportNumber} onChange={(e)=>updateReportSection("project", "reportNumber", e.target.value)} placeholder="Enter number" />
                         </div>
-                      ))}
-                      {!reportData.project.parties.length && (
-                        <div className="tiny">No parties added yet.</div>
-                      )}
-                    </div>
-                  </div>
+                        <div>
+                          <div className="lbl">Project Name</div>
+                          <input className="inp" value={residenceName} onChange={(e)=>updateProjectName(e.target.value)} placeholder="Morris residence" />
+                        </div>
+                        <div>
+                          <div className="lbl">Property Address</div>
+                          <input className="inp" value={reportData.project.address} onChange={(e)=>updateReportSection("project", "address", e.target.value)} placeholder="Street address" />
+                        </div>
+                        <div>
+                          <div className="lbl">City</div>
+                          <input className="inp" value={reportData.project.city} onChange={(e)=>updateReportSection("project", "city", e.target.value)} placeholder="City" />
+                        </div>
+                        <div>
+                          <div className="lbl">State</div>
+                          <input className="inp" value={reportData.project.state} onChange={(e)=>updateReportSection("project", "state", e.target.value)} />
+                        </div>
+                        <div>
+                          <div className="lbl">ZIP</div>
+                          <input className="inp" value={reportData.project.zip} onChange={(e)=>updateReportSection("project", "zip", e.target.value)} placeholder="Zip" />
+                        </div>
+                        <div>
+                          <div className="lbl">Inspection Date</div>
+                          <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
+                        </div>
+                        <div>
+                          <div className="lbl">Primary Facing Direction (from diagram)</div>
+                          <div className="inlineTag">{frontFaces}</div>
+                        </div>
+                        <div>
+                          <div className="lbl">General Orientation</div>
+                          <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
+                            <option value="">Select</option>
+                            {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "parties",
+                    title: "Parties Present",
+                    subtitle: "List everyone present during the inspection.",
+                    status: partiesStatus,
+                    sectionKey: "project.parties",
+                    children: (
+                      <>
+                        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+                          <div className="tiny">{reportData.project.parties.length} {reportData.project.parties.length === 1 ? "person" : "people"} listed</div>
+                          <button className="btn btnPrimary" type="button" onClick={addParty}>Add Person</button>
+                        </div>
+                        <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                          {reportData.project.parties.map(person => (
+                            <div key={person.id} className="personRow">
+                              <div>
+                                <div className="lbl">Name</div>
+                                <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Name" />
+                              </div>
+                              <div>
+                                <div className="lbl">Role</div>
+                                <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
+                                  <option value="">Select</option>
+                                  {PARTY_ROLES.map(role => (
+                                    <option key={role} value={role}>{role}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <div className="lbl">Company</div>
+                                <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company (optional)" />
+                              </div>
+                              <div>
+                                <div className="lbl">Contact</div>
+                                <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone/email (optional)" />
+                              </div>
+                              <div className="personActions">
+                                <button className="btn btnDanger" type="button" onClick={() => removeParty(person.id)}>Remove</button>
+                              </div>
+                            </div>
+                          ))}
+                          {!reportData.project.parties.length && (
+                            <div className="tiny">No parties added yet.</div>
+                          )}
+                        </div>
+                      </>
+                    ),
+                  })}
                 </>
-              )}
+                );
+              })()}
 
               {reportTab === "description" && (() => {
                 // Per-sub-section completion status so the nav pills
@@ -8394,9 +8830,14 @@ const loadPdfJs = () => {
                       </button>
                     ))}
                   </div>
-                  {showSub("structure") && (
-                  <div className="reportCard tone-structure">
-                    <div className="reportSectionTitle">Structure</div>
+                  {showSub("structure") && renderReportBubble({
+                    tone: "structure",
+                    title: "Structure",
+                    subtitle: "Building type, framing, foundation, exterior finishes, and fenestration.",
+                    status: groupStatus(structureFields),
+                    sectionKey: "description.structure",
+                    children: (
+                      <>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Occupancy Type</div>
@@ -8506,12 +8947,18 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                     </div>
-                  </div>
-                  )}
+                      </>
+                    ),
+                  })}
 
-                  {showSub("garage") && (
-                  <div className="reportCard tone-description">
-                    <div className="reportSectionTitle">Garage</div>
+                  {showSub("garage") && renderReportBubble({
+                    tone: "description",
+                    title: "Garage",
+                    subtitle: "Garage presence, bay count, overhead doors, and orientation.",
+                    status: groupStatus(garageFields),
+                    sectionKey: "description.garage",
+                    children: (
+                      <>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Garage Present</div>
@@ -8550,12 +8997,18 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                     </div>
-                  </div>
-                  )}
+                      </>
+                    ),
+                  })}
 
-                  {showSub("site") && (
-                  <div className="reportCard tone-site">
-                    <div className="reportSectionTitle">Site Conditions</div>
+                  {showSub("site") && renderReportBubble({
+                    tone: "site",
+                    title: "Site Conditions",
+                    subtitle: "Surrounding terrain and vegetation that affect wind and hail exposure.",
+                    status: groupStatus(siteFields),
+                    sectionKey: "description.site",
+                    children: (
+                      <>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Terrain</div>
@@ -8572,12 +9025,18 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                     </div>
-                  </div>
-                  )}
+                      </>
+                    ),
+                  })}
 
-                  {showSub("roof") && (
-                  <div className="reportCard tone-roof">
-                    <div className="reportSectionTitle">Roof Information</div>
+                  {showSub("roof") && renderReportBubble({
+                    tone: "roof",
+                    title: "Roof Information",
+                    subtitle: "Geometry, covering type, shingle measurements, slopes, gutters, and appurtenances.",
+                    status: groupStatus(roofFields),
+                    sectionKey: "description.roof",
+                    children: (
+                      <>
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Roof Geometry</div>
@@ -8589,6 +9048,56 @@ const loadPdfJs = () => {
                       <div>
                         <div className="lbl">Roof Covering</div>
                         <input className="inp" value={reportData.description.roofCovering} onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)} />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Manufacturer</div>
+                        <input className="inp" value={reportData.description.shingleManufacturer || ""} onChange={(e)=>updateReportSection("description", "shingleManufacturer", e.target.value)} placeholder="e.g., GAF / Owens Corning / CertainTeed" />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Product / Model</div>
+                        <input className="inp" value={reportData.description.shingleProduct || ""} onChange={(e)=>updateReportSection("description", "shingleProduct", e.target.value)} placeholder="e.g., Timberline HDZ" />
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Type</div>
+                        <select className="inp" value={reportData.description.shingleClass || ""} onChange={(e)=>updateReportSection("description", "shingleClass", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Laminated">Laminated (architectural)</option>
+                          <option value="3-Tab">3-Tab</option>
+                          <option value="Architectural">Architectural (non-laminated)</option>
+                          <option value="Designer">Designer / Specialty</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Shingle Mat</div>
+                        <select className="inp" value={reportData.description.shingleMat || ""} onChange={(e)=>updateReportSection("description", "shingleMat", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="Fiberglass">Fiberglass</option>
+                          <option value="Organic">Organic</option>
+                          <option value="Unknown">Unknown</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Granule Color</div>
+                        <input className="inp" value={reportData.description.granuleColor || ""} onChange={(e)=>updateReportSection("description", "granuleColor", e.target.value)} placeholder="e.g., charcoal, weathered wood" />
+                      </div>
+                      <div>
+                        <div className="lbl">Estimated Roof Age</div>
+                        <input className="inp" value={reportData.description.roofAge || ""} onChange={(e)=>updateReportSection("description", "roofAge", e.target.value)} placeholder="e.g., approximately 8 years" />
+                      </div>
+                      <div>
+                        <div className="lbl">Number of Roof Layers</div>
+                        <select className="inp" value={reportData.description.roofLayers || ""} onChange={(e)=>updateReportSection("description", "roofLayers", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="1">1 (single layer)</option>
+                          <option value="2">2 (overlay)</option>
+                          <option value="3+">3 or more</option>
+                          <option value="Unknown">Unknown</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Underlayment (if visible)</div>
+                        <input className="inp" value={reportData.description.underlayment || ""} onChange={(e)=>updateReportSection("description", "underlayment", e.target.value)} placeholder="e.g., felt, synthetic, ice & water shield" />
                       </div>
                       <div>
                         <div className="lbl">Shingle Length</div>
@@ -8681,235 +9190,611 @@ const loadPdfJs = () => {
                     <div className="sectionHint">
                       Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
                     </div>
-                  </div>
-                  )}
+                      </>
+                    ),
+                  })}
                 </>
                 );
               })()}
 
-              {reportTab === "background" && (
+              {reportTab === "background" && (() => {
+                // Status logic per section:
+                //  • Parties: Ready if any party has name + role.
+                //  • Background: Ready if date-of-loss AND (concerns or notes).
+                //  • Access: Ready if access-obtained has a value.
+                const hasVal = (v: unknown) => v != null && String(v).trim() !== "";
+                const bg = reportData.background;
+                const partiesStatus: "ready" | "partial" | "empty" =
+                  !reportData.project.parties.length ? "empty" :
+                  reportData.project.parties.some(x => hasVal(x.name) && hasVal(x.role)) ? "ready" : "partial";
+                const backgroundReady = hasVal(bg.dateOfLoss) && (bg.concerns.length > 0 || hasVal(bg.notes));
+                const backgroundHasAny = hasVal(bg.dateOfLoss) || bg.concerns.length > 0 || hasVal(bg.notes) || hasVal(bg.source);
+                const backgroundStatus: "ready" | "partial" | "empty" =
+                  backgroundReady ? "ready" : backgroundHasAny ? "partial" : "empty";
+                const accessStatus: "ready" | "partial" | "empty" =
+                  hasVal(bg.accessObtained) ? "ready" :
+                  (bg.limitations.length > 0 || hasVal(bg.limitationsOther)) ? "partial" : "empty";
+                return (
                 <>
-                  <div className="reportCard tone-parties">
-                    <div className="reportSectionTitle">Present Parties / Contacts</div>
-                    <div className="reportCardSubtitle">
-                      Anyone present at the inspection or a contact relevant to the claim — homeowner, contractor, adjuster, attorney, witness, etc. Add as many as needed.
-                    </div>
-                    <div className="partyToolbar">
-                      <div className="tiny">{reportData.project.parties.length} {reportData.project.parties.length === 1 ? "person" : "people"} listed</div>
-                      <button className="btn btnPrimary" type="button" onClick={addParty}>+ Add person</button>
-                    </div>
-                    <div className="partyList">
-                      {reportData.project.parties.map((person, idx) => (
-                        <div key={person.id} className="partyCard">
-                          <div className="partyCardHeader">
-                            <span className="partyCardIndex">#{idx + 1}</span>
-                            <span className="partyCardTitle">{person.name?.trim() || "Unnamed"}</span>
-                            {person.role ? <span className="partyCardRoleChip">{person.role}</span> : null}
-                            <button
-                              className="btn btnGhostDanger partyRemoveBtn"
-                              type="button"
-                              onClick={() => removeParty(person.id)}
-                              aria-label="Remove person"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div className="partyGrid">
-                            <div>
-                              <div className="lbl">Name</div>
-                              <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Full name" />
-                            </div>
-                            <div>
-                              <div className="lbl">Role</div>
-                              <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
-                                <option value="">Select role…</option>
-                                {PARTY_ROLES.map(role => (
-                                  <option key={role} value={role}>{role}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <div className="lbl">Company <span className="lblHint">optional</span></div>
-                              <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company / firm" />
-                            </div>
-                            <div>
-                              <div className="lbl">Contact <span className="lblHint">optional</span></div>
-                              <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone / email" />
-                            </div>
-                          </div>
-                          <div style={{marginTop:10}}>
-                            <div className="lbl">Notes for this person <span className="lblHint">not merged into the narrative unless you say so</span></div>
-                            <textarea
-                              className="inp"
-                              rows={2}
-                              value={person.notes || ""}
-                              onChange={(e)=>updateParty(person.id, "notes", e.target.value)}
-                              placeholder="Statements from this contact only — kept separate to avoid mixing conflicting accounts."
-                            />
-                          </div>
-                          <label className="partyExcludeToggle">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(person.excludeFromNarrative)}
-                              onChange={(e)=>updateParty(person.id, "excludeFromNarrative", e.target.checked)}
-                            />
-                            <span>Exclude this person's account from the auto-generated final paragraph (avoids conflicts)</span>
-                          </label>
+                  {renderReportBubble({
+                    tone: "parties",
+                    title: "Present Parties / Contacts",
+                    subtitle: "Anyone present at the inspection or a contact relevant to the claim — homeowner, contractor, adjuster, attorney, witness, etc.",
+                    status: partiesStatus,
+                    sectionKey: "background.parties",
+                    children: (
+                      <>
+                        <div className="partyToolbar">
+                          <div className="tiny">{reportData.project.parties.length} {reportData.project.parties.length === 1 ? "person" : "people"} listed</div>
+                          <button className="btn btnPrimary" type="button" onClick={addParty}>+ Add person</button>
                         </div>
-                      ))}
-                      {!reportData.project.parties.length && (
-                        <div className="partyEmpty">No parties added yet. Click <strong>Add person</strong> to begin.</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="reportCard tone-background">
-                    <div className="reportSectionTitle">Reported Background</div>
-                    <div className="reportCardSubtitle">
-                      Short factual notes, reported concerns, and information source captured from the insured or claim file.
-                    </div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Provided Date</div>
-                        <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">Information Source</div>
-                        <input className="inp" value={reportData.background.source} onChange={(e)=>updateReportSection("background", "source", e.target.value)} placeholder="Insured, contractor, claim file..." />
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Reported Concerns</div>
-                      <div className="chipList">
-                        {BACKGROUND_CONCERNS.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + (reportData.background.concerns.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("background", "concerns", option)}
-                          >
-                            {option}
+                        <div className="partyList">
+                          {reportData.project.parties.map((person, idx) => (
+                            <div key={person.id} className="partyCard">
+                              <div className="partyCardHeader">
+                                <span className="partyCardIndex">#{idx + 1}</span>
+                                <span className="partyCardTitle">{person.name?.trim() || "Unnamed"}</span>
+                                {person.role ? <span className="partyCardRoleChip">{person.role}</span> : null}
+                                <button
+                                  className="btn btnGhostDanger partyRemoveBtn"
+                                  type="button"
+                                  onClick={() => removeParty(person.id)}
+                                  aria-label="Remove person"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              <div className="partyGrid">
+                                <div>
+                                  <div className="lbl">Name</div>
+                                  <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Full name" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Role</div>
+                                  <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
+                                    <option value="">Select role…</option>
+                                    {PARTY_ROLES.map(role => (
+                                      <option key={role} value={role}>{role}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div className="lbl">Company <span className="lblHint">optional</span></div>
+                                  <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company / firm" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Contact <span className="lblHint">optional</span></div>
+                                  <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone / email" />
+                                </div>
+                              </div>
+                              <div style={{marginTop:10}}>
+                                <div className="lbl">Statements / Notes for this person <span className="lblHint">captured verbatim so you can attribute them in the report</span></div>
+                                <textarea
+                                  className="inp"
+                                  rows={2}
+                                  value={person.notes || ""}
+                                  onChange={(e)=>updateParty(person.id, "notes", e.target.value)}
+                                  placeholder="e.g., &quot;Insured reported roof damage following storm on 4/12.&quot;"
+                                />
+                              </div>
+                              <label className="partyExcludeToggle">
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(person.excludeFromNarrative)}
+                                  onChange={(e)=>updateParty(person.id, "excludeFromNarrative", e.target.checked)}
+                                />
+                                <span>Exclude this person's account from the auto-generated final paragraph (avoids conflicts)</span>
+                              </label>
+                            </div>
+                          ))}
+                          {!reportData.project.parties.length && (
+                            <div className="partyEmpty">No parties added yet. Click <strong>Add person</strong> to begin.</div>
+                          )}
+                        </div>
+                      </>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "background",
+                    title: "Reported Background",
+                    subtitle: "Claim identifiers, date of loss, reported concerns, prior claims, and documents reviewed.",
+                    status: backgroundStatus,
+                    sectionKey: "background.reported",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Claim Number <span className="lblHint">insurance carrier's number</span></div>
+                            <input className="inp" value={reportData.background.claimNumber || ""} onChange={(e)=>updateReportSection("background", "claimNumber", e.target.value)} placeholder="Carrier claim #" />
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Background Notes</div>
-                      <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
-                    </div>
-                  </div>
-                  <div className="reportCard tone-access">
-                    <div className="reportSectionTitle">Access & Limitations</div>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Roof Access Obtained</div>
-                        <select className="inp" value={reportData.background.accessObtained} onChange={(e)=>updateReportSection("background", "accessObtained", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Partial">Partial</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Reason(s) for Limited / No Access</div>
-                      <div className="chipList">
-                        {ACCESS_LIMITATION_REASONS.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + (reportData.background.limitations.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("background", "limitations", option)}
-                          >
-                            {option}
+                          <div>
+                            <div className="lbl">Insurance Carrier</div>
+                            <input className="inp" value={reportData.background.carrier || ""} onChange={(e)=>updateReportSection("background", "carrier", e.target.value)} placeholder="e.g., State Farm" />
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Other / Notes on Limitation</div>
-                      <textarea
-                        className="inp"
-                        value={reportData.background.limitationsOther}
-                        onChange={(e)=>updateReportSection("background", "limitationsOther", e.target.value)}
-                        placeholder="Describe anything else — red tape, attorney involvement, construction in progress, hazardous conditions, safety tie-off limits, etc."
-                      />
-                    </div>
-                    <div className="sectionHint">Tap chips for common reasons. Use the notes area for anything a chip doesn't cover.</div>
-                  </div>
+                          <div>
+                            <div className="lbl">Policy Type <span className="lblHint">if known</span></div>
+                            <input className="inp" value={reportData.background.policyType || ""} onChange={(e)=>updateReportSection("background", "policyType", e.target.value)} placeholder="HO-3, HO-5, Dwelling…" />
+                          </div>
+                          <div>
+                            <div className="lbl">Reported Date of Loss</div>
+                            <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
+                          </div>
+                          <div>
+                            <div className="lbl">Information Source</div>
+                            <input className="inp" value={reportData.background.source} onChange={(e)=>updateReportSection("background", "source", e.target.value)} placeholder="Insured, contractor, claim file..." />
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Reported Concerns</div>
+                          <div className="chipList">
+                            {BACKGROUND_CONCERNS.map(option => (
+                              <div
+                                key={option}
+                                className={"chip " + (reportData.background.concerns.includes(option) ? "active" : "")}
+                                onClick={() => toggleReportList("background", "concerns", option)}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Prior Claims / Prior Repairs <span className="lblHint">as reported by the insured</span></div>
+                          <textarea
+                            className="inp"
+                            rows={2}
+                            value={reportData.background.priorClaims || ""}
+                            onChange={(e)=>updateReportSection("background", "priorClaims", e.target.value)}
+                            placeholder="e.g., Roof replaced in 2019 following hail claim; no claims since."
+                          />
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Documents Reviewed</div>
+                          <div className="chipList">
+                            {["Claim file", "Prior inspection report", "Contractor estimate", "Photographs", "EagleView report", "Weather report", "Policy documents"].map(option => (
+                              <div
+                                key={option}
+                                className={"chip " + ((reportData.background.documentsReviewed || []).includes(option) ? "active" : "")}
+                                onClick={() => toggleReportList("background", "documentsReviewed", option)}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Background Notes</div>
+                          <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
+                        </div>
+                      </>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "access",
+                    title: "Access & Limitations",
+                    subtitle: "Whether the roof and interior were accessible, and the reasons for any limitations.",
+                    status: accessStatus,
+                    sectionKey: "background.access",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Roof Access Obtained</div>
+                            <select className="inp" value={reportData.background.accessObtained} onChange={(e)=>updateReportSection("background", "accessObtained", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="Yes">Yes</option>
+                              <option value="No">No</option>
+                              <option value="Partial">Partial</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Reason(s) for Limited / No Access</div>
+                          <div className="chipList">
+                            {ACCESS_LIMITATION_REASONS.map(option => (
+                              <div
+                                key={option}
+                                className={"chip " + (reportData.background.limitations.includes(option) ? "active" : "")}
+                                onClick={() => toggleReportList("background", "limitations", option)}
+                              >
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Other / Notes on Limitation</div>
+                          <textarea
+                            className="inp"
+                            value={reportData.background.limitationsOther}
+                            onChange={(e)=>updateReportSection("background", "limitationsOther", e.target.value)}
+                            placeholder="Describe anything else — red tape, attorney involvement, construction in progress, hazardous conditions, safety tie-off limits, etc."
+                          />
+                        </div>
+                        <div className="sectionHint">Tap chips for common reasons. Use the notes area for anything a chip doesn't cover.</div>
+                      </>
+                    ),
+                  })}
                 </>
-              )}
+                );
+              })()}
 
 
-              {reportTab === "inspection" && (
+              {reportTab === "weather" && (() => {
+                // Weather tab captures NCEI Storm Events / SPC search
+                // results on-site so the Weather Data paragraph can be
+                // generated without a follow-up desk visit. Status is
+                // Ready when all of: search radius, start+end dates, and
+                // at least one report count are filled.
+                const w: any = (reportData as any).weather || {};
+                const has = (v: unknown) => v != null && String(v).trim() !== "";
+                const readyKeys = [
+                  has(w.searchRadius),
+                  has(w.searchStart),
+                  has(w.searchEnd),
+                  has(w.hailReportCount) || has(w.windReportCount),
+                ];
+                const filled = readyKeys.filter(Boolean).length;
+                const weatherStatus: "ready" | "partial" | "empty" =
+                  filled === readyKeys.length ? "ready" :
+                  filled > 0 ? "partial" : "empty";
+                const setWeather = (key: string, value: string) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    weather: { ...((prev as any).weather || {}), [key]: value }
+                  }));
+                };
+                return (
                 <>
-                  <div className="reportCard tone-inspection">
-                    <div className="reportSectionTitle">Inspection Narrative</div>
-                    <div className="reportCardSubtitle">
-                      Paragraphs below feed the Haag-style narrative output. Toggle sections off to exclude them.
-                    </div>
-                    <div className="inspectionParagraphList">
-                      {inspectionGeneratedSections.map(group => (
-                        <details className="inspectionParagraphCard" key={group.key} open>
-                          <summary>
-                            <span>{group.label}</span>
-                          </summary>
-                          <div className="inspectionParagraphList" style={{marginTop:10}}>
-                            {group.sections.map(section => {
-                              const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
-                              return (
-                                <details className="inspectionParagraphCard" key={section.key}>
-                                  <summary>
-                                    <span>{section.title}</span>
-                                    <label className="inspectionIncludeToggle" onClick={(e) => e.stopPropagation()}>
-                                      <input
-                                        type="checkbox"
-                                        checked={paragraphSettings.include ?? true}
-                                        onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
-                                      />
-                                      Include
-                                    </label>
-                                  </summary>
-                                  <div className="inspectionNarrativeText">{section.text}</div>
-                                  {section.key === "roofGeneral" && (
-                                    <div className="inspectionInlineControls">
-                                      <div className="lbl">Roof General Condition</div>
-                                      <div className="radioGrid compact">
-                                        {["good", "fair", "poor"].map(condition => (
-                                          <div
-                                            key={condition}
-                                            className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
-                                            onClick={() => updateReportSection("inspection", "roofCondition", condition)}
-                                          >
-                                            {condition.charAt(0).toUpperCase() + condition.slice(1)}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {section.key === "exteriorWind" && (
-                                    <div className="inspectionInlineControls">
-                                      <div className="lbl">Exterior Components Inspected</div>
-                                      <div className="chipList compact">
-                                        {INSPECTION_COMPONENTS.map(component => (
-                                          <div
-                                            key={component.key}
-                                            className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
-                                            onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
-                                          >
-                                            {component.label}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                </details>
-                              );
-                            })}
+                  {renderReportBubble({
+                    tone: "weather",
+                    title: "Weather Data",
+                    subtitle: "NCEI Storm Events / SPC search results for the property. Feeds the Weather Data paragraph in the final report.",
+                    status: weatherStatus,
+                    sectionKey: "weather.search",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Search Radius (miles)</div>
+                            <input className="inp" value={w.searchRadius || ""} onChange={(e)=>setWeather("searchRadius", e.target.value)} placeholder="e.g., 5" />
                           </div>
-                        </details>
-                      ))}
-                    </div>
-                  </div>
+                          <div>
+                            <div className="lbl">Search Start Date</div>
+                            <input className="inp" type="date" value={w.searchStart || ""} onChange={(e)=>setWeather("searchStart", e.target.value)} />
+                          </div>
+                          <div>
+                            <div className="lbl">Search End Date</div>
+                            <input className="inp" type="date" value={w.searchEnd || ""} onChange={(e)=>setWeather("searchEnd", e.target.value)} />
+                          </div>
+                          <div>
+                            <div className="lbl">Hail Reports Found</div>
+                            <input className="inp" value={w.hailReportCount || ""} onChange={(e)=>setWeather("hailReportCount", e.target.value)} placeholder="# of hail reports" />
+                          </div>
+                          <div>
+                            <div className="lbl">Thunderstorm Wind Reports Found</div>
+                            <input className="inp" value={w.windReportCount || ""} onChange={(e)=>setWeather("windReportCount", e.target.value)} placeholder="# of wind reports" />
+                          </div>
+                          <div>
+                            <div className="lbl">Weather Station (LCD)</div>
+                            <input className="inp" value={w.weatherStation || ""} onChange={(e)=>setWeather("weatherStation", e.target.value)} placeholder="Nearest NWS station" />
+                          </div>
+                        </div>
+                        <div className="sectionHint">
+                          These fields come from the <b>NCEI Storm Events Database</b> and the <b>SPC Storm Reports</b>. Record them here while on-site so the Weather paragraph generates correctly.
+                        </div>
+                      </>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "weather",
+                    title: "Nearest Hail Report",
+                    subtitle: "Closest hail event to the property within the search window.",
+                    status: (has(w.nearestHailSize) || has(w.nearestHailDate)) ? "ready" : "empty",
+                    sectionKey: "weather.hail",
+                    children: (
+                      <div className="reportGrid">
+                        <div>
+                          <div className="lbl">Distance (miles)</div>
+                          <input className="inp" value={w.nearestHailDistance || ""} onChange={(e)=>setWeather("nearestHailDistance", e.target.value)} placeholder="e.g., 1.2" />
+                        </div>
+                        <div>
+                          <div className="lbl">Direction from Property</div>
+                          <input className="inp" value={w.nearestHailDirection || ""} onChange={(e)=>setWeather("nearestHailDirection", e.target.value)} placeholder="e.g., NNW" />
+                        </div>
+                        <div>
+                          <div className="lbl">Hail Size (inches)</div>
+                          <input className="inp" value={w.nearestHailSize || ""} onChange={(e)=>setWeather("nearestHailSize", e.target.value)} placeholder="e.g., 1.25" />
+                        </div>
+                        <div>
+                          <div className="lbl">Report Date</div>
+                          <input className="inp" type="date" value={w.nearestHailDate || ""} onChange={(e)=>setWeather("nearestHailDate", e.target.value)} />
+                        </div>
+                      </div>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "weather",
+                    title: "Nearest Thunderstorm Wind Report",
+                    subtitle: "Closest recorded wind gust event within the search window.",
+                    status: (has(w.nearestWindSpeed) || has(w.nearestWindDate)) ? "ready" : "empty",
+                    sectionKey: "weather.wind",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Distance (miles)</div>
+                            <input className="inp" value={w.nearestWindDistance || ""} onChange={(e)=>setWeather("nearestWindDistance", e.target.value)} placeholder="e.g., 2.4" />
+                          </div>
+                          <div>
+                            <div className="lbl">Direction from Property</div>
+                            <input className="inp" value={w.nearestWindDirection || ""} onChange={(e)=>setWeather("nearestWindDirection", e.target.value)} placeholder="e.g., E" />
+                          </div>
+                          <div>
+                            <div className="lbl">Wind Speed (mph / kt)</div>
+                            <input className="inp" value={w.nearestWindSpeed || ""} onChange={(e)=>setWeather("nearestWindSpeed", e.target.value)} placeholder="e.g., 62 mph" />
+                          </div>
+                          <div>
+                            <div className="lbl">Report Date</div>
+                            <input className="inp" type="date" value={w.nearestWindDate || ""} onChange={(e)=>setWeather("nearestWindDate", e.target.value)} />
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Additional Weather Notes</div>
+                          <textarea
+                            className="inp"
+                            rows={2}
+                            value={w.notes || ""}
+                            onChange={(e)=>setWeather("notes", e.target.value)}
+                            placeholder="Extra context — pattern of events, adjacent LCD station notes, radar imagery interpretation, etc."
+                          />
+                        </div>
+                      </>
+                    ),
+                  })}
                 </>
-              )}
+                );
+              })()}
+
+              {reportTab === "inspection" && (() => {
+                // Status logic for the Inspection bubble:
+                //  • Ready: at least one included paragraph has non-empty text.
+                //  • Partial: paragraphs exist but some included ones are blank.
+                //  • Empty: no paragraphs toggled on.
+                let includedWithText = 0;
+                let includedBlank = 0;
+                let anyIncluded = false;
+                inspectionGeneratedSections.forEach(group => {
+                  group.sections.forEach(section => {
+                    const ps = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
+                    if (ps.include ?? true) {
+                      anyIncluded = true;
+                      const bodyText = (section.text || "").trim();
+                      if (bodyText.length > 0) includedWithText += 1;
+                      else includedBlank += 1;
+                    }
+                  });
+                });
+                const inspectionStatus: "ready" | "partial" | "empty" =
+                  !anyIncluded ? "empty" :
+                  includedBlank === 0 && includedWithText > 0 ? "ready" : "partial";
+                const insp = reportData.inspection;
+                const hasVal2 = (v: unknown) => v != null && String(v).trim() !== "";
+                const detailKeys = [hasVal2(insp.bondCondition), hasVal2(insp.spatterMarksObserved), hasVal2(insp.damageFound)];
+                const detailFilled = detailKeys.filter(Boolean).length;
+                const detailStatus: "ready" | "partial" | "empty" =
+                  detailFilled === detailKeys.length ? "ready" :
+                  detailFilled > 0 ? "partial" : "empty";
+                const testSquareKeys = ["north", "south", "east", "west"] as const;
+                const tsAny = testSquareKeys.some(dir => {
+                  const sq: any = (insp as any).testSquares?.[dir] || {};
+                  return hasVal2(sq.bruises) || hasVal2(sq.punctures) || hasVal2(sq.notes);
+                });
+                const tsAll = testSquareKeys.every(dir => {
+                  const sq: any = (insp as any).testSquares?.[dir] || {};
+                  return hasVal2(sq.bruises) || hasVal2(sq.punctures);
+                });
+                const tsStatus: "ready" | "partial" | "empty" = tsAll ? "ready" : tsAny ? "partial" : "empty";
+                const setInspectionField = (key: string, value: string) => {
+                  setReportData((prev: any) => ({ ...prev, inspection: { ...prev.inspection, [key]: value } }));
+                };
+                const setTestSquare = (dir: string, field: string, value: string) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      testSquares: {
+                        ...(prev.inspection.testSquares || {}),
+                        [dir]: { ...((prev.inspection.testSquares || {})[dir] || {}), [field]: value }
+                      }
+                    }
+                  }));
+                };
+                const toggleSpatterSurface = (surface: string) => {
+                  setReportData((prev: any) => {
+                    const cur = normalizeList(prev.inspection.spatterMarksSurfaces);
+                    const next = cur.includes(surface) ? cur.filter((x: string) => x !== surface) : [...cur, surface];
+                    return { ...prev, inspection: { ...prev.inspection, spatterMarksSurfaces: next } };
+                  });
+                };
+                return (
+                <>
+                  {renderReportBubble({
+                    tone: "inspection",
+                    title: "Inspection Details",
+                    subtitle: "Findings captured as discrete observations. These feed the Bond Condition, Spatter Marks, and Damage Summary paragraphs.",
+                    status: detailStatus,
+                    sectionKey: "inspection.details",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Adhesive / Sealant Bond Condition</div>
+                            <select className="inp" value={insp.bondCondition || ""} onChange={(e)=>setInspectionField("bondCondition", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="good">Good — intact, resisted lifting</option>
+                              <option value="fair">Fair — partial adhesion</option>
+                              <option value="poor">Poor — lifted by hand with minimal effort</option>
+                              <option value="not-evaluated">Not evaluated</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Spatter Marks Observed</div>
+                            <select className="inp" value={insp.spatterMarksObserved || ""} onChange={(e)=>setInspectionField("spatterMarksObserved", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="yes">Yes — observed</option>
+                              <option value="no">No — none found</option>
+                              <option value="not inspected">Not inspected</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Overall Damage Finding</div>
+                            <select className="inp" value={insp.damageFound || ""} onChange={(e)=>setInspectionField("damageFound", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="no">No storm-caused damage</option>
+                              <option value="yes">Storm-caused damage found</option>
+                              <option value="mixed">Mixed / partial</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Surfaces Inspected for Spatter</div>
+                          <div className="chipList">
+                            {["HVAC condenser", "Gutters", "Downspouts", "Metal vents", "Window screens", "Painted trim", "Fence", "Other"].map(surface => (
+                              <div
+                                key={surface}
+                                className={"chip " + ((insp.spatterMarksSurfaces || []).includes(surface) ? "active" : "")}
+                                onClick={() => toggleSpatterSurface(surface)}
+                              >
+                                {surface}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Spatter Mark Notes <span className="lblHint">location, approximate age, size</span></div>
+                          <textarea
+                            className="inp"
+                            rows={2}
+                            value={insp.spatterMarksNotes || ""}
+                            onChange={(e)=>setInspectionField("spatterMarksNotes", e.target.value)}
+                            placeholder="e.g., Fresh spatter ~3/4&quot; on north-side HVAC condenser fins; dried oxide spatter on west downspout."
+                          />
+                        </div>
+                      </>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "inspection",
+                    title: "Test Squares",
+                    subtitle: "100-square-foot test-area counts per slope direction. Used by the Test Squares paragraph.",
+                    status: tsStatus,
+                    sectionKey: "inspection.testSquares",
+                    children: (
+                      <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                        {testSquareKeys.map(dir => {
+                          const sq: any = ((insp as any).testSquares || {})[dir] || {};
+                          return (
+                            <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px"}}>
+                              <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, marginBottom:6}}>
+                                {dir === "north" ? "North-facing slope" :
+                                 dir === "south" ? "South-facing slope" :
+                                 dir === "east" ? "East-facing slope" : "West-facing slope"}
+                              </div>
+                              <div className="reportGrid">
+                                <div>
+                                  <div className="lbl">Bruises</div>
+                                  <input className="inp" value={sq.bruises || ""} onChange={(e)=>setTestSquare(dir, "bruises", e.target.value)} placeholder="e.g., 0" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Punctures</div>
+                                  <input className="inp" value={sq.punctures || ""} onChange={(e)=>setTestSquare(dir, "punctures", e.target.value)} placeholder="e.g., 0" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Notes</div>
+                                  <input className="inp" value={sq.notes || ""} onChange={(e)=>setTestSquare(dir, "notes", e.target.value)} placeholder="location, condition" />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "inspection",
+                    title: "Inspection Narrative",
+                    subtitle: "Paragraphs below feed the Haag-style narrative output. Toggle sections off to exclude them from the final report.",
+                    status: inspectionStatus,
+                    sectionKey: "inspection.narrative",
+                    children: (
+                      <div className="inspectionParagraphList">
+                        {inspectionGeneratedSections.map(group => (
+                          <details className="inspectionParagraphCard" key={group.key} open>
+                            <summary>
+                              <span>{group.label}</span>
+                            </summary>
+                            <div className="inspectionParagraphList" style={{marginTop:10}}>
+                              {group.sections.map(section => {
+                                const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
+                                return (
+                                  <details className="inspectionParagraphCard" key={section.key}>
+                                    <summary>
+                                      <span>{section.title}</span>
+                                      <label className="inspectionIncludeToggle" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                          type="checkbox"
+                                          checked={paragraphSettings.include ?? true}
+                                          onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
+                                        />
+                                        Include
+                                      </label>
+                                    </summary>
+                                    <div className="inspectionNarrativeText">{section.text}</div>
+                                    {section.key === "roofGeneral" && (
+                                      <div className="inspectionInlineControls">
+                                        <div className="lbl">Roof General Condition</div>
+                                        <div className="radioGrid compact">
+                                          {["good", "fair", "poor"].map(condition => (
+                                            <div
+                                              key={condition}
+                                              className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
+                                              onClick={() => updateReportSection("inspection", "roofCondition", condition)}
+                                            >
+                                              {condition.charAt(0).toUpperCase() + condition.slice(1)}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {section.key === "exteriorWind" && (
+                                      <div className="inspectionInlineControls">
+                                        <div className="lbl">Exterior Components Inspected</div>
+                                        <div className="chipList compact">
+                                          {INSPECTION_COMPONENTS.map(component => (
+                                            <div
+                                              key={component.key}
+                                              className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
+                                              onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
+                                            >
+                                              {component.label}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </details>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    ),
+                  })}
+                </>
+                );
+              })()}
             </div>
           </div>
           ) : (
