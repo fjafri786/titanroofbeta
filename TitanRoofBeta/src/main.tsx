@@ -2502,6 +2502,64 @@ const loadPdfJs = () => {
           });
         }, [pageItems]);
 
+        // Derive inspection-side data directly from diagram items so the
+        // inspector does not have to re-enter what they already plotted.
+        // Test Squares form fields default to these values and only need
+        // to be touched when the inspector wants to override.
+        const testSquaresDerived = useMemo(() => {
+          const dirKeys = { N: "north", S: "south", E: "east", W: "west" } as const;
+          const out: Record<string, { bruises: string; punctures: string; notes: string; squareCount: number; hasData: boolean }> = {
+            north: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
+            south: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
+            east:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
+            west:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false }
+          };
+          const acc: Record<string, { squares: string[]; bruises: number; maxSize: string; maxParsed: number; noteFrags: string[] }> = {
+            north: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
+            south: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
+            east:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
+            west:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] }
+          };
+          pageItems.forEach(item => {
+            if(item.type !== "ts") return;
+            const dirLong = dirKeys[item.data?.dir as keyof typeof dirKeys];
+            if(!dirLong || !acc[dirLong]) return;
+            const a = acc[dirLong];
+            a.squares.push(item.name || "TS");
+            (item.data?.bruises || []).forEach((b: any) => {
+              a.bruises += 1;
+              const parsed = parseSize(b?.size);
+              if(parsed > a.maxParsed){
+                a.maxParsed = parsed;
+                a.maxSize = b?.size || "";
+              }
+            });
+            if(item.data?.caption && String(item.data.caption).trim()){
+              a.noteFrags.push(`${item.name}: ${String(item.data.caption).trim()}`);
+            }
+          });
+          (Object.keys(acc) as Array<keyof typeof acc>).forEach(dirLong => {
+            const a = acc[dirLong];
+            if(!a.squares.length){
+              return; // no diagram data for this direction; leave blank
+            }
+            out[dirLong].hasData = true;
+            out[dirLong].squareCount = a.squares.length;
+            out[dirLong].bruises = String(a.bruises);
+            out[dirLong].punctures = "0";
+            const noteParts: string[] = [];
+            noteParts.push(`${a.squares.length} test square${a.squares.length === 1 ? "" : "s"} (${a.squares.join(", ")})`);
+            if(a.bruises > 0 && a.maxSize){
+              noteParts.push(`largest mapped bruise ${a.maxSize}"`);
+            }
+            if(a.noteFrags.length){
+              noteParts.push(a.noteFrags.join("; "));
+            }
+            out[dirLong].notes = noteParts.join("; ");
+          });
+          return out;
+        }, [pageItems]);
+
         const inspectionGeneratedSections = useMemo(() => {
           const localJoinReadableList = (list = []) => {
             if(!list.length) return "";
@@ -2589,14 +2647,32 @@ const loadPdfJs = () => {
             return acc;
           }, {});
           const tsBruises = Object.values(tsByDirection).reduce((count, stats) => count + stats.hits, 0);
+          const tsFormOverrides = (reportData.inspection?.testSquares || {}) as Record<string, any>;
+          const tsNoteOverrides = ["N", "S", "E", "W"].map(dir => {
+            const long = ({ N: "north", S: "south", E: "east", W: "west" } as const)[dir as "N"|"S"|"E"|"W"];
+            const sq = tsFormOverrides[long] || {};
+            const parts: string[] = [];
+            if(typeof sq.punctures === "string" && sq.punctures.trim() && sq.punctures.trim() !== "0"){
+              parts.push(`${sq.punctures.trim()} puncture${sq.punctures.trim() === "1" ? "" : "s"} on the ${long}-facing slope`);
+            }
+            if(typeof sq.notes === "string" && sq.notes.trim() && !/\btest square/i.test(sq.notes.trim())){
+              parts.push(`${long}-facing slope note: ${sq.notes.trim()}`);
+            }
+            return parts.join("; ");
+          }).filter(Boolean);
           const directionalHitText = ["N", "S", "E", "W"].map(dir => {
             const stats = tsByDirection[dir];
             if(!stats || !stats.hits) return "";
             const maxSizeText = stats.maxSizeLabel ? ` with a largest mapped bruise of ${stats.maxSizeLabel}\"` : "";
             return `${localDirLabel(dir)} slope (${stats.squares} test square${stats.squares === 1 ? "" : "s"}): ${stats.hits} hail hit${stats.hits === 1 ? "" : "s"}${maxSizeText}`;
           }).filter(Boolean);
+          const overrideTail = tsNoteOverrides.length ? ` Additional observations: ${localJoinReadableList(tsNoteOverrides)}.` : "";
+          const coveredDirs = ["N", "S", "E", "W"].filter(d => tsByDirection[d]);
+          const slopeCoveragePhrase = coveredDirs.length === 4
+            ? "all roof slopes"
+            : `${localJoinReadableList(coveredDirs.map(localDirLabel))} roof slopes`;
           const testSquaresText = tsCount
-            ? `We examined 100-square-foot test area${tsCount === 1 ? "" : "s"} on ${localJoinReadableList(Object.keys(tsByDirection).map(localDirLabel))} roof slopes. Each shingle within the test area${tsCount === 1 ? " was" : "s were"} examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. ${tsBruises ? `Within the test area${tsCount === 1 ? "" : "s"}, we noted ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"}${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "We did not find hail-caused bruises or punctured shingles within the test areas."}`
+            ? `We examined 100-square-foot test area${tsCount === 1 ? "" : "s"} on ${slopeCoveragePhrase}. Each shingle within the test area${tsCount === 1 ? " was" : "s were"} examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. ${tsBruises ? `Within the test area${tsCount === 1 ? "" : "s"}, we noted ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"}${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "We did not find hail-caused bruises or punctured shingles within the test areas."}${overrideTail}`
             : "No test squares were documented for this inspection.";
 
           const roofCondition = reportData.inspection?.roofCondition || "fair";
@@ -4778,6 +4854,12 @@ const loadPdfJs = () => {
           if(list.length === 2) return `${list[0]} and ${list[1]}`;
           return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
         };
+        // Haag-style narrative prefers "brick on all elevations" to the
+        // enumerated "brick on the north, south, east, and west elevations"
+        // when the same material appears on every cardinal side. Only four
+        // cardinal keys exist (north/south/east/west), so a material with
+        // all four collapses to "all elevations".
+        const CARDINAL_ELEVATIONS = ["north", "south", "east", "west"];
         const formatDirectionalExteriorFinishes = (finishByElevation = {}) => {
           const grouped = Object.entries(finishByElevation).reduce((acc, [elevation, material]) => {
             if(!material) return acc;
@@ -4785,7 +4867,12 @@ const loadPdfJs = () => {
             acc[material].push(elevation);
             return acc;
           }, {});
-          const parts = Object.entries(grouped).map(([material, elevations]) => {
+          const parts = Object.entries(grouped).map(([material, elevationsRaw]) => {
+            const elevations = (elevationsRaw as string[]) || [];
+            const coversAllCardinals = CARDINAL_ELEVATIONS.every(key => elevations.includes(key));
+            if(coversAllCardinals){
+              return `${material.toLowerCase()} on all elevations`;
+            }
             const readableElevations = joinReadableList(elevations.map(elevation => elevation.toLowerCase()));
             const elevationLabel = elevations.length > 1 ? "elevations" : "elevation";
             return `${material.toLowerCase()} on the ${readableElevations} ${elevationLabel}`;
@@ -9721,13 +9808,15 @@ const loadPdfJs = () => {
                   detailFilled === detailKeys.length ? "ready" :
                   detailFilled > 0 ? "partial" : "empty";
                 const testSquareKeys = ["north", "south", "east", "west"] as const;
+                const tsDerivedAny = testSquareKeys.some(dir => testSquaresDerived[dir]?.hasData);
                 const tsAny = testSquareKeys.some(dir => {
                   const sq: any = (insp as any).testSquares?.[dir] || {};
                   return hasVal2(sq.bruises) || hasVal2(sq.punctures) || hasVal2(sq.notes);
-                });
+                }) || tsDerivedAny;
                 const tsAll = testSquareKeys.every(dir => {
                   const sq: any = (insp as any).testSquares?.[dir] || {};
-                  return hasVal2(sq.bruises) || hasVal2(sq.punctures);
+                  const derived = testSquaresDerived[dir];
+                  return hasVal2(sq.bruises) || hasVal2(sq.punctures) || (derived && derived.hasData);
                 });
                 const tsStatus: "ready" | "partial" | "empty" = tsAll ? "ready" : tsAny ? "partial" : "empty";
                 const setInspectionField = (key: string, value: string) => {
@@ -9822,32 +9911,63 @@ const loadPdfJs = () => {
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Test Squares",
-                    subtitle: "100-square-foot test-area counts per slope direction. Used by the Test Squares paragraph.",
+                    subtitle: "Counts auto-populate from the diagram — drop TS items with bruises on a slope and the values mirror here. Override only if the paragraph should differ from what was mapped.",
                     status: tsStatus,
                     sectionKey: "inspection.testSquares",
                     children: (
                       <div style={{display:"flex", flexDirection:"column", gap:10}}>
                         {testSquareKeys.map(dir => {
                           const sq: any = ((insp as any).testSquares || {})[dir] || {};
+                          const derived = testSquaresDerived[dir] || { bruises: "", punctures: "", notes: "", hasData: false, squareCount: 0 };
+                          const bruisesVal = hasVal2(sq.bruises) ? sq.bruises : (derived.hasData ? derived.bruises : "");
+                          const puncturesVal = hasVal2(sq.punctures) ? sq.punctures : (derived.hasData ? derived.punctures : "");
+                          const notesVal = hasVal2(sq.notes) ? sq.notes : (derived.hasData ? derived.notes : "");
+                          const anyOverride = hasVal2(sq.bruises) || hasVal2(sq.punctures) || hasVal2(sq.notes);
                           return (
                             <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px"}}>
-                              <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, marginBottom:6}}>
-                                {dir === "north" ? "North-facing slope" :
-                                 dir === "south" ? "South-facing slope" :
-                                 dir === "east" ? "East-facing slope" : "West-facing slope"}
+                              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
+                                <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, margin:0}}>
+                                  {dir === "north" ? "North-facing slope" :
+                                   dir === "south" ? "South-facing slope" :
+                                   dir === "east" ? "East-facing slope" : "West-facing slope"}
+                                </div>
+                                <div style={{display:"flex", alignItems:"center", gap:8}}>
+                                  {derived.hasData && !anyOverride && (
+                                    <span className="lblHint" style={{fontSize:10, color:"#0ea5e9"}}>
+                                      Synced with diagram · {derived.squareCount} TS
+                                    </span>
+                                  )}
+                                  {anyOverride && (
+                                    <>
+                                      <span className="lblHint" style={{fontSize:10, color:"#f59e0b"}}>Manual override</span>
+                                      <button
+                                        type="button"
+                                        className="btn btnGhost"
+                                        style={{fontSize:11, padding:"2px 8px"}}
+                                        onClick={() => {
+                                          setTestSquare(dir, "bruises", "");
+                                          setTestSquare(dir, "punctures", "");
+                                          setTestSquare(dir, "notes", "");
+                                        }}
+                                      >
+                                        Reset
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                               <div className="reportGrid">
                                 <div>
                                   <div className="lbl">Bruises</div>
-                                  <input className="inp" value={sq.bruises || ""} onChange={(e)=>setTestSquare(dir, "bruises", e.target.value)} placeholder="e.g., 0" />
+                                  <input className="inp" value={bruisesVal} onChange={(e)=>setTestSquare(dir, "bruises", e.target.value)} placeholder={derived.hasData ? derived.bruises : "e.g., 0"} />
                                 </div>
                                 <div>
                                   <div className="lbl">Punctures</div>
-                                  <input className="inp" value={sq.punctures || ""} onChange={(e)=>setTestSquare(dir, "punctures", e.target.value)} placeholder="e.g., 0" />
+                                  <input className="inp" value={puncturesVal} onChange={(e)=>setTestSquare(dir, "punctures", e.target.value)} placeholder={derived.hasData ? derived.punctures : "e.g., 0"} />
                                 </div>
                                 <div>
                                   <div className="lbl">Notes</div>
-                                  <input className="inp" value={sq.notes || ""} onChange={(e)=>setTestSquare(dir, "notes", e.target.value)} placeholder="location, condition" />
+                                  <input className="inp" value={notesVal} onChange={(e)=>setTestSquare(dir, "notes", e.target.value)} placeholder={derived.hasData ? "location, condition" : "no test squares on this slope"} />
                                 </div>
                               </div>
                             </div>
