@@ -3407,9 +3407,7 @@
         display:flex;
         flex-direction:column;
         gap:22px;
-        max-width:1280px;
         width:100%;
-        margin:0 auto;
       }
       /* Force an always-visible scrollbar on WebKit/Blink so users on
          macOS (where overlay scrollbars auto-hide by default) can see
