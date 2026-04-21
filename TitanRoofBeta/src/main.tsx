@@ -2373,37 +2373,42 @@ const loadPdfJs = () => {
 
         const updatePinch = () => {
           const pts = [...pointersRef.current.values()];
-          if(pts.length !== 2 || !pinchRef.current) return;
+          // Snapshot the pinch ref up front. iPad can fire a pointerup /
+          // pointercancel between here and when the setView updater below
+          // actually runs (React defers updaters), which would otherwise
+          // leave us dereferencing a null pinchRef inside the callback.
+          const pinch = pinchRef.current;
+          if(pts.length !== 2 || !pinch) return;
           const [a,b] = pts;
           const dx = b.x - a.x;
           const dy = b.y - a.y;
           const dist = Math.hypot(dx,dy) || 1;
 
           const center = { x:(a.x+b.x)/2, y:(a.y+b.y)/2 };
-          const ratio = dist / pinchRef.current.startDist;
+          const ratio = dist / pinch.startDist;
 
           // scale anchored at pinch center
-          const targetScale = clamp(pinchRef.current.startScale * ratio, 0.35, 3.0);
+          const targetScale = clamp(pinch.startScale * ratio, 0.35, 3.0);
           if(!Number.isFinite(targetScale)) return;
 
           // also allow two-finger pan using center movement
-          const dcx = center.x - pinchRef.current.lastCenterX;
-          const dcy = center.y - pinchRef.current.lastCenterY;
+          const dcx = center.x - pinch.lastCenterX;
+          const dcy = center.y - pinch.lastCenterY;
 
           setView(prev => {
             // first compute anchored scaling based on stored start (stable)
             const v = viewportRef.current?.getBoundingClientRect();
             if(!v) return prev;
 
-            const ax = pinchRef.current.centerX - v.left;
-            const ay = pinchRef.current.centerY - v.top;
+            const ax = pinch.centerX - v.left;
+            const ay = pinch.centerY - v.top;
 
-            const s0 = pinchRef.current.startScale;
+            const s0 = pinch.startScale;
             const s1 = targetScale;
             if(!Number.isFinite(s0) || s0 <= 0 || !Number.isFinite(s1)) return prev;
 
-            const tx0 = pinchRef.current.startTx;
-            const ty0 = pinchRef.current.startTy;
+            const tx0 = pinch.startTx;
+            const ty0 = pinch.startTy;
 
             const dx0 = ax - v.width/2 - tx0;
             const dy0 = ay - v.height/2 - ty0;
@@ -2418,8 +2423,13 @@ const loadPdfJs = () => {
             };
           });
 
-          pinchRef.current.lastCenterX = center.x;
-          pinchRef.current.lastCenterY = center.y;
+          // Another pointer event may have cleared pinchRef while the
+          // setView updater was queued; only update the live ref if it
+          // still points to the same pinch session we snapshotted.
+          if(pinchRef.current === pinch){
+            pinch.lastCenterX = center.x;
+            pinch.lastCenterY = center.y;
+          }
         };
 
         // === DASHBOARD STATS ===
@@ -4280,6 +4290,31 @@ const loadPdfJs = () => {
           }
 
           setDrag(null);
+        };
+
+        // iPadOS fires pointercancel aggressively when pen and finger
+        // inputs overlap, on palm rejection, and when OS gestures steal
+        // the touch stream. Without handling it, cancelled pointers would
+        // remain in pointersRef and keep pinch logic alive on stale data,
+        // which was the trigger for the "pinchRef.current.centerX" crash.
+        // Treat cancel as an abort: drop the pointer, tear down pinch,
+        // and discard any in-progress gesture without committing it.
+        const onPointerCancel = (e) => {
+          try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+          pointersRef.current.delete(e.pointerId);
+          if(pointersRef.current.size < 2){
+            pinchRef.current = null;
+          }
+          if(drag){
+            setDrag(null);
+          }
+          if(freeStroke){
+            setFreeStroke(null);
+          }
+          if(freeSuggestion){
+            setFreeSuggestion(null);
+          }
+          freeHoldRef.current = { timerId: null, lastMoveAt: 0, lastPos: null, applied: false, suggestion: null };
         };
 
         // === Grouped list ===
@@ -7447,6 +7482,7 @@ const loadPdfJs = () => {
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
               >
                 <div
                   className="stage"
