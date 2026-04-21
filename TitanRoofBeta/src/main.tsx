@@ -2504,27 +2504,38 @@ const loadPdfJs = () => {
 
         // Derive inspection-side data directly from diagram items so the
         // inspector does not have to re-enter what they already plotted.
-        // Test Squares form fields default to these values and only need
-        // to be touched when the inspector wants to override.
+        // The inspection tab renders these values read-only and jumps
+        // back to the diagram when the engineer needs to edit them.
         const testSquaresDerived = useMemo(() => {
           const dirKeys = { N: "north", S: "south", E: "east", W: "west" } as const;
-          const out: Record<string, { bruises: string; punctures: string; notes: string; squareCount: number; hasData: boolean }> = {
-            north: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
-            south: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
-            east:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false },
-            west:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false }
+          type DirEntry = {
+            bruises: string;
+            punctures: string;
+            notes: string;
+            squareCount: number;
+            hasData: boolean;
+            firstItemId: string;
+            maxSizeLabel: string;
+            squareNames: string[];
           };
-          const acc: Record<string, { squares: string[]; bruises: number; maxSize: string; maxParsed: number; noteFrags: string[] }> = {
-            north: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
-            south: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
-            east:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] },
-            west:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [] }
+          const out: Record<string, DirEntry> = {
+            north: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false, firstItemId: "", maxSizeLabel: "", squareNames: [] },
+            south: { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false, firstItemId: "", maxSizeLabel: "", squareNames: [] },
+            east:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false, firstItemId: "", maxSizeLabel: "", squareNames: [] },
+            west:  { bruises: "", punctures: "", notes: "", squareCount: 0, hasData: false, firstItemId: "", maxSizeLabel: "", squareNames: [] }
+          };
+          const acc: Record<string, { squares: string[]; bruises: number; maxSize: string; maxParsed: number; noteFrags: string[]; firstItemId: string }> = {
+            north: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [], firstItemId: "" },
+            south: { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [], firstItemId: "" },
+            east:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [], firstItemId: "" },
+            west:  { squares: [], bruises: 0, maxSize: "", maxParsed: 0, noteFrags: [], firstItemId: "" }
           };
           pageItems.forEach(item => {
             if(item.type !== "ts") return;
             const dirLong = dirKeys[item.data?.dir as keyof typeof dirKeys];
             if(!dirLong || !acc[dirLong]) return;
             const a = acc[dirLong];
+            if(!a.firstItemId) a.firstItemId = item.id;
             a.squares.push(item.name || "TS");
             (item.data?.bruises || []).forEach((b: any) => {
               a.bruises += 1;
@@ -2547,6 +2558,9 @@ const loadPdfJs = () => {
             out[dirLong].squareCount = a.squares.length;
             out[dirLong].bruises = String(a.bruises);
             out[dirLong].punctures = "0";
+            out[dirLong].firstItemId = a.firstItemId;
+            out[dirLong].maxSizeLabel = a.maxSize;
+            out[dirLong].squareNames = a.squares;
             const noteParts: string[] = [];
             noteParts.push(`${a.squares.length} test square${a.squares.length === 1 ? "" : "s"} (${a.squares.join(", ")})`);
             if(a.bruises > 0 && a.maxSize){
@@ -2556,6 +2570,43 @@ const loadPdfJs = () => {
               noteParts.push(a.noteFrags.join("; "));
             }
             out[dirLong].notes = noteParts.join("; ");
+          });
+          return out;
+        }, [pageItems]);
+
+        // Parallel derivation for WIND items. The inspection tab shows a
+        // per-slope summary of creased / torn-missing counts; the engineer
+        // edits these in the diagram, not here.
+        const windDerived = useMemo(() => {
+          const dirKeys = { N: "north", S: "south", E: "east", W: "west" } as const;
+          type DirEntry = {
+            creased: number;
+            tornMissing: number;
+            hasData: boolean;
+            firstItemId: string;
+            components: string[];
+          };
+          const out: Record<string, DirEntry> = {
+            north: { creased: 0, tornMissing: 0, hasData: false, firstItemId: "", components: [] },
+            south: { creased: 0, tornMissing: 0, hasData: false, firstItemId: "", components: [] },
+            east:  { creased: 0, tornMissing: 0, hasData: false, firstItemId: "", components: [] },
+            west:  { creased: 0, tornMissing: 0, hasData: false, firstItemId: "", components: [] }
+          };
+          pageItems.forEach(item => {
+            if(item.type !== "wind") return;
+            const dirLong = dirKeys[item.data?.dir as keyof typeof dirKeys];
+            if(!dirLong) return;
+            const e = out[dirLong];
+            const creased = Number(item.data?.creasedCount || 0);
+            const torn = Number(item.data?.tornMissingCount || 0);
+            if(creased || torn){
+              e.hasData = true;
+              e.creased += creased;
+              e.tornMissing += torn;
+              if(!e.firstItemId) e.firstItemId = item.id;
+              const comp = (item.data?.component || "").toString().trim();
+              if(comp && !e.components.includes(comp)) e.components.push(comp);
+            }
           });
           return out;
         }, [pageItems]);
@@ -6692,6 +6743,40 @@ const loadPdfJs = () => {
           }
           setPhotoLightbox(entry);
         };
+        // Jumps from the read-only inspection summaries back to the diagram.
+        // If itemId is provided the existing item is selected; otherwise the
+        // named tool is primed so the next tap places a fresh item in the
+        // requested direction/scope.
+        const jumpToDiagram = ({
+          itemId,
+          tool: nextTool,
+          dir: nextDir,
+          scope: nextScope
+        }: {
+          itemId?: string;
+          tool?: "ts" | "wind" | "apt" | "ds" | "obs";
+          dir?: "N" | "S" | "E" | "W";
+          scope?: "roof" | "exterior";
+        }) => {
+          if(viewMode !== "diagram") setViewMode("diagram");
+          if(itemId){
+            const item = items.find(i => i.id === itemId);
+            if(item?.pageId && item.pageId !== activePageId){
+              setActivePageId(item.pageId);
+            }
+            setSelectedId(itemId);
+            setTool(null);
+          } else if(nextTool){
+            if(nextTool === "ts" && nextDir) setTsLastDir(nextDir);
+            if(nextTool === "wind"){
+              if(nextDir) setWindLastDir(nextDir);
+              if(nextScope) setWindLastScope(nextScope);
+            }
+            setTool(nextTool);
+          }
+          setPanelView("props");
+          if(isMobile) setMobilePanelOpen(true);
+        };
         const showResetView = Math.abs(view.tx) > sheetWidth / 2
           || Math.abs(view.ty) > sheetHeight / 2
           || view.scale < 0.6
@@ -9808,31 +9893,11 @@ const loadPdfJs = () => {
                   detailFilled === detailKeys.length ? "ready" :
                   detailFilled > 0 ? "partial" : "empty";
                 const testSquareKeys = ["north", "south", "east", "west"] as const;
-                const tsDerivedAny = testSquareKeys.some(dir => testSquaresDerived[dir]?.hasData);
-                const tsAny = testSquareKeys.some(dir => {
-                  const sq: any = (insp as any).testSquares?.[dir] || {};
-                  return hasVal2(sq.bruises) || hasVal2(sq.punctures) || hasVal2(sq.notes);
-                }) || tsDerivedAny;
-                const tsAll = testSquareKeys.every(dir => {
-                  const sq: any = (insp as any).testSquares?.[dir] || {};
-                  const derived = testSquaresDerived[dir];
-                  return hasVal2(sq.bruises) || hasVal2(sq.punctures) || (derived && derived.hasData);
-                });
+                const tsAny = testSquareKeys.some(dir => testSquaresDerived[dir]?.hasData);
+                const tsAll = testSquareKeys.every(dir => testSquaresDerived[dir]?.hasData);
                 const tsStatus: "ready" | "partial" | "empty" = tsAll ? "ready" : tsAny ? "partial" : "empty";
                 const setInspectionField = (key: string, value: string) => {
                   setReportData((prev: any) => ({ ...prev, inspection: { ...prev.inspection, [key]: value } }));
-                };
-                const setTestSquare = (dir: string, field: string, value: string) => {
-                  setReportData((prev: any) => ({
-                    ...prev,
-                    inspection: {
-                      ...prev.inspection,
-                      testSquares: {
-                        ...(prev.inspection.testSquares || {}),
-                        [dir]: { ...((prev.inspection.testSquares || {})[dir] || {}), [field]: value }
-                      }
-                    }
-                  }));
                 };
                 const toggleSpatterSurface = (surface: string) => {
                   setReportData((prev: any) => {
@@ -9911,71 +9976,109 @@ const loadPdfJs = () => {
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Test Squares",
-                    subtitle: "Counts auto-populate from the diagram — drop TS items with bruises on a slope and the values mirror here. Override only if the paragraph should differ from what was mapped.",
+                    subtitle: "Read-only counts from the diagram. Use the edit button to add or adjust bruises on the roof.",
                     status: tsStatus,
                     sectionKey: "inspection.testSquares",
                     children: (
                       <div style={{display:"flex", flexDirection:"column", gap:10}}>
                         {testSquareKeys.map(dir => {
-                          const sq: any = ((insp as any).testSquares || {})[dir] || {};
-                          const derived = testSquaresDerived[dir] || { bruises: "", punctures: "", notes: "", hasData: false, squareCount: 0 };
-                          const bruisesVal = hasVal2(sq.bruises) ? sq.bruises : (derived.hasData ? derived.bruises : "");
-                          const puncturesVal = hasVal2(sq.punctures) ? sq.punctures : (derived.hasData ? derived.punctures : "");
-                          const notesVal = hasVal2(sq.notes) ? sq.notes : (derived.hasData ? derived.notes : "");
-                          const anyOverride = hasVal2(sq.bruises) || hasVal2(sq.punctures) || hasVal2(sq.notes);
+                          const derived = testSquaresDerived[dir] || { bruises: "", punctures: "", notes: "", hasData: false, squareCount: 0, firstItemId: "", maxSizeLabel: "", squareNames: [] };
+                          const dirShort = ({ north: "N", south: "S", east: "E", west: "W" } as const)[dir];
+                          const dirLabel = dir === "north" ? "North-facing slope" :
+                                           dir === "south" ? "South-facing slope" :
+                                           dir === "east"  ? "East-facing slope"  : "West-facing slope";
+                          const bruisesNum = derived.hasData ? Number(derived.bruises || 0) : 0;
                           return (
-                            <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px"}}>
-                              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
+                            <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
+                              <div style={{display:"flex", flexDirection:"column", gap:4, minWidth:0}}>
                                 <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, margin:0}}>
-                                  {dir === "north" ? "North-facing slope" :
-                                   dir === "south" ? "South-facing slope" :
-                                   dir === "east" ? "East-facing slope" : "West-facing slope"}
+                                  {dirLabel}
                                 </div>
-                                <div style={{display:"flex", alignItems:"center", gap:8}}>
-                                  {derived.hasData && !anyOverride && (
-                                    <span className="lblHint" style={{fontSize:10, color:"#0ea5e9"}}>
-                                      Synced with diagram · {derived.squareCount} TS
-                                    </span>
-                                  )}
-                                  {anyOverride && (
-                                    <>
-                                      <span className="lblHint" style={{fontSize:10, color:"#f59e0b"}}>Manual override</span>
-                                      <button
-                                        type="button"
-                                        className="btn btnGhost"
-                                        style={{fontSize:11, padding:"2px 8px"}}
-                                        onClick={() => {
-                                          setTestSquare(dir, "bruises", "");
-                                          setTestSquare(dir, "punctures", "");
-                                          setTestSquare(dir, "notes", "");
-                                        }}
-                                      >
-                                        Reset
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
+                                {derived.hasData ? (
+                                  <div style={{fontSize:13, color:"#1e293b", display:"flex", flexWrap:"wrap", gap:12}}>
+                                    <span><strong>{derived.squareCount}</strong> test square{derived.squareCount === 1 ? "" : "s"}</span>
+                                    <span><strong>{bruisesNum}</strong> bruise{bruisesNum === 1 ? "" : "s"}</span>
+                                    {derived.maxSizeLabel && <span>max size <strong>{derived.maxSizeLabel}"</strong></span>}
+                                    {derived.squareNames.length > 0 && <span style={{color:"#64748b"}}>{derived.squareNames.join(", ")}</span>}
+                                  </div>
+                                ) : (
+                                  <div style={{fontSize:13, color:"#94a3b8", fontStyle:"italic"}}>No test squares mapped on this slope</div>
+                                )}
                               </div>
-                              <div className="reportGrid">
-                                <div>
-                                  <div className="lbl">Bruises</div>
-                                  <input className="inp" value={bruisesVal} onChange={(e)=>setTestSquare(dir, "bruises", e.target.value)} placeholder={derived.hasData ? derived.bruises : "e.g., 0"} />
-                                </div>
-                                <div>
-                                  <div className="lbl">Punctures</div>
-                                  <input className="inp" value={puncturesVal} onChange={(e)=>setTestSquare(dir, "punctures", e.target.value)} placeholder={derived.hasData ? derived.punctures : "e.g., 0"} />
-                                </div>
-                                <div>
-                                  <div className="lbl">Notes</div>
-                                  <input className="inp" value={notesVal} onChange={(e)=>setTestSquare(dir, "notes", e.target.value)} placeholder={derived.hasData ? "location, condition" : "no test squares on this slope"} />
-                                </div>
-                              </div>
+                              <button
+                                type="button"
+                                className="btn btnGhost"
+                                style={{display:"inline-flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap"}}
+                                title={derived.hasData ? `Open ${derived.squareNames[0] || "test square"} in the diagram` : `Add a test square on the ${dir}-facing slope`}
+                                onClick={() => jumpToDiagram(derived.hasData
+                                  ? { itemId: derived.firstItemId }
+                                  : { tool: "ts", dir: dirShort }
+                                )}
+                              >
+                                <Icon name="pencil" />
+                                <span>{derived.hasData ? "Edit in diagram" : "Add in diagram"}</span>
+                              </button>
                             </div>
                           );
                         })}
                       </div>
                     ),
                   })}
+                  {(() => {
+                    const windDirKeys = ["north", "south", "east", "west"] as const;
+                    const anyWind = windDirKeys.some(d => windDerived[d]?.hasData);
+                    const allWind = windDirKeys.every(d => windDerived[d]?.hasData);
+                    const windStatus: "ready" | "partial" | "empty" = !anyWind ? "empty" : allWind ? "ready" : "partial";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Wind Evaluation",
+                      subtitle: "Read-only counts from the diagram WIND items. Use the edit button to add or adjust creased, torn, or missing shingles on a slope.",
+                      status: windStatus,
+                      sectionKey: "inspection.wind",
+                      children: (
+                        <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                          {windDirKeys.map(dir => {
+                            const d = windDerived[dir] || { creased: 0, tornMissing: 0, hasData: false, firstItemId: "", components: [] };
+                            const dirShort = ({ north: "N", south: "S", east: "E", west: "W" } as const)[dir];
+                            const dirLabel = dir === "north" ? "North-facing slope" :
+                                             dir === "south" ? "South-facing slope" :
+                                             dir === "east"  ? "East-facing slope"  : "West-facing slope";
+                            return (
+                              <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
+                                <div style={{display:"flex", flexDirection:"column", gap:4, minWidth:0}}>
+                                  <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, margin:0}}>
+                                    {dirLabel}
+                                  </div>
+                                  {d.hasData ? (
+                                    <div style={{fontSize:13, color:"#1e293b", display:"flex", flexWrap:"wrap", gap:12}}>
+                                      <span><strong>{d.creased}</strong> creased</span>
+                                      <span><strong>{d.tornMissing}</strong> torn or missing</span>
+                                      {d.components.length > 0 && <span style={{color:"#64748b"}}>{d.components.join(", ")}</span>}
+                                    </div>
+                                  ) : (
+                                    <div style={{fontSize:13, color:"#94a3b8", fontStyle:"italic"}}>No wind conditions mapped on this slope</div>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btnGhost"
+                                  style={{display:"inline-flex", alignItems:"center", gap:6, padding:"6px 10px", whiteSpace:"nowrap"}}
+                                  title={d.hasData ? "Open this wind item in the diagram" : `Add wind conditions on the ${dir}-facing slope`}
+                                  onClick={() => jumpToDiagram(d.hasData
+                                    ? { itemId: d.firstItemId }
+                                    : { tool: "wind", dir: dirShort, scope: "roof" }
+                                  )}
+                                >
+                                  <Icon name="pencil" />
+                                  <span>{d.hasData ? "Edit in diagram" : "Add in diagram"}</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ),
+                    });
+                  })()}
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Inspection Narrative",
