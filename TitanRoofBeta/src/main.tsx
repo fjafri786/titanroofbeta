@@ -1175,6 +1175,22 @@ const loadPdfJs = () => {
         const [aptLastType, setAptLastType] = usePersistedState<string>("titanroof.tool.aptType", "EF");
         const [aptLastDir, setAptLastDir] = usePersistedState<string>("titanroof.tool.aptDir", "N");
         const [dsLastDir, setDsLastDir] = usePersistedState<string>("titanroof.tool.dsDir", "N");
+        // TS / WIND / OBS last-used sub-selections. Mirrors the APT/DS
+        // pattern above — when the inspector changes one of these fields
+        // on an existing item, the next freshly placed item of the same
+        // type inherits the new value instead of snapping back to the
+        // hardcoded default (feedback: "options should stay consistent").
+        const [tsLastDir, setTsLastDir] = usePersistedState<string>("titanroof.tool.tsDir", "N");
+        const [windLastScope, setWindLastScope] = usePersistedState<string>("titanroof.tool.windScope", "roof");
+        const [windLastComponent, setWindLastComponent] = usePersistedState<string>("titanroof.tool.windComponent", "Shingles");
+        const [windLastDir, setWindLastDir] = usePersistedState<string>("titanroof.tool.windDir", "N");
+        const [windLastCreasedCount, setWindLastCreasedCount] = usePersistedState<number>("titanroof.tool.windCreasedCount", 1);
+        const [windLastTornMissingCount, setWindLastTornMissingCount] = usePersistedState<number>("titanroof.tool.windTornMissingCount", 0);
+        const [obsLastCode, setObsLastCode] = usePersistedState<string>("titanroof.tool.obsCode", "DDM");
+        const [obsLastDir, setObsLastDir] = usePersistedState<string>("titanroof.tool.obsDir", "");
+        const [obsLastArea, setObsLastArea] = usePersistedState<string>("titanroof.tool.obsArea", "");
+        const [obsLastArrowType, setObsLastArrowType] = usePersistedState<string>("titanroof.tool.obsArrowType", "triangle");
+        const [obsLastArrowLabelPosition, setObsLastArrowLabelPosition] = usePersistedState<string>("titanroof.tool.obsArrowLabelPos", "end");
 
         const [obsPaletteOpen, setObsPaletteOpen] = useState(false);
         const [obsPalettePos, setObsPalettePos] = useState({ left: 0, top: 0 });
@@ -2430,111 +2446,6 @@ const loadPdfJs = () => {
           }
         ), [dashboard]);
 
-        const dashFocusData = useMemo(() => {
-          if(!dashFocusDir) return null;
-          const tsItems = pageItems.filter(item => item.type === "ts" && item.data?.dir === dashFocusDir);
-          const windItems = pageItems.filter(item => item.type === "wind" && item.data?.dir === dashFocusDir);
-          const obsItems = pageItems.filter(item => item.type === "obs" && item.data?.dir === dashFocusDir);
-          let maxBruise = null;
-          let maxBruiseSize = 0;
-          let maxBruiseItem = null;
-          let totalCreased = 0;
-          let totalTornMissing = 0;
-          const windPhotos = [];
-          const hailPhotos = [];
-          const obsPhotos = [];
-
-          tsItems.forEach(ts => {
-            const tsData = ts.data || {};
-            (tsData.bruises || []).forEach(b => {
-              const size = parseSize(b.size);
-              if(size > maxBruiseSize){
-                maxBruiseSize = size;
-                maxBruise = b;
-                maxBruiseItem = ts;
-              }
-            });
-            const tsLabel = testSquareLabel(tsData.dir);
-            if(tsData.overviewPhoto?.url){
-              hailPhotos.push({
-                itemId: ts.id,
-                url: tsData.overviewPhoto.url,
-                caption: `Overview of the ${tsLabel}`
-              });
-            }
-            (tsData.bruises || []).forEach((b, idx) => {
-              if(!b.photo?.url) return;
-              hailPhotos.push({
-                itemId: ts.id,
-                url: b.photo.url,
-                caption: `Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`
-              });
-            });
-            (tsData.conditions || []).forEach((c, idx) => {
-              if(!c.photo?.url) return;
-              const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
-              hailPhotos.push({
-                itemId: ts.id,
-                url: c.photo.url,
-                caption: `Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`
-              });
-            });
-          });
-
-          windItems.forEach(wind => {
-            const windData = wind.data || {};
-            totalCreased += windData.creasedCount || 0;
-            totalTornMissing += windData.tornMissingCount || 0;
-            if(windData.scope !== "exterior" && windData.creasedPhoto?.url){
-              windPhotos.push({
-                itemId: wind.id,
-                url: windData.creasedPhoto.url,
-                caption: windCaption("creased", windData)
-              });
-            }
-            if(windData.scope !== "exterior" && windData.tornMissingPhoto?.url){
-              windPhotos.push({
-                itemId: wind.id,
-                url: windData.tornMissingPhoto.url,
-                caption: windCaption("torn", windData)
-              });
-            }
-            if(windData.overviewPhoto?.url){
-              windPhotos.push({
-                itemId: wind.id,
-                url: windData.overviewPhoto.url,
-                caption: windCaption("overview", windData)
-              });
-            }
-          });
-
-          obsItems.forEach(obs => {
-            if(!obs.data.photo?.url) return;
-            obsPhotos.push({
-              itemId: obs.id,
-              url: obs.data.photo.url,
-              caption: observationCaption(obs)
-            });
-          });
-
-          return {
-            tsItems,
-            windItems,
-            obsItems,
-            maxBruise,
-            maxBruiseSize,
-            maxBruiseItem,
-            totalCreased,
-            totalTornMissing,
-            windPhotos,
-            hailPhotos,
-            obsPhotos,
-            windPhotoOverflow: Math.max(0, windPhotos.length - DASHBOARD_PHOTO_LIMIT),
-            hailPhotoOverflow: Math.max(0, hailPhotos.length - DASHBOARD_PHOTO_LIMIT),
-            obsPhotoOverflow: Math.max(0, obsPhotos.length - DASHBOARD_PHOTO_LIMIT)
-          };
-        }, [dashFocusDir, pageItems]);
-
         const dashboardSummary = useMemo(() => {
           return pageItems.reduce((summary, item) => {
             if(item.type === "ts"){
@@ -2872,7 +2783,7 @@ const loadPdfJs = () => {
             const n = counts.current.ts++;
             base.name = `TS-${n}`;
             base.data = {
-              dir: "N",
+              dir: tsLastDir || "N",
               locked: false,
               points: pos.points,
               bruises: [],
@@ -2918,13 +2829,22 @@ const loadPdfJs = () => {
 
           if(type === "wind"){
             base.name = `WIND-${counts.current.wind++}`;
+            const scope = windLastScope || "roof";
+            const fallbackComponent = scope === "exterior" ? "Siding" : "Shingles";
+            const componentOptions = WIND_COMPONENTS[scope] || WIND_COMPONENTS.roof;
+            const component = componentOptions.includes(windLastComponent) ? windLastComponent : fallbackComponent;
+            const dirOptions = scope === "exterior" ? EXTERIOR_WIND_DIRS : ROOF_WIND_DIRS;
+            const dir = dirOptions.includes(windLastDir) ? windLastDir : "N";
             base.data = {
-              scope: "roof",
-              component: "Shingles",
-              dir: "N",
+              scope,
+              component,
+              dir,
               locked: false,
-              creasedCount: 1,
-              tornMissingCount: 0,
+              // Exterior wind items don't expose creased / torn inputs, so
+              // skip the persisted defaults in that branch to mirror the
+              // reset that the Area toggle performs.
+              creasedCount: scope === "exterior" ? 0 : (windLastCreasedCount ?? 1),
+              tornMissingCount: scope === "exterior" ? 0 : (windLastTornMissingCount ?? 0),
               caption: "",
               overviewPhoto: null,
               creasedPhoto: null,
@@ -2935,18 +2855,18 @@ const loadPdfJs = () => {
           if(type === "obs"){
             base.name = `OBS-${counts.current.obs++}`;
             base.data = {
-              code: "DDM",
+              code: obsLastCode || "DDM",
               otherLabel: "",
-              dir: "",
-              area: "",
+              dir: obsLastDir || "",
+              area: obsLastArea || "",
               locked: false,
               caption: "",
               photo: null,
               points: pos?.points || null,
               kind: options.kind || "pin",
               label: "",
-              arrowType: "triangle",
-              arrowLabelPosition: "end"
+              arrowType: obsLastArrowType || "triangle",
+              arrowLabelPosition: obsLastArrowLabelPosition || "end"
             };
           }
 
@@ -2978,8 +2898,10 @@ const loadPdfJs = () => {
 
         const updateItemData = (k, v) => {
           setItems(prev => prev.map(i => i.id === selectedId ? { ...i, data: { ...i.data, [k]: v } } : i));
-          // Persist last-used APT / DS sub-selections so the next
-          // item created uses the same defaults (feedback item 18).
+          // Persist last-used sub-selections so the next item created
+          // uses the same defaults (feedback item 18 / follow-up for
+          // TS + WIND + OBS: options should stay consistent until the
+          // inspector changes them).
           const it = items.find(i => i.id === selectedId);
           if(!it) return;
           if(it.type === "apt"){
@@ -2988,6 +2910,23 @@ const loadPdfJs = () => {
           }
           if(it.type === "ds"){
             if(k === "dir" && typeof v === "string") setDsLastDir(v);
+          }
+          if(it.type === "ts"){
+            if(k === "dir" && typeof v === "string") setTsLastDir(v);
+          }
+          if(it.type === "wind"){
+            if(k === "scope" && typeof v === "string") setWindLastScope(v);
+            if(k === "component" && typeof v === "string") setWindLastComponent(v);
+            if(k === "dir" && typeof v === "string") setWindLastDir(v);
+            if(k === "creasedCount" && typeof v === "number") setWindLastCreasedCount(v);
+            if(k === "tornMissingCount" && typeof v === "number") setWindLastTornMissingCount(v);
+          }
+          if(it.type === "obs"){
+            if(k === "code" && typeof v === "string") setObsLastCode(v);
+            if(k === "dir" && typeof v === "string") setObsLastDir(v);
+            if(k === "area" && typeof v === "string") setObsLastArea(v);
+            if(k === "arrowType" && typeof v === "string") setObsLastArrowType(v);
+            if(k === "arrowLabelPosition" && typeof v === "string") setObsLastArrowLabelPosition(v);
           }
         };
 
@@ -4664,6 +4603,117 @@ const loadPdfJs = () => {
           const location = observationLocation(obs.data?.dir, obs.data?.area);
           return location ? `${base} ${location}` : base;
         };
+
+        // Defined after the caption/label helpers so the memo's callback
+        // can call them safely. Placing the useMemo earlier put those
+        // helpers in the temporal dead zone and crashed the dashboard
+        // with "Cannot access <x> before initialization" the first time a
+        // slope was focused.
+        const dashFocusData = useMemo(() => {
+          if(!dashFocusDir) return null;
+          const tsItems = pageItems.filter(item => item.type === "ts" && item.data?.dir === dashFocusDir);
+          const windItems = pageItems.filter(item => item.type === "wind" && item.data?.dir === dashFocusDir);
+          const obsItems = pageItems.filter(item => item.type === "obs" && item.data?.dir === dashFocusDir);
+          let maxBruise = null;
+          let maxBruiseSize = 0;
+          let maxBruiseItem = null;
+          let totalCreased = 0;
+          let totalTornMissing = 0;
+          const windPhotos = [];
+          const hailPhotos = [];
+          const obsPhotos = [];
+
+          tsItems.forEach(ts => {
+            const tsData = ts.data || {};
+            (tsData.bruises || []).forEach(b => {
+              const size = parseSize(b.size);
+              if(size > maxBruiseSize){
+                maxBruiseSize = size;
+                maxBruise = b;
+                maxBruiseItem = ts;
+              }
+            });
+            const tsLabel = testSquareLabel(tsData.dir);
+            if(tsData.overviewPhoto?.url){
+              hailPhotos.push({
+                itemId: ts.id,
+                url: tsData.overviewPhoto.url,
+                caption: `Overview of the ${tsLabel}`
+              });
+            }
+            (tsData.bruises || []).forEach((b, idx) => {
+              if(!b.photo?.url) return;
+              hailPhotos.push({
+                itemId: ts.id,
+                url: b.photo.url,
+                caption: `Bruise ${idx + 1} (${b.size}") on the ${tsLabel}`
+              });
+            });
+            (tsData.conditions || []).forEach((c, idx) => {
+              if(!c.photo?.url) return;
+              const conditionLabel = TS_CONDITIONS.find(condition => condition.code === c.code)?.label || c.code;
+              hailPhotos.push({
+                itemId: ts.id,
+                url: c.photo.url,
+                caption: `Condition ${idx + 1} (${conditionLabel}) on the ${tsLabel}`
+              });
+            });
+          });
+
+          windItems.forEach(wind => {
+            const windData = wind.data || {};
+            totalCreased += windData.creasedCount || 0;
+            totalTornMissing += windData.tornMissingCount || 0;
+            if(windData.scope !== "exterior" && windData.creasedPhoto?.url){
+              windPhotos.push({
+                itemId: wind.id,
+                url: windData.creasedPhoto.url,
+                caption: windCaption("creased", windData)
+              });
+            }
+            if(windData.scope !== "exterior" && windData.tornMissingPhoto?.url){
+              windPhotos.push({
+                itemId: wind.id,
+                url: windData.tornMissingPhoto.url,
+                caption: windCaption("torn", windData)
+              });
+            }
+            if(windData.overviewPhoto?.url){
+              windPhotos.push({
+                itemId: wind.id,
+                url: windData.overviewPhoto.url,
+                caption: windCaption("overview", windData)
+              });
+            }
+          });
+
+          obsItems.forEach(obs => {
+            if(!obs.data.photo?.url) return;
+            obsPhotos.push({
+              itemId: obs.id,
+              url: obs.data.photo.url,
+              caption: observationCaption(obs)
+            });
+          });
+
+          return {
+            tsItems,
+            windItems,
+            obsItems,
+            maxBruise,
+            maxBruiseSize,
+            maxBruiseItem,
+            totalCreased,
+            totalTornMissing,
+            windPhotos,
+            hailPhotos,
+            obsPhotos,
+            windPhotoOverflow: Math.max(0, windPhotos.length - DASHBOARD_PHOTO_LIMIT),
+            hailPhotoOverflow: Math.max(0, hailPhotos.length - DASHBOARD_PHOTO_LIMIT),
+            obsPhotoOverflow: Math.max(0, obsPhotos.length - DASHBOARD_PHOTO_LIMIT)
+          };
+        }, [dashFocusDir, pageItems]);
+
         const damageEntryDescription = (entry) => {
           const mode = entry.mode === "both"
             ? "spatter and dent"
