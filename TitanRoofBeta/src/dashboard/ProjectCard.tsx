@@ -141,12 +141,14 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
               {summary.itemCount ?? 0} item
               {summary.itemCount === 1 ? "" : "s"}
             </span>
-            <span
-              className={`projectCardDamage damage-${summary.damageSummary || "unknown"}`}
-              title={damageTitle(summary.damageSummary)}
-            >
-              {damageLabel(summary.damageSummary)}
-            </span>
+            {showDamageBadge(summary.damageSummary) && (
+              <span
+                className={`projectCardDamage damage-${summary.damageSummary}`}
+                title={damageTitle(summary.damageSummary)}
+              >
+                {damageLabel(summary.damageSummary)}
+              </span>
+            )}
           </div>
           {itemBreakdown && (
             <div className="projectCardBreakdown">{itemBreakdown}</div>
@@ -300,6 +302,15 @@ const ChipIcon: React.FC<{ kind: "photo" | "item" }> = ({ kind }) => {
   );
 };
 
+// The dashboard deliberately avoids rendering a "no damage" verdict before
+// the inspector finishes the report — the diagram-derived summary can be
+// misleading mid-inspection and we don't want to imply a conclusion to a
+// client who happens to glance at the dashboard. Only affirmative damage
+// indicators get a badge; "none" and "unknown" are hidden.
+function showDamageBadge(d?: DamageSummary): boolean {
+  return d === "wind+hail" || d === "hail" || d === "wind";
+}
+
 function damageLabel(d?: DamageSummary): string {
   switch (d) {
     case "wind+hail":
@@ -308,10 +319,8 @@ function damageLabel(d?: DamageSummary): string {
       return "Hail";
     case "wind":
       return "Wind";
-    case "none":
-      return "No damage";
     default:
-      return "No items";
+      return "";
   }
 }
 
@@ -323,10 +332,8 @@ function damageTitle(d?: DamageSummary): string {
       return "Hail indicators present in diagram items.";
     case "wind":
       return "Wind indicators present in diagram items.";
-    case "none":
-      return "No wind or hail indicators across diagram items.";
     default:
-      return "No diagram items placed yet.";
+      return "";
   }
 }
 
