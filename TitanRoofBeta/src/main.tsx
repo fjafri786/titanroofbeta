@@ -758,6 +758,44 @@ const loadPdfJs = () => {
           if(doc?.destroy) doc.destroy();
         }
       }
+      async function renderPdfBufferToThumbnails(buffer, { targetWidth = 320, onThumbnail = null, shouldCancel = null } = {}){
+        let pdfjsLib;
+        try { pdfjsLib = await loadPdfJs(); } catch { return []; }
+        if(!pdfjsLib?.getDocument) return [];
+        let doc = null;
+        try{
+          doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+          const out = [];
+          for(let pageNum = 1; pageNum <= doc.numPages; pageNum++){
+            if(shouldCancel && shouldCancel()) break;
+            const page = await doc.getPage(pageNum);
+            const baseViewport = page.getViewport({ scale: 1 });
+            const scale = baseViewport.width ? (targetWidth / baseViewport.width) : 1;
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(viewport.width));
+            canvas.height = Math.max(1, Math.round(viewport.height));
+            const ctx = canvas.getContext("2d");
+            if(!ctx) continue;
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+            const thumb = {
+              pageNumber: pageNum,
+              dataUrl,
+              aspectRatio: viewport.width && viewport.height ? viewport.width / viewport.height : null
+            };
+            out.push(thumb);
+            if(onThumbnail) onThumbnail(thumb);
+          }
+          return out;
+        } catch (err) {
+          console.warn("Failed to render PDF thumbnails.", err);
+          return [];
+        } finally {
+          if(doc?.cleanup) doc.cleanup();
+          if(doc?.destroy) doc.destroy();
+        }
+      }
 
       const Icon = ({name, className=""}) => {
         const common = { className: `ico ${className}`, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:"2", strokeLinecap:"round", strokeLinejoin:"round" };
@@ -5805,6 +5843,39 @@ const loadPdfJs = () => {
         }, [activePageId, pageItems, selectedId]);
 
         useEffect(() => {
+          const file = pdfImportState?.file;
+          if(!file) return;
+          if(pdfImportState?.thumbnailsForFile === file) return;
+          let cancelled = false;
+          (async () => {
+            let buffer;
+            try { buffer = await file.arrayBuffer(); }
+            catch { return; }
+            if(cancelled) return;
+            await renderPdfBufferToThumbnails(buffer.slice(0), {
+              targetWidth: 320,
+              shouldCancel: () => cancelled,
+              onThumbnail: (thumb) => {
+                if(cancelled) return;
+                setPdfImportState(prev => {
+                  if(!prev || prev.file !== file) return prev;
+                  const existing = prev.thumbnails || [];
+                  if(existing.some(t => t.pageNumber === thumb.pageNumber)) return prev;
+                  const next = [...existing, thumb].sort((a, b) => a.pageNumber - b.pageNumber);
+                  return { ...prev, thumbnails: next, thumbnailsForFile: file };
+                });
+              }
+            });
+            if(cancelled) return;
+            setPdfImportState(prev => {
+              if(!prev || prev.file !== file) return prev;
+              return { ...prev, thumbnailsForFile: file };
+            });
+          })();
+          return () => { cancelled = true; };
+        }, [pdfImportState?.file]);
+
+        useEffect(() => {
           if(activeItem){
             setGroupOpen(prev => ({ ...prev, [activeItem.type]: true }));
           }
@@ -6428,15 +6499,29 @@ const loadPdfJs = () => {
                 <div className="pdfImportGrid">
                   {Array.from({ length: pdfImportState.pageCount }, (_, idx) => idx + 1).map(pageNum => {
                     const active = pdfImportState.selected.includes(pageNum);
+                    const thumb = pdfImportState.thumbnails?.find(t => t.pageNumber === pageNum);
                     return (
                       <button
                         key={pageNum}
                         type="button"
-                        className={"pdfImportChip" + (active ? " active" : "")}
+                        className={"pdfImportChip" + (active ? " active" : "") + (thumb ? " hasThumb" : "")}
                         onClick={() => togglePdfImportPage(pageNum)}
                         aria-pressed={active}
+                        aria-label={`Page ${pageNum}`}
                       >
-                        <span className="pdfImportChipNum">{pageNum}</span>
+                        <span className="pdfImportChipPreview">
+                          {thumb ? (
+                            <img
+                              className="pdfImportChipThumb"
+                              src={thumb.dataUrl}
+                              alt=""
+                              draggable={false}
+                            />
+                          ) : (
+                            <span className="pdfImportChipSpinner" aria-hidden="true" />
+                          )}
+                        </span>
+                        <span className="pdfImportChipLabel">{pageNum}</span>
                         {active && <span className="pdfImportChipTick" aria-hidden="true">✓</span>}
                       </button>
                     );
