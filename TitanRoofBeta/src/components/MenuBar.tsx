@@ -274,26 +274,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
         <span
           className="menuBarBetaBadge"
           role="img"
-          aria-label="Beta v4.0"
-          title="Beta v4.0"
+          aria-label="Beta v4.2.3"
+          title="Beta v4.2.3"
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M8 1.5L15 14H1L8 1.5Z"
-              fill="#F59E0B"
-              stroke="#B45309"
-              strokeWidth="1"
-              strokeLinejoin="round"
-            />
-            <rect x="7.25" y="6" width="1.5" height="4" rx="0.5" fill="#fff" />
-            <rect x="7.25" y="11" width="1.5" height="1.5" rx="0.5" fill="#fff" />
-          </svg>
+          <span className="menuBarBetaLabel">Beta</span>
+          <span className="menuBarBetaVersion">v4.2.3</span>
         </span>
       </div>
       <div className="menuBarRight">
