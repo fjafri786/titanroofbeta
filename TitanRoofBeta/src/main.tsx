@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import PropertiesBar from "./components/PropertiesBar";
 import MenuBar from "./components/MenuBar";
 import TopBar from "./components/TopBar";
+import UnifiedBar from "./components/UnifiedBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
@@ -2074,9 +2075,38 @@ const loadPdfJs = () => {
 
         const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
         useEffect(() => {
-          const onResize = () => setViewportSize({ w: window.innerWidth, h: window.innerHeight });
-          window.addEventListener("resize", onResize);
-          return () => window.removeEventListener("resize", onResize);
+          // iPad rotation: the browser fires `resize` asynchronously and the
+          // page dimensions can lag the orientation flip by a frame or two.
+          // We poll across a few rAF ticks after the event so React re-renders
+          // with the settled size (prevents the top chrome from slipping
+          // off-screen or the toolbar from measuring against stale values).
+          let raf1 = 0, raf2 = 0, timer = 0;
+          const measure = () => {
+            const vv = (window.visualViewport ?? null);
+            const w = vv ? Math.round(vv.width) : window.innerWidth;
+            const h = vv ? Math.round(vv.height) : window.innerHeight;
+            setViewportSize(prev => (prev.w === w && prev.h === h ? prev : { w, h }));
+          };
+          const scheduleSettle = () => {
+            measure();
+            cancelAnimationFrame(raf1); cancelAnimationFrame(raf2);
+            window.clearTimeout(timer);
+            raf1 = requestAnimationFrame(() => {
+              measure();
+              raf2 = requestAnimationFrame(measure);
+            });
+            timer = window.setTimeout(measure, 350);
+          };
+          window.addEventListener("resize", scheduleSettle);
+          window.addEventListener("orientationchange", scheduleSettle);
+          window.visualViewport?.addEventListener("resize", scheduleSettle);
+          return () => {
+            window.removeEventListener("resize", scheduleSettle);
+            window.removeEventListener("orientationchange", scheduleSettle);
+            window.visualViewport?.removeEventListener("resize", scheduleSettle);
+            cancelAnimationFrame(raf1); cancelAnimationFrame(raf2);
+            window.clearTimeout(timer);
+          };
         }, []);
         const [viewportBounds, setViewportBounds] = useState({ w: 0, h: 0 });
         const prevViewportBounds = useRef(null);
@@ -2105,6 +2135,20 @@ const loadPdfJs = () => {
         }, []);
 
         const isMobile = viewportSize.w <= 600;
+        // iPad-class viewports: between phone (600) and small-laptop
+        // (1280) cutoff. These get the unified header bar instead of
+        // the desktop TopBar + MenuBar + PropertiesBar stack. 1280
+        // covers iPad Pro 11" landscape (1194) and iPad Air landscape
+        // (1180), where the desktop stack was compressing to 0.74 scale.
+        const isTablet = viewportSize.w > 600 && viewportSize.w <= 1280;
+        const useUnifiedBar = isTablet;
+
+        useEffect(() => {
+          const body = document.body;
+          if(useUnifiedBar) body.classList.add("useUnifiedBar");
+          else body.classList.remove("useUnifiedBar");
+          return () => body.classList.remove("useUnifiedBar");
+        }, [useUnifiedBar]);
 
         useEffect(() => {
           document.documentElement.style.setProperty("--mobile-scale", String(mobileScale));
@@ -7084,34 +7128,74 @@ const loadPdfJs = () => {
 
         return (
           <>
-          <TopBar label="BETA" />
-          <MenuBar
-            onSave={() => saveState("manual")}
-            onSaveAs={exportTrp}
-            onOpen={() => trpInputRef.current?.click()}
-            onRecover={restoreAutoSave}
-            onExport={() => { saveState("manual"); setExportMode(true); }}
-            exportDisabled={exportDisabled}
-            onEditProjectProperties={() => setHdrEditOpen(true)}
-            onClearDiagramAndItems={clearDiagram}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onZoomIn={zoomIn}
-            onZoomOut={zoomOut}
-            onZoomFit={zoomFit}
-            gridEnabled={gridEnabled}
-            onToggleGrid={() => setGridEnabled(g => !g)}
-            onOpenGridSettings={() => setGridSettingsOpen(true)}
-            toolbarCollapsed={toolbarCollapsed}
-            onToggleToolbar={() => setToolbarCollapsed(v => !v)}
-            onPickTool={(key) => handleToolSelect(key)}
-            currentTool={tool}
-            onBeginScaleReference={beginScaleReference}
-            onClearScaleReference={() => setScaleRef(null)}
-            scaleReferenceSet={!!scaleRef}
-            lastSavedAt={lastSavedAt}
-          />
-          {headerContent}
+          {useUnifiedBar ? (
+            <UnifiedBar
+              residenceName={residenceName}
+              roofSummary={roofSummary}
+              frontFaces={frontFaces}
+              pages={pages.map(p => ({ id: p.id, name: p.name }))}
+              activePageId={activePageId}
+              onPageChange={setActivePageId}
+              onAddPage={insertBlankPageAfter}
+              onEditPage={startPageNameEdit}
+              onRotatePage={rotateActivePage}
+              onDeletePage={deleteActivePage}
+              onPrevPage={goToPrevPage}
+              onNextPage={goToNextPage}
+              viewMode={viewMode as "diagram" | "photos" | "report"}
+              onViewModeChange={setViewMode}
+              currentTool={tool}
+              onPickTool={(key) => handleToolSelect(key)}
+              onBeginScaleReference={beginScaleReference}
+              onClearScaleReference={() => setScaleRef(null)}
+              scaleReferenceSet={!!scaleRef}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              onZoomFit={zoomFit}
+              gridEnabled={gridEnabled}
+              onToggleGrid={() => setGridEnabled(g => !g)}
+              onOpenGridSettings={() => setGridSettingsOpen(true)}
+              onSave={() => saveState("manual")}
+              onSaveAs={exportTrp}
+              onOpen={() => trpInputRef.current?.click()}
+              onRecover={restoreAutoSave}
+              onExport={() => { saveState("manual"); setExportMode(true); }}
+              exportDisabled={exportDisabled}
+              onEditProjectProperties={() => setHdrEditOpen(true)}
+              onClearDiagramAndItems={clearDiagram}
+            />
+          ) : (
+            <>
+              <TopBar label="BETA" />
+              <MenuBar
+                onSave={() => saveState("manual")}
+                onSaveAs={exportTrp}
+                onOpen={() => trpInputRef.current?.click()}
+                onRecover={restoreAutoSave}
+                onExport={() => { saveState("manual"); setExportMode(true); }}
+                exportDisabled={exportDisabled}
+                onEditProjectProperties={() => setHdrEditOpen(true)}
+                onClearDiagramAndItems={clearDiagram}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                onZoomIn={zoomIn}
+                onZoomOut={zoomOut}
+                onZoomFit={zoomFit}
+                gridEnabled={gridEnabled}
+                onToggleGrid={() => setGridEnabled(g => !g)}
+                onOpenGridSettings={() => setGridSettingsOpen(true)}
+                toolbarCollapsed={toolbarCollapsed}
+                onToggleToolbar={() => setToolbarCollapsed(v => !v)}
+                onPickTool={(key) => handleToolSelect(key)}
+                currentTool={tool}
+                onBeginScaleReference={beginScaleReference}
+                onClearScaleReference={() => setScaleRef(null)}
+                scaleReferenceSet={!!scaleRef}
+                lastSavedAt={lastSavedAt}
+              />
+              {headerContent}
+            </>
+          )}
           <input
             ref={trpInputRef}
             type="file"
