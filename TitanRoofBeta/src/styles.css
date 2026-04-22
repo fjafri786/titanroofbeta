@@ -1,7 +1,13 @@
 :root{
+        /* --ui-scale gently scales top-chrome (menu bar, properties bar,
+           toolbar, icon buttons) so the full menu/tool row fits on iPad
+           and small laptops without horizontal scrolling. Target: 1.0 at
+           1280px+, clamps to 0.74 on the narrow end. Mobile (<=820px)
+           has its own layout and resets this to 1. */
+        --ui-scale: clamp(0.74, calc(100vw / 1280), 1);
         --topbar-height: 24px;
-        --propsbar-height: 56px;
-        --toolbar-height: 56px;
+        --propsbar-height: calc(56px * var(--ui-scale));
+        --toolbar-height: calc(56px * var(--ui-scale));
         --navy:#0B2A3A;
         --navy2:#0E3348;
 
@@ -92,7 +98,7 @@
       }
       /* ========= MENU BAR (File / Edit / View / Tools / Help) ========= */
       :root{
-        --menubar-height: 32px;
+        --menubar-height: calc(32px * var(--ui-scale));
       }
       .menuBar{
         position: fixed;
@@ -103,11 +109,11 @@
         z-index: 199;
         display: flex;
         align-items: center;
-        padding: 0 14px;
+        padding: 0 calc(14px * var(--ui-scale));
         background: #FFFFFF;
         border-bottom: 1px solid rgba(148,163,184,0.24);
         box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 4px 8px -6px rgba(2,6,23,0.1);
-        font-size: 12px;
+        font-size: calc(12px * var(--ui-scale));
         font-weight: 1200;
         color: #0B1220;
       }
@@ -135,7 +141,7 @@
       .menuBarBtn{
         display: inline-flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 calc(12px * var(--ui-scale));
         background: transparent;
         border: none;
         color: inherit;
@@ -367,11 +373,11 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 16px;
+        padding: calc(8px * var(--ui-scale)) calc(16px * var(--ui-scale));
         background: linear-gradient(135deg, rgba(14,165,233,0.95), rgba(59,130,246,0.95));
         color: #fff;
         box-shadow: 0 12px 22px rgba(2,6,23,0.16);
-        gap: 12px;
+        gap: calc(12px * var(--ui-scale));
         flex-wrap: nowrap;
         pointer-events: auto;
       }
@@ -387,13 +393,13 @@
       .propertiesDashboardBtn{
         display:inline-flex;
         align-items:center;
-        gap:6px;
-        padding:6px 12px 6px 10px;
+        gap: calc(6px * var(--ui-scale));
+        padding: calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
         border-radius:999px;
         border:1px solid rgba(255,255,255,0.35);
         background: rgba(255,255,255,0.16);
         color:#fff;
-        font-size:11px;
+        font-size: calc(11px * var(--ui-scale));
         font-weight:1200;
         letter-spacing:0.2px;
         cursor:pointer;
@@ -405,8 +411,8 @@
         border-color: rgba(255,255,255,0.55);
       }
       .propertiesDashboardBtn svg{
-        width:14px;
-        height:14px;
+        width: calc(14px * var(--ui-scale));
+        height: calc(14px * var(--ui-scale));
       }
       .propertiesCenter{
         display:flex;
@@ -435,7 +441,7 @@
         min-width:0;
       }
       .propertiesTitle{
-        font-size:20px;
+        font-size: calc(20px * var(--ui-scale));
         font-weight:1200;
         letter-spacing:0.2px;
         white-space:nowrap;
@@ -717,15 +723,15 @@
 
       /* ========= TOOLBAR ========= */
       .toolbar{
-        --toolbar-control-size: 40px;
+        --toolbar-control-size: calc(40px * var(--ui-scale));
         position: fixed;
         top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         left: 0;
         right: 0;
         display:flex;
         align-items:center;
-        gap:12px;
-        padding:6px 16px;
+        gap: calc(12px * var(--ui-scale));
+        padding: calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale));
         height: var(--toolbar-height);
         min-height: var(--toolbar-height);
         border-radius: 0 0 18px 18px;
@@ -738,6 +744,7 @@
         user-select:none;
         -webkit-user-select:none;
         cursor: default;
+        flex-wrap: nowrap;
       }
       .toolbar.collapsed{
         height: calc(var(--toolbar-height) - 8px);
@@ -752,9 +759,9 @@
       .tbTools{
         display:flex;
         align-items:center;
-        gap:6px;
-        flex-wrap:wrap;
-        margin-left:18px;
+        gap: calc(6px * var(--ui-scale));
+        flex-wrap: nowrap;
+        margin-left: calc(18px * var(--ui-scale));
         padding:0;
         border-radius:0;
         background: transparent;
@@ -1011,15 +1018,16 @@
       }
       .tbDivider{
         width:1px;
-        height:28px;
+        height: calc(28px * var(--ui-scale));
         background: rgba(148,163,184,0.35);
         border-radius: 999px;
+        flex-shrink: 0;
       }
       .tbZoom{
         display:flex;
         align-items:center;
-        gap:8px;
-        margin-left:8px;
+        gap: calc(8px * var(--ui-scale));
+        margin-left: calc(8px * var(--ui-scale));
         padding:0;
         border-radius:0;
         background: transparent;
@@ -1028,32 +1036,32 @@
       .tbZoomRow{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap: calc(8px * var(--ui-scale));
       }
       .tbPages{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap: calc(8px * var(--ui-scale));
         padding:0;
         border-radius:0;
         background: transparent;
         border:none;
-        flex-wrap:wrap;
+        flex-wrap: nowrap;
       }
       .tbPageNav{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap: calc(8px * var(--ui-scale));
         padding:0;
         border-radius:0;
         border:none;
         background: transparent;
-        flex-wrap:wrap;
+        flex-wrap: nowrap;
       }
       .tbPageTools{
         display:flex;
         align-items:center;
-        gap:6px;
+        gap: calc(6px * var(--ui-scale));
       }
       .toolbar.vertical .pageSelect{
         width:100%;
@@ -1067,9 +1075,10 @@
         min-width:0;
       }
       .pageIndex{
-        font-size:9px;
+        font-size: calc(9px * var(--ui-scale));
         font-weight:1100;
         color: var(--sub);
+        white-space: nowrap;
       }
       .pageName{
         border:1px solid rgba(148,163,184,0.35);
@@ -1114,12 +1123,12 @@
         appearance:none;
         border-radius:999px;
         border:1px solid transparent;
-        padding:6px 28px 6px 12px;
-        font-size:12px;
+        padding: calc(6px * var(--ui-scale)) calc(28px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
+        font-size: calc(12px * var(--ui-scale));
         font-weight:1100;
         color: var(--navy);
         background: rgba(15,23,42,0.04);
-        min-width:72px;
+        min-width: calc(72px * var(--ui-scale));
         text-align:center;
         transition: border-color 0.2s ease, background 0.2s ease;
       }
@@ -1183,7 +1192,7 @@
         opacity:0.45;
         cursor:not-allowed;
       }
-      .iconBtn svg{ width:18px; height:18px; }
+      .iconBtn svg{ width: calc(18px * var(--ui-scale)); height: calc(18px * var(--ui-scale)); }
       .iconBtn.active{
         background: rgba(15,23,42,0.08);
         border-color: rgba(15,23,42,0.28);
@@ -1230,18 +1239,18 @@
         border-radius:50%;
       }
       .toolBtn.iconLabel{
-        padding:0 12px;
-        min-width: calc(var(--toolbar-control-size) + 22px);
+        padding:0 calc(10px * var(--ui-scale));
+        min-width: calc(var(--toolbar-control-size) + (18px * var(--ui-scale)));
         height: var(--toolbar-control-size);
         border-radius: 999px;
-        gap:8px;
+        gap: calc(6px * var(--ui-scale));
       }
       .toolBtn.iconLabel svg{
-        width:22px;
-        height:22px;
+        width: calc(22px * var(--ui-scale));
+        height: calc(22px * var(--ui-scale));
       }
       .toolBtn.iconLabel .toolText{
-        font-size:11px;
+        font-size: calc(11px * var(--ui-scale));
       }
       .toolBtn.free{ --toolColor: #0EA5E9; }
       .toolbar.vertical .toolBtn.textLabel{
@@ -1249,11 +1258,11 @@
         justify-content:center;
       }
       .toolBtn svg{
-        width:22px;
-        height:22px;
+        width: calc(22px * var(--ui-scale));
+        height: calc(22px * var(--ui-scale));
       }
       .toolBtn .toolText{
-        font-size:11px;
+        font-size: calc(11px * var(--ui-scale));
         font-weight:1100;
         letter-spacing:0.3px;
       }
@@ -1642,19 +1651,19 @@
         border-left:1px solid rgba(255,255,255,0.22);
       }
       .hdrBtn{
-        padding:6px 9px;
+        padding: calc(6px * var(--ui-scale)) calc(9px * var(--ui-scale));
         border-radius:12px;
         border:1px solid rgba(255,255,255,0.32);
         background: rgba(255,255,255,0.16);
         color:#fff;
-        font-size:11px;
+        font-size: calc(11px * var(--ui-scale));
         font-weight:1200;
         cursor:pointer;
         white-space:nowrap;
         display:inline-flex;
         align-items:center;
         justify-content:center;
-        gap:6px;
+        gap: calc(6px * var(--ui-scale));
         touch-action: manipulation;
       }
       .hdrBtn.ghost{
@@ -1686,8 +1695,8 @@
         font-size:14px;
       }
       .hdrBtn .icon{
-        width:16px;
-        height:16px;
+        width: calc(16px * var(--ui-scale));
+        height: calc(16px * var(--ui-scale));
       }
       .hdrBtn.collapseArrow{
         font-size:18px;
@@ -5821,6 +5830,7 @@
       }
       @media (max-width: 820px){
         :root{
+          --ui-scale: 1;
           --propsbar-height: 96px;
           --toolbar-height: 80px;
           --mobile-font: calc(13px * var(--mobile-scale));
