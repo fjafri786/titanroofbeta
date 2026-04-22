@@ -3197,6 +3197,16 @@ const loadPdfJs = () => {
           setItems(prev => prev.map(i => i.id === id ? { ...i, data: { ...i.data, points } } : i));
         };
 
+        // Scoped to the active page; `type` optional to restrict to one group.
+        const setItemsLocked = (locked, type = null) => {
+          setItems(prev => prev.map(i => {
+            if(i.pageId !== activePageId) return i;
+            if(type && i.type !== type) return i;
+            if(!!i.data?.locked === !!locked) return i;
+            return { ...i, data: { ...i.data, locked: !!locked } };
+          }));
+        };
+
         // === Files ===
         const pdfRasterizingRef = useRef(new Set());
         const buildPageEntry = useCallback(({ name, background, aspectRatio, rotation = 0 }) => ({
@@ -7193,6 +7203,10 @@ const loadPdfJs = () => {
                 onBeginScaleReference={beginScaleReference}
                 onClearScaleReference={() => setScaleRef(null)}
                 scaleReferenceSet={!!scaleRef}
+                onLockAllItems={() => setItemsLocked(true)}
+                onUnlockAllItems={() => setItemsLocked(false)}
+                lockAllDisabled={!pageItems.length || pageItems.every(i => !!i.data?.locked)}
+                unlockAllDisabled={!pageItems.length || pageItems.every(i => !i.data?.locked)}
                 lastSavedAt={lastSavedAt}
               />
               {headerContent}
@@ -8214,6 +8228,24 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
+                    {pageItems.length > 0 && (() => {
+                      const allPageLocked = pageItems.every(item => !!item.data?.locked);
+                      return (
+                        <div className="itemsPanelBulk">
+                          <div className="itemsPanelBulkLabel">{pageItems.length} item{pageItems.length === 1 ? "" : "s"} on this page</div>
+                          <button
+                            type="button"
+                            className={"btn itemsPanelBulkBtn" + (allPageLocked ? " active" : "")}
+                            onClick={() => setItemsLocked(!allPageLocked)}
+                            aria-pressed={allPageLocked}
+                            title={allPageLocked ? "Unlock every annotation on this page" : "Lock every annotation on this page"}
+                          >
+                            <Icon name={allPageLocked ? "lock" : "unlock"} />
+                            <span>{allPageLocked ? "Unlock All" : "Lock All"}</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
                     {["ts","apt","ds","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
@@ -8229,6 +8261,7 @@ const loadPdfJs = () => {
                       if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; iconName="wind"; }
                       if(type==="free"){ title="Free Draw"; color="#0EA5E9"; iconName="free"; }
 
+                      const allLocked = group.every(item => !!item.data?.locked);
                       return (
                         <div key={type}>
                           <div
@@ -8242,8 +8275,23 @@ const loadPdfJs = () => {
                               <span>{title}</span>
                               <span className="groupCount">{group.length}</span>
                             </div>
-                            <div className="groupChevron">
-                              <Icon name={isOpen ? "chevUp" : "chevDown"} />
+                            <div className="groupActions">
+                              <button
+                                type="button"
+                                className={"iconBtn groupLockBtn" + (allLocked ? " active" : "")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setItemsLocked(!allLocked, type);
+                                }}
+                                title={allLocked ? `Unlock all ${title}` : `Lock all ${title}`}
+                                aria-label={allLocked ? `Unlock all ${title}` : `Lock all ${title}`}
+                                aria-pressed={allLocked}
+                              >
+                                <Icon name={allLocked ? "lock" : "unlock"} />
+                              </button>
+                              <div className="groupChevron">
+                                <Icon name={isOpen ? "chevUp" : "chevDown"} />
+                              </div>
                             </div>
                           </div>
                           {isOpen && group.map(item => (

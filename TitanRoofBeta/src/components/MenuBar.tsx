@@ -65,6 +65,10 @@ export interface MenuBarProps {
   onBeginScaleReference: () => void;
   onClearScaleReference: () => void;
   scaleReferenceSet: boolean;
+  onLockAllItems: () => void;
+  onUnlockAllItems: () => void;
+  lockAllDisabled?: boolean;
+  unlockAllDisabled?: boolean;
 
   // Header
   lastSavedAt: { source: string; time: string } | null;
@@ -186,6 +190,20 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
               label: "Clear Scale Reference",
               onClick: () => fire(props.onClearScaleReference),
               disabled: !props.scaleReferenceSet,
+            },
+          ],
+        },
+        {
+          items: [
+            {
+              label: "Lock All Items on Page",
+              onClick: () => fire(props.onLockAllItems),
+              disabled: !!props.lockAllDisabled,
+            },
+            {
+              label: "Unlock All Items on Page",
+              onClick: () => fire(props.onUnlockAllItems),
+              disabled: !!props.unlockAllDisabled,
             },
           ],
         },
