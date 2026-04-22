@@ -2027,6 +2027,39 @@ const loadPdfJs = () => {
           };
         }, []);
 
+        // Block browser pinch-zoom outside the canvas viewport. The diagram
+        // handles its own pinch via pointer events inside .viewport, so we
+        // only want Safari's built-in page zoom to fire there. Everywhere
+        // else (toolbar, menu bar, sidebar) an accidental two-finger gesture
+        // on iPad zooms the UI and is hard to undo.
+        useEffect(() => {
+          const isInsideCanvas = (target) => {
+            if(!target || !(target instanceof Element)) return false;
+            return !!target.closest(".viewport");
+          };
+          const preventIfOutsideCanvas = (e) => {
+            if(!isInsideCanvas(e.target)) e.preventDefault();
+          };
+          const onTouchMove = (e) => {
+            if(e.touches && e.touches.length >= 2 && !isInsideCanvas(e.target)){
+              e.preventDefault();
+            }
+          };
+          // iOS Safari fires non-standard gesture* events for pinch on the
+          // page. Listeners must be non-passive so preventDefault takes effect.
+          const opts = { passive: false };
+          document.addEventListener("gesturestart", preventIfOutsideCanvas, opts);
+          document.addEventListener("gesturechange", preventIfOutsideCanvas, opts);
+          document.addEventListener("gestureend", preventIfOutsideCanvas, opts);
+          document.addEventListener("touchmove", onTouchMove, opts);
+          return () => {
+            document.removeEventListener("gesturestart", preventIfOutsideCanvas, opts);
+            document.removeEventListener("gesturechange", preventIfOutsideCanvas, opts);
+            document.removeEventListener("gestureend", preventIfOutsideCanvas, opts);
+            document.removeEventListener("touchmove", onTouchMove, opts);
+          };
+        }, []);
+
         // Esc clears tool
         useEffect(() => {
           const onKey = (e) => {

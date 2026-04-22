@@ -717,7 +717,7 @@
 
       /* ========= TOOLBAR ========= */
       .toolbar{
-        --toolbar-control-size: 34px;
+        --toolbar-control-size: 40px;
         position: fixed;
         top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         left: 0;
@@ -1183,7 +1183,7 @@
         opacity:0.45;
         cursor:not-allowed;
       }
-      .iconBtn svg{ width:16px; height:16px; }
+      .iconBtn svg{ width:18px; height:18px; }
       .iconBtn.active{
         background: rgba(15,23,42,0.08);
         border-color: rgba(15,23,42,0.28);
@@ -1237,11 +1237,11 @@
         gap:8px;
       }
       .toolBtn.iconLabel svg{
-        width:20px;
-        height:20px;
+        width:22px;
+        height:22px;
       }
       .toolBtn.iconLabel .toolText{
-        font-size:10px;
+        font-size:11px;
       }
       .toolBtn.free{ --toolColor: #0EA5E9; }
       .toolbar.vertical .toolBtn.textLabel{
@@ -1249,11 +1249,11 @@
         justify-content:center;
       }
       .toolBtn svg{
-        width:20px;
-        height:20px;
+        width:22px;
+        height:22px;
       }
       .toolBtn .toolText{
-        font-size:10px;
+        font-size:11px;
         font-weight:1100;
         letter-spacing:0.3px;
       }
