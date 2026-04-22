@@ -840,17 +840,14 @@ const loadPdfJs = () => {
           );
         }
         if(name === "apt"){
-          // Appurtenance: a roof-mounted unit with a vent cap. Drawn
-          // to fill the 24x24 viewBox so it reads at the same visual
-          // weight as the other tool icons.
+          // Appurtenance: a squat roof unit with a vent pipe. Bolder
+          // than the earlier "basket with weave" version so the shape
+          // still reads clearly at 20px inside the toolbar pill.
           return (
             <svg {...common}>
-              <rect x="4" y="10" width="16" height="10" rx="1.5"/>
-              <path d="M2 10h20"/>
-              <path d="M12 10V4"/>
-              <circle cx="12" cy="4" r="2" fill="currentColor" stroke="none"/>
-              <path d="M7 14h2"/>
-              <path d="M15 14h2"/>
+              <rect x="3" y="11" width="18" height="9" rx="1.5"/>
+              <path d="M12 11V5"/>
+              <rect x="9" y="3" width="6" height="3" rx="1" fill="currentColor" stroke="none"/>
             </svg>
           );
         }
@@ -7520,11 +7517,6 @@ const loadPdfJs = () => {
                       {gridEnabled && (
                         <rect width="100%" height="100%" fill="url(#grid)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
                       )}
-                      <defs>
-                        <marker id="freeArrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-                          <path d="M0 0 L10 5 L0 10 z" fill="context-stroke" />
-                        </marker>
-                      </defs>
                       {dashVisibleItems.filter(i => i.type === "free" && i.data.points?.length > 1).map(i => {
                         const pts = i.data.points;
                         const isSel = selectedId === i.id;
@@ -7532,19 +7524,38 @@ const loadPdfJs = () => {
                         const color = i.data.color || "#0EA5E9";
                         const sw = (i.data.strokeWidth || 2) * (isSel ? 1.5 : 1);
                         const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x * sheetWidth},${p.y * sheetHeight}`).join(" ") + (i.data.closed ? " Z" : "");
+                        let arrowHead = null;
+                        if(shape === "arrow" && pts.length >= 2){
+                          // Render the arrowhead as an inline polygon rather than an
+                          // SVG <marker>. iPad Safari doesn't reliably honour
+                          // `fill="context-stroke"` on markers, which made the head
+                          // render black even when the line was red/blue/etc.
+                          const a = pts[pts.length - 2];
+                          const b = pts[pts.length - 1];
+                          const ax = a.x * sheetWidth, ay = a.y * sheetHeight;
+                          const bx = b.x * sheetWidth, by = b.y * sheetHeight;
+                          const ang = Math.atan2(by - ay, bx - ax);
+                          const headSize = Math.max(10, sw * 4);
+                          const hx1 = bx - headSize * Math.cos(ang - Math.PI / 6);
+                          const hy1 = by - headSize * Math.sin(ang - Math.PI / 6);
+                          const hx2 = bx - headSize * Math.cos(ang + Math.PI / 6);
+                          const hy2 = by - headSize * Math.sin(ang + Math.PI / 6);
+                          arrowHead = (
+                            <polygon points={`${bx},${by} ${hx1},${hy1} ${hx2},${hy2}`} fill={color} />
+                          );
+                        }
                         return (
-                          <path
-                            key={i.id}
-                            d={d}
-                            fill={i.data.closed ? `${color}1a` : "none"}
-                            stroke={color}
-                            strokeWidth={sw}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            opacity={isSel ? 1 : 0.95}
-                            markerEnd={shape === "arrow" ? "url(#freeArrowHead)" : undefined}
-                            style={{ cursor: "pointer" }}
-                          />
+                          <g key={i.id} opacity={isSel ? 1 : 0.95} style={{ cursor: "pointer" }}>
+                            <path
+                              d={d}
+                              fill={i.data.closed ? `${color}1a` : "none"}
+                              stroke={color}
+                              strokeWidth={sw}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            {arrowHead}
+                          </g>
                         );
                       })}
                       {freeStroke && freeStroke.points.length > 1 && !freeSuggestion && (
@@ -7625,12 +7636,21 @@ const loadPdfJs = () => {
                           );
                         }
                         if(shape === "arrow"){
+                          const ax = s.x * sheetWidth, ay = s.y * sheetHeight;
+                          const bx = c.x * sheetWidth, by = c.y * sheetHeight;
+                          const ang = Math.atan2(by - ay, bx - ax);
+                          const headSize = Math.max(10, sw * 4);
+                          const hx1 = bx - headSize * Math.cos(ang - Math.PI / 6);
+                          const hy1 = by - headSize * Math.sin(ang - Math.PI / 6);
+                          const hx2 = bx - headSize * Math.cos(ang + Math.PI / 6);
+                          const hy2 = by - headSize * Math.sin(ang + Math.PI / 6);
                           return (
-                            <line x1={s.x * sheetWidth} y1={s.y * sheetHeight}
-                                  x2={c.x * sheetWidth} y2={c.y * sheetHeight}
-                                  stroke={stroke} strokeWidth={sw}
-                                  strokeDasharray="6,4" strokeLinecap="round"
-                                  markerEnd="url(#freeArrowHead)"/>
+                            <g>
+                              <line x1={ax} y1={ay} x2={bx} y2={by}
+                                    stroke={stroke} strokeWidth={sw}
+                                    strokeDasharray="6,4" strokeLinecap="round"/>
+                              <polygon points={`${bx},${by} ${hx1},${hy1} ${hx2},${hy2}`} fill={stroke} />
+                            </g>
                           );
                         }
                         if(shape === "rect"){
