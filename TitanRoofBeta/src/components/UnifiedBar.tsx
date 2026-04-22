@@ -1,12 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useProject } from "../project/ProjectContext";
+import { useAuth } from "../auth/AuthContext";
+import SaveIndicator from "../autosave/SaveIndicator";
+import TitanRoofLogo from "./TitanRoofLogo";
+
+const APP_VERSION = "4.2.3";
 
 /**
- * UnifiedBar — single header bar rendered on iPad-class viewports
- * (601-1180px) in place of the desktop TopBar + MenuBar + PropertiesBar
- * stack. Collapses the three-row header into one compact bar with a
- * center pill of submenu buttons (Tools / Page / Photos / Report) and a
- * right-hand overflow pill (share / more).
+ * UnifiedBar — single flat header rendered on every non-phone viewport.
+ * Replaces the legacy TopBar + MenuBar + PropertiesBar stack with a
+ * single draw.io-style 44px row: brand on the left, project title and
+ * menu pills in the middle, save indicator + save / export / more on
+ * the right.
  *
  * The Tools submenu is sticky: it stays open until the user taps the
  * Tools button again (so a tool stays selected and the picker doesn't
@@ -64,9 +69,21 @@ export interface UnifiedBarProps {
   // Edit
   onEditProjectProperties: () => void;
   onClearDiagramAndItems: () => void;
+
+  // Items
+  onLockAllItems?: () => void;
+  onUnlockAllItems?: () => void;
+  lockAllDisabled?: boolean;
+  unlockAllDisabled?: boolean;
 }
 
 type MenuKey = "tools" | "page" | "view" | "more" | null;
+
+const initialsFor = (name: string): string => {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map(p => p[0]?.toUpperCase() || "").join("") || name[0].toUpperCase();
+};
 
 const sv = {
   className: "ubIcon",
@@ -123,6 +140,7 @@ const TOOL_DEFS: { key: ToolKey; label: string; short: string; icon: keyof typeo
 
 const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   const { route, returnToDashboard } = useProject();
+  const { user, logout } = useAuth();
   const [open, setOpen] = useState<MenuKey>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -167,8 +185,17 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   return (
     <div className="unifiedBar" ref={rootRef} role="banner">
       <div className="ubRow ubRowMain">
-        {/* Left: back + project title */}
+        {/* Left: brand + back + project title */}
         <div className="ubLeft">
+          <div className="ubBrand" title={`TitanRoof Beta v${APP_VERSION}`}>
+            <TitanRoofLogo size={26} />
+            <span className="ubBrandText">
+              <span className="ubBrandName">TitanRoof</span>
+              <span className="ubBrandMeta">
+                Beta <span className="ubBrandVersion">v{APP_VERSION}</span>
+              </span>
+            </span>
+          </div>
           {route === "workspace" && (
             <button
               type="button"
@@ -185,7 +212,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               type="button"
               className="ubTitleBtn"
               onClick={props.onEditProjectProperties}
-              title="Edit project properties"
+              title="Click to edit project properties"
             >
               <span className="ubTitle">{props.residenceName || "Project"}</span>
               <I.chevDown />
@@ -245,8 +272,13 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           </div>
         </div>
 
-        {/* Right: share / more pill */}
+        {/* Right: save status + compact action cluster */}
         <div className="ubRight">
+          {route === "workspace" && (
+            <div className="ubSaveStatus">
+              <SaveIndicator />
+            </div>
+          )}
           <div className="ubPill ubPillCompact">
             <button
               type="button"
@@ -278,6 +310,17 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               <I.dots />
             </button>
           </div>
+          {user && (
+            <button
+              type="button"
+              className="ubUserBtn"
+              onClick={() => { void logout(); }}
+              title={user.email || user.displayName}
+              aria-label={`Sign out ${user.displayName}`}
+            >
+              {initialsFor(user.displayName)}
+            </button>
+          )}
         </div>
       </div>
 
@@ -320,6 +363,33 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           >
             Clear Scale Reference
           </button>
+          {(props.onLockAllItems || props.onUnlockAllItems) && (
+            <>
+              <div className="ubMenuDivider" />
+              {props.onLockAllItems && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ubMenuItem"
+                  disabled={!!props.lockAllDisabled}
+                  onClick={() => fire(props.onLockAllItems!)}
+                >
+                  Lock All Items on Page
+                </button>
+              )}
+              {props.onUnlockAllItems && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ubMenuItem"
+                  disabled={!!props.unlockAllDisabled}
+                  onClick={() => fire(props.onUnlockAllItems!)}
+                >
+                  Unlock All Items on Page
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
 

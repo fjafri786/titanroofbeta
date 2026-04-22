@@ -2147,12 +2147,11 @@ const loadPdfJs = () => {
         }, []);
 
         const isMobile = viewportSize.w <= 600;
-        // iPad-class viewports: 601-1180px. 1180 covers iPad Air/Pro
-        // 11" landscape (1180/1194) and all iPad portraits. Desktop
-        // browsers above 1180 keep the full TopBar + MenuBar +
-        // PropertiesBar stack at their designed 1.0 scale.
-        const isTablet = viewportSize.w > 600 && viewportSize.w <= 1180;
-        const useUnifiedBar = isTablet;
+        // Single flat UI across tablet + desktop: the legacy stacked
+        // TopBar + MenuBar + PropertiesBar is retired for anything
+        // wider than a phone. The UnifiedBar scales cleanly and gives
+        // a consistent draw.io-style chrome regardless of viewport.
+        const useUnifiedBar = !isMobile;
 
         // useLayoutEffect so the body class flips synchronously before
         // the next paint — prevents a one-frame flash of the opposite
@@ -4494,14 +4493,14 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+16} fill="var(--c-ts)" fontWeight="800" fontSize="11">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+30} fill="var(--c-ts)" fontWeight="700" fontSize="10">
+              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+13} fill="var(--c-ts)" fontWeight="800" fontSize="9">{ts.name}</text>
+              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
                 {ts.data.dir}
               </text>
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+8 + (ts.data.dir?.length || 0)*6 + 4}, ${toPxY(bb.minY)+22})`} fill="var(--c-ts)" stroke="var(--c-ts)">
-                  <rect x="0" y="4" width="10" height="7" rx="1.2" fill="var(--c-ts)" />
-                  <path d="M2 4V2.5a3 3 0 016 0V4" fill="none" strokeWidth="1.3" strokeLinecap="round" />
+                <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
+                  <path d="M1.4 3V2a2.1 2.1 0 014.2 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
               )}
 
@@ -4533,14 +4532,14 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+16} fill="var(--c-ts)" fontWeight="800" fontSize="11">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+30} fill="var(--c-ts)" fontWeight="700" fontSize="10">
+              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+13} fill="var(--c-ts)" fontWeight="800" fontSize="9">{ts.name}</text>
+              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
                 {ts.data.dir}
               </text>
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+8 + (ts.data.dir?.length || 0)*6 + 4}, ${toPxY(bb.minY)+22})`} fill="var(--c-ts)" stroke="var(--c-ts)">
-                  <rect x="0" y="4" width="10" height="7" rx="1.2" fill="var(--c-ts)" />
-                  <path d="M2 4V2.5a3 3 0 016 0V4" fill="none" strokeWidth="1.3" strokeLinecap="round" />
+                <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
+                  <path d="M1.4 3V2a2.1 2.1 0 014.2 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
               )}
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
@@ -7199,6 +7198,10 @@ const loadPdfJs = () => {
               exportDisabled={exportDisabled}
               onEditProjectProperties={() => setHdrEditOpen(true)}
               onClearDiagramAndItems={clearDiagram}
+              onLockAllItems={() => setItemsLocked(true)}
+              onUnlockAllItems={() => setItemsLocked(false)}
+              lockAllDisabled={!pageItems.length || pageItems.every(i => !!i.data?.locked)}
+              unlockAllDisabled={!pageItems.length || pageItems.every(i => !i.data?.locked)}
             />
           ) : (
             <>
