@@ -2046,18 +2046,30 @@ const loadPdfJs = () => {
               e.preventDefault();
             }
           };
+          // Desktop trackpads (and Ctrl+wheel on mice) emit wheel events
+          // with ctrlKey=true for pinch-zoom. The browser turns that into
+          // a page zoom unless we preventDefault at capture phase. Inside
+          // the canvas, the onWheel handler already owns zoom.
+          const onWheelCapture = (e) => {
+            if(e.ctrlKey && !isInsideCanvas(e.target)){
+              e.preventDefault();
+            }
+          };
           // iOS Safari fires non-standard gesture* events for pinch on the
           // page. Listeners must be non-passive so preventDefault takes effect.
           const opts = { passive: false };
+          const captureOpts = { passive: false, capture: true };
           document.addEventListener("gesturestart", preventIfOutsideCanvas, opts);
           document.addEventListener("gesturechange", preventIfOutsideCanvas, opts);
           document.addEventListener("gestureend", preventIfOutsideCanvas, opts);
           document.addEventListener("touchmove", onTouchMove, opts);
+          document.addEventListener("wheel", onWheelCapture, captureOpts);
           return () => {
             document.removeEventListener("gesturestart", preventIfOutsideCanvas, opts);
             document.removeEventListener("gesturechange", preventIfOutsideCanvas, opts);
             document.removeEventListener("gestureend", preventIfOutsideCanvas, opts);
             document.removeEventListener("touchmove", onTouchMove, opts);
+            document.removeEventListener("wheel", onWheelCapture, captureOpts);
           };
         }, []);
 
@@ -8217,6 +8229,18 @@ const loadPdfJs = () => {
               )}
             </div>
 
+            {/* FLOATING SIDEBAR TOGGLE (when collapsed) */}
+            {!isMobile && sidebarCollapsed && (
+              <button
+                className="sidebarFloatingToggle"
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                title="Show sidebar"
+                aria-label="Show sidebar"
+              >
+                <Icon name="chevLeft" />
+              </button>
+            )}
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
               <div className="panelHeader">
@@ -8227,11 +8251,11 @@ const loadPdfJs = () => {
                   <button
                     className="panelToggleBtn iconOnly"
                     type="button"
-                    onClick={() => setSidebarCollapsed(v => !v)}
-                    title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-                    aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                    onClick={() => setSidebarCollapsed(true)}
+                    title="Hide sidebar"
+                    aria-label="Hide sidebar"
                   >
-                    <Icon name={sidebarCollapsed ? "chevLeft" : "chevRight"} />
+                    <Icon name="chevRight" />
                   </button>
                 )}
               </div>
