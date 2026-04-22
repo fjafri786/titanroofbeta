@@ -8364,19 +8364,40 @@ const loadPdfJs = () => {
                   <div className="card itemsPanel">
                     {pageItems.length > 0 && (() => {
                       const allPageLocked = pageItems.every(item => !!item.data?.locked);
+                      const groupTypesWithItems = ["ts","apt","ds","obs","wind","free"].filter(t => grouped[t].length > 0);
+                      const allGroupsOpen = groupTypesWithItems.length > 0 && groupTypesWithItems.every(t => !!groupOpen[t]);
                       return (
                         <div className="itemsPanelBulk">
                           <div className="itemsPanelBulkLabel">{pageItems.length} item{pageItems.length === 1 ? "" : "s"} on this page</div>
-                          <button
-                            type="button"
-                            className={"btn itemsPanelBulkBtn" + (allPageLocked ? " active" : "")}
-                            onClick={() => setItemsLocked(!allPageLocked)}
-                            aria-pressed={allPageLocked}
-                            title={allPageLocked ? "Unlock every annotation on this page" : "Lock every annotation on this page"}
-                          >
-                            <Icon name={allPageLocked ? "lock" : "unlock"} />
-                            <span>{allPageLocked ? "Unlock All" : "Lock All"}</span>
-                          </button>
+                          <div className="itemsPanelBulkActions">
+                            <button
+                              type="button"
+                              className={"btn itemsPanelBulkBtn" + (allGroupsOpen ? " active" : "")}
+                              onClick={() => {
+                                const next = !allGroupsOpen;
+                                setGroupOpen(prev => {
+                                  const out = { ...prev };
+                                  groupTypesWithItems.forEach(t => { out[t] = next; });
+                                  return out;
+                                });
+                              }}
+                              aria-pressed={allGroupsOpen}
+                              title={allGroupsOpen ? "Collapse every group on this page" : "Expand every group on this page"}
+                            >
+                              <Icon name={allGroupsOpen ? "chevUp" : "chevDown"} />
+                              <span>{allGroupsOpen ? "Collapse All" : "Expand All"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className={"btn itemsPanelBulkBtn" + (allPageLocked ? " active" : "")}
+                              onClick={() => setItemsLocked(!allPageLocked)}
+                              aria-pressed={allPageLocked}
+                              title={allPageLocked ? "Unlock every annotation on this page" : "Lock every annotation on this page"}
+                            >
+                              <Icon name={allPageLocked ? "lock" : "unlock"} />
+                              <span>{allPageLocked ? "Unlock All" : "Lock All"}</span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })()}
