@@ -2567,6 +2567,53 @@
         border:1px solid rgba(148,163,184,0.3);
         color: var(--sub);
       }
+      .groupHeader .groupActions{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex:0 0 auto;
+      }
+      .groupHeader .groupLockBtn{
+        width:30px;
+        height:30px;
+        border-radius:10px;
+        color: var(--sub);
+      }
+      .groupHeader .groupLockBtn.active{
+        background: rgba(11,167,165,0.14);
+        border-color: rgba(11,167,165,0.45);
+        color: var(--teal);
+      }
+      .itemsPanelBulk{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        padding:10px 12px;
+        margin-bottom:8px;
+        border-radius:14px;
+        border:1px solid rgba(148,163,184,0.25);
+        background: linear-gradient(90deg, rgba(248,250,252,0.9), rgba(255,255,255,0.95));
+      }
+      .itemsPanelBulkLabel{
+        font-size:12px;
+        font-weight:700;
+        color: var(--sub);
+      }
+      .itemsPanelBulkBtn{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:6px 12px;
+        font-weight:800;
+        font-size:12px;
+      }
+      .itemsPanelBulkBtn.active{
+        background: rgba(11,167,165,0.14);
+        border-color: rgba(11,167,165,0.45);
+        color: var(--teal);
+      }
+      .itemsPanelBulkBtn svg{ width:16px; height:16px; }
       .groupHeader.ts{
         border-left:3px solid var(--c-ts);
         background: linear-gradient(90deg, rgba(254,226,226,0.55), rgba(255,255,255,0.95) 60%);
