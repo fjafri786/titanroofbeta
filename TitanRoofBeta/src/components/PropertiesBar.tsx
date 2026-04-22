@@ -26,6 +26,8 @@ interface PropertiesBarProps {
   isMobile: boolean;
   mobileMenuOpen: boolean;
   onMobileMenuToggle: () => void;
+  mobileSidebarOpen?: boolean;
+  onMobileSidebarToggle?: () => void;
 }
 
 const svgProps = {
@@ -134,6 +136,8 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   isMobile,
   mobileMenuOpen,
   onMobileMenuToggle,
+  mobileSidebarOpen = false,
+  onMobileSidebarToggle,
 }) => {
   const activePageIndex = Math.max(0, pages.findIndex((page) => page.id === activePageId));
   const { route, returnToDashboard } = useProject();
@@ -214,6 +218,30 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
         </div>
       )}
       <div className="propertiesRight">
+        {isMobile && onMobileSidebarToggle && viewMode === "diagram" && (
+          <button
+            className={`hdrBtn iconOnly mobileSidebarBtn${mobileSidebarOpen ? " active" : ""}`}
+            type="button"
+            onClick={onMobileSidebarToggle}
+            aria-pressed={mobileSidebarOpen}
+            aria-label={mobileSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            title={mobileSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+          >
+            <svg
+              className="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M15 4v16" />
+            </svg>
+          </button>
+        )}
         {isMobile ? (
           <button
             className={`hdrBtn mobileMenuBtn${mobileMenuOpen ? " active" : ""}`}

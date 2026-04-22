@@ -229,41 +229,81 @@
         letter-spacing: 0.2px;
       }
 
-      /* Project properties modal tabs */
+      /* Project properties modal tabs — styled to echo the report
+         bubble (reportCard) treatment used elsewhere for "Project
+         Information": a thin gradient strip at the top of the card and
+         a title row with a flat underlined tab group. Keeps the same
+         UI language across project-level surfaces. */
       .modalCard.projectPropsCard{
         max-width: 820px;
+        position:relative;
+        overflow:hidden;
+      }
+      .modalCard.projectPropsCard::before{
+        content:"";
+        position:absolute;
+        left:0;
+        right:0;
+        top:0;
+        height:3px;
+        background: linear-gradient(90deg, #0EA5E9, #22D3EE);
+        z-index:1;
+      }
+      .modalCard.projectPropsCard .modalHeader{
+        background: #FFFFFF;
+        border-bottom: 1px solid rgba(226,232,240,0.95);
       }
       .projectPropsTitleRow{
         display:flex;
         align-items:center;
-        gap:16px;
+        gap:18px;
         flex:1;
+      }
+      .projectPropsTitleRow .modalTitle{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        font-size:12px;
+        font-weight:900;
+        text-transform:uppercase;
+        letter-spacing:0.6px;
+        color:#0B1220;
+      }
+      .projectPropsTitleRow .modalTitle::before{
+        content:"";
+        width:6px;
+        height:18px;
+        border-radius:4px;
+        background: linear-gradient(180deg, #0EA5E9, #22D3EE);
       }
       .projectPropsTabs{
         display:inline-flex;
         align-items:center;
         gap:4px;
-        padding:3px;
-        background:#F1F5F9;
-        border:1px solid rgba(148,163,184,0.3);
-        border-radius:999px;
+        padding:0;
+        background:transparent;
+        border:none;
+        border-radius:0;
       }
       .projectPropsTab{
-        padding:6px 16px;
-        font-size:11px;
-        font-weight:900;
+        padding:8px 14px;
+        font-size:12px;
+        font-weight:800;
         letter-spacing:0.2px;
         color:#64748B;
         background:transparent;
         border:none;
-        border-radius:999px;
+        border-bottom: 2px solid transparent;
+        border-radius:0;
         cursor:pointer;
-        transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+        transition: color 0.12s ease, border-color 0.12s ease;
       }
+      .projectPropsTab:hover{ color:#0B1220; }
       .projectPropsTab.active{
-        background:#FFFFFF;
-        color:#0B1220;
-        box-shadow: 0 6px 12px -8px rgba(2,6,23,0.25);
+        color:#0EA5E9;
+        border-bottom-color:#0EA5E9;
+        background:transparent;
+        box-shadow:none;
       }
 
       /* Grid settings modal */
@@ -1633,6 +1673,19 @@
       .panel.collapsed .panelHeaderTitle{
         display:none;
       }
+      /* Subheadings inside the sidebar group the Page Setup controls and
+         the Inspection Items list under the single "Properties" header. */
+      .panelSubhead{
+        padding:10px 12px 4px;
+        font-size:10px;
+        font-weight:800;
+        letter-spacing:0.5px;
+        text-transform:uppercase;
+        color:#64748B;
+      }
+      .panelSubheadItems{
+        padding:4px 2px 6px;
+      }
 
       /* Header with 3 lines + single edit icon */
       .pHeader{
@@ -1787,6 +1840,15 @@
       .hdrBtn.mobileMenuBtn.active{
         background: rgba(15,23,42,0.55);
         box-shadow: 0 6px 14px rgba(2,6,23,0.25);
+      }
+      .hdrBtn.mobileSidebarBtn{
+        margin-right:6px;
+        background: rgba(15,23,42,0.28);
+        border-color: rgba(255,255,255,0.35);
+      }
+      .hdrBtn.mobileSidebarBtn.active{
+        background: rgba(14,165,233,0.6);
+        border-color: rgba(14,165,233,0.85);
       }
       .hdrBtn.iconOnly{
         padding:6px 8px;
@@ -2833,7 +2895,7 @@
         font-weight:800;
         font-size:7.5px;
         border:1px solid rgba(255,255,255,0.92);
-        box-shadow: 0 1px 2px rgba(2,6,23,0.28);
+        box-shadow: 0 1px 1px rgba(2,6,23,0.14);
         user-select:none;
       }
       .markerWind{
@@ -6251,7 +6313,9 @@
          Single-row 56px bar: the title block carries the page summary
          inline so we don't burn a second row on one label. */
       :root{
-        --unifiedbar-height: 44px;
+        /* 44px base + 25% for the two-row title cluster: project name on
+           row 1, view tabs + tool strip on row 2. */
+        --unifiedbar-height: 55px;
       }
       body.useUnifiedBar{
         --topbar-height: var(--safe-top);
@@ -6350,8 +6414,8 @@
       }
       .ubBack{
         flex: 0 0 auto;
-        width: 26px;
-        height: 26px;
+        width: 30px;
+        height: 30px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -6362,19 +6426,36 @@
         cursor: pointer;
       }
       .ubBack:hover{ background: rgba(14,165,233,0.1); color: #0B1220; }
-      .ubBack .ubIcon{ width: 16px; height: 16px; }
+      .ubBack .ubIcon{ width: 18px; height: 18px; }
+      .ubTitleCluster{
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        min-width: 0;
+        gap: 1px;
+        margin-left: 2px;
+        flex: 1 1 auto;
+        overflow: hidden;
+      }
+      .ubTitleSubRow{
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+      }
       .ubTitleBlock{
         display: flex;
         flex-direction: column;
         min-width: 0;
         gap: 1px;
-        margin-left: 2px;
-        /* Constrain the whole block so the title/subtitle share one
-           clamped width instead of the title pushing the chevron far
-           to the right. The tabs + tool strip sit to the right of
-           this block, so keep it narrower than before. */
-        max-width: min(28vw, 300px);
-        flex: 0 1 auto;
+        /* Row 1 is just the title; the subtitle can wrap to its own
+           line beneath the title text. Tabs no longer sit next to this
+           block, so it can consume the full width of its cluster. */
+        max-width: 100%;
+        flex: 0 0 auto;
       }
       .ubTitleBtn{
         display: inline-flex;
@@ -6443,10 +6524,9 @@
         border: none;
         background: transparent;
       }
-      /* Tabs pill sits in the left cluster next to the project title,
-         with a small gap so it reads as its own control group. */
+      /* Tabs pill sits in the sub-row beneath the project title. */
       .ubPillTabs{
-        margin-left: 6px;
+        margin-left: 0;
         flex: 0 0 auto;
       }
       .ubPillBtn{
@@ -6490,7 +6570,7 @@
         align-items: center;
         justify-content: center;
       }
-      .ubPillIcon .ubIcon{ width: 15px; height: 15px; }
+      .ubPillIcon .ubIcon{ width: 17px; height: 17px; }
       .ubPillLabel{
         display: inline-block;
       }
@@ -6498,10 +6578,10 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        width: 30px;
+        height: 30px;
         border: none;
-        border-radius: 6px;
+        border-radius: 7px;
         background: transparent;
         color: #475569;
         cursor: pointer;
@@ -6509,7 +6589,7 @@
       .ubIconBtn:hover{ background: rgba(14,165,233,0.1); color: #0B1220; }
       .ubIconBtn.active{ background: rgba(14,165,233,0.14); color: #0EA5E9; }
       .ubIconBtn[disabled]{ opacity: 0.35; cursor: not-allowed; }
-      .ubIconBtn .ubIcon{ width: 15px; height: 15px; }
+      .ubIconBtn .ubIcon{ width: 17px; height: 17px; }
       .ubSaveStatus{
         display: inline-flex;
         align-items: center;
@@ -6745,14 +6825,13 @@
       .ubMenu .ubToolBtn.active.tool-obs .ubToolIcon{ color: var(--c-obs); }
       .ubMenu .ubToolBtn.active.tool-free .ubToolIcon{ color: #0EA5E9; }
 
-      /* Tool strip — renders to the right of the view tabs whenever
-         Diagram is the active tab, separated from the tabs by a
-         divider so it reads as its own control group. */
+      /* Tool strip — renders in the title sub-row to the right of the
+         view tabs whenever Diagram is the active tab. */
       .ubToolStrip{
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        margin-left: 10px;
+        margin-left: 4px;
         padding: 2px 0 2px 10px;
         border-left: 1px solid rgba(148,163,184,0.35);
         overflow: hidden;
