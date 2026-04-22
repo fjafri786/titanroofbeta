@@ -160,6 +160,10 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
 
   const isDiagram = props.viewMode === "diagram";
 
+  const pageSummary = props.pages.length > 0
+    ? `Page ${activePageIndex + 1}/${props.pages.length}${activePage?.name ? ` · ${activePage.name}` : ""}`
+    : "";
+
   return (
     <div className="unifiedBar" ref={rootRef} role="banner">
       <div className="ubRow ubRowMain">
@@ -187,7 +191,8 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               <I.chevDown />
             </button>
             <div className="ubSubtitle">
-              Roof: {props.roofSummary} · Front faces: {props.frontFaces}
+              {props.roofSummary} · Front: {props.frontFaces}
+              {isDiagram && pageSummary ? ` · ${pageSummary}` : ""}
             </div>
           </div>
         </div>
@@ -274,14 +279,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Page counter row */}
-      <div className="ubRow ubRowMeta">
-        <span className="ubPageChip">
-          Page {activePageIndex + 1} of {props.pages.length}
-          {activePage?.name ? ` · ${activePage.name}` : ""}
-        </span>
       </div>
 
       {/* Submenus */}
