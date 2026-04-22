@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import PropertiesBar from "./components/PropertiesBar";
 import MenuBar from "./components/MenuBar";
@@ -2135,15 +2135,17 @@ const loadPdfJs = () => {
         }, []);
 
         const isMobile = viewportSize.w <= 600;
-        // iPad-class viewports: between phone (600) and small-laptop
-        // (1280) cutoff. These get the unified header bar instead of
-        // the desktop TopBar + MenuBar + PropertiesBar stack. 1280
-        // covers iPad Pro 11" landscape (1194) and iPad Air landscape
-        // (1180), where the desktop stack was compressing to 0.74 scale.
-        const isTablet = viewportSize.w > 600 && viewportSize.w <= 1280;
+        // iPad-class viewports: 601-1180px. 1180 covers iPad Air/Pro
+        // 11" landscape (1180/1194) and all iPad portraits. Desktop
+        // browsers above 1180 keep the full TopBar + MenuBar +
+        // PropertiesBar stack at their designed 1.0 scale.
+        const isTablet = viewportSize.w > 600 && viewportSize.w <= 1180;
         const useUnifiedBar = isTablet;
 
-        useEffect(() => {
+        // useLayoutEffect so the body class flips synchronously before
+        // the next paint — prevents a one-frame flash of the opposite
+        // layout on iPad rotation / desktop resize.
+        useLayoutEffect(() => {
           const body = document.body;
           if(useUnifiedBar) body.classList.add("useUnifiedBar");
           else body.classList.remove("useUnifiedBar");
@@ -4470,13 +4472,13 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="800" fontSize="14">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="700" fontSize="12">
                 {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
               </text>
 
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
+              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
 
@@ -4503,12 +4505,12 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="1200" fontSize="14">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="1100" fontSize="12">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="800" fontSize="14">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="700" fontSize="12">
                 {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
               </text>
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="1200">
+              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
             </g>
@@ -4528,7 +4530,7 @@ const loadPdfJs = () => {
                 stroke="var(--c-obs)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
               {isSel && !obs.data.locked && pts.map((p, idx) => (
@@ -4578,7 +4580,7 @@ const loadPdfJs = () => {
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
                   {obs.data.label}
                 </text>
               )}
@@ -4606,7 +4608,7 @@ const loadPdfJs = () => {
                 stroke="var(--c-obs)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="1200" fontSize="13">
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
             </g>
@@ -4649,7 +4651,7 @@ const loadPdfJs = () => {
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="1200" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
                   {obs.data.label}
                 </text>
               )}
@@ -7219,7 +7221,7 @@ const loadPdfJs = () => {
           <div className={"app" + (!isMobile && sidebarCollapsed ? " sidebarCollapsed" : "") + (toolbarCollapsed ? " toolbarCollapsed" : "")}>
             {/* CANVAS */}
             <div className="canvasZone" ref={canvasRef}>
-              {!toolbarCollapsed && (
+              {!toolbarCollapsed && !useUnifiedBar && (
                 <div
                   className={"toolbar docked" + (isMobile ? " mobile" : "")}
                   ref={toolbarRef}
@@ -7889,7 +7891,7 @@ const loadPdfJs = () => {
                   boxShadow:"0 18px 34px rgba(2,6,23,0.14)",
                   padding:"16px"
                 }}>
-                  <div style={{fontWeight:1200, fontSize:14, color:"var(--navy)"}}>Add a diagram background</div>
+                  <div style={{fontWeight:800, fontSize:14, color:"var(--navy)"}}>Add a diagram background</div>
                   <div className="tiny" style={{marginTop:6}}>
                     Upload an image or PDF (multi-page supported), or use a Google Maps address as the background.
                   </div>
@@ -8383,7 +8385,7 @@ const loadPdfJs = () => {
                               {(activeItem.data.bruises||[]).map((b, idx) => (
                                 <div key={b.id} style={{marginBottom:8}}>
                                   <div className="row">
-                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={b.size} onChange={(e)=>updateBruise(b.id, "size", e.target.value)}>
                                       {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
                                     </select>
@@ -8411,7 +8413,7 @@ const loadPdfJs = () => {
                               {(activeItem.data.conditions||[]).map((c, idx) => (
                                 <div key={c.id} style={{marginBottom:8}}>
                                   <div className="row">
-                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={c.code} onChange={(e)=>updateTsCondition(c.id, "code", e.target.value)}>
                                       {TS_CONDITIONS.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}
                                     </select>
@@ -8471,7 +8473,7 @@ const loadPdfJs = () => {
                               {(activeItem.data.damageEntries || []).map((entry, idx) => (
                                 <div key={entry.id} style={{marginBottom:8}}>
                                   <div className="row">
-                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
                                     </select>
@@ -8567,7 +8569,7 @@ const loadPdfJs = () => {
                               {(activeItem.data.damageEntries || []).map((entry, idx) => (
                                 <div key={entry.id} style={{marginBottom:8}}>
                                   <div className="row">
-                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:1200, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
                                     </select>
@@ -10742,7 +10744,7 @@ const loadPdfJs = () => {
                   <tbody>
                     {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`print-${dir}`}>
-                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td style={{fontWeight:900}}>{dir}</td>
                         <td>{getDashStats(dir).tsHits}</td>
                         <td>{getDashStats(dir).tsMaxHail>0 ? `${getDashStats(dir).tsMaxHail}"` : "—"}</td>
                         <td>{getDashStats(dir).wind.creased}</td>
@@ -10763,7 +10765,7 @@ const loadPdfJs = () => {
                   <tbody>
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`print-hail-${dir}`}>
-                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td style={{fontWeight:900}}>{dir}</td>
                         <td>{getDashStats(dir).aptMax>0 ? `${getDashStats(dir).aptMax}"` : "—"}</td>
                         <td>{getDashStats(dir).dsMax>0 ? `${getDashStats(dir).dsMax}"` : "—"}</td>
                       </tr>
@@ -10781,7 +10783,7 @@ const loadPdfJs = () => {
                     const tsPhotos = collectTsPhotos(ts);
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
-                        <div style={{fontWeight:1200}}>{testSquareLabel(ts.data.dir)}</div>
+                        <div style={{fontWeight:800}}>{testSquareLabel(ts.data.dir)}</div>
                         <div className="tiny">Hits: {(ts.data.bruises||[]).length} • Conditions: {(ts.data.conditions||[]).length}</div>
                         {tsPhotos.map((p, idx) => (
                           <PrintPhoto
@@ -10812,7 +10814,7 @@ const loadPdfJs = () => {
                   <tbody>
                     {ROOF_WIND_DIRS.map(dir => (
                       <tr key={`wind-${dir}`}>
-                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td style={{fontWeight:900}}>{dir}</td>
                         <td>{getDashStats(dir).wind.creased}</td>
                         <td>{getDashStats(dir).wind.torn_missing}</td>
                       </tr>
@@ -10822,7 +10824,7 @@ const loadPdfJs = () => {
                 <div className="printGrid" style={{marginTop:10}}>
                   {pageItems.filter(i => i.type === "wind").map(w => (
                     <div className="printCard" key={`wind-${w.id}`}>
-                      <div style={{fontWeight:1200}}>{titleCase(windLocationLabel(w.data.dir))}</div>
+                      <div style={{fontWeight:800}}>{titleCase(windLocationLabel(w.data.dir))}</div>
                       <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
                       {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (
                         <>
@@ -10874,7 +10876,7 @@ const loadPdfJs = () => {
                   <tbody>
                     {CARDINAL_DIRS.map(dir => (
                       <tr key={`hail-${dir}`}>
-                        <td style={{fontWeight:1300}}>{dir}</td>
+                        <td style={{fontWeight:900}}>{dir}</td>
                         <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
                         <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
                         <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
@@ -10887,7 +10889,7 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "apt" || i.type === "ds").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
-                      <div style={{fontWeight:1200}}>{componentTitle(it)}</div>
+                      <div style={{fontWeight:800}}>{componentTitle(it)}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
                       {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (
                         (it.data.damageEntries || []).map((entry, idx) => (
@@ -10930,7 +10932,7 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "obs").map(obs => (
                     <div className="printCard" key={`obs-${obs.id}`}>
-                      <div style={{fontWeight:1200}}>{observationCaption(obs)}</div>
+                      <div style={{fontWeight:800}}>{observationCaption(obs)}</div>
                       <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
                       {obs.data.photo?.url ? (
                         <PrintPhoto
@@ -10951,7 +10953,7 @@ const loadPdfJs = () => {
             <div className="printPage">
               <div className="printSection">
                 <h3>Report Notes</h3>
-                <div className="printBlock" style={{marginTop:8, fontWeight:1200}}>Description</div>
+                <div className="printBlock" style={{marginTop:8, fontWeight:800}}>Description</div>
                 <div className="printBlock">{formatBlock(descriptionParagraph())}</div>
               </div>
             </div>
