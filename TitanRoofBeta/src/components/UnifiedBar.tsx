@@ -77,7 +77,7 @@ export interface UnifiedBarProps {
   unlockAllDisabled?: boolean;
 }
 
-type MenuKey = "tools" | "page" | "view" | "more" | null;
+type MenuKey = "page" | "view" | "more" | null;
 
 const initialsFor = (name: string): string => {
   if (!name) return "?";
@@ -104,6 +104,7 @@ const I = {
   dots: () => (<svg {...sv}><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>),
 
   tools: () => (<svg {...sv}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2.1-2.1 2.9-2.7z"/></svg>),
+  diagram: () => (<svg {...sv}><rect x="3" y="3" width="8" height="7" rx="1"/><rect x="13" y="3" width="8" height="4" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>),
   page: () => (<svg {...sv}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>),
   photos: () => (<svg {...sv}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 8"/></svg>),
   report: () => (<svg {...sv}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>),
@@ -142,6 +143,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   const { route, returnToDashboard } = useProject();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState<MenuKey>(null);
+  const [toolsExpanded, setToolsExpanded] = useState<boolean>(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -161,13 +163,20 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
     };
   }, [open]);
 
+  // When leaving diagram mode, collapse the inline tool strip so it doesn't
+  // flash back open the next time the user returns to the diagram.
+  useEffect(() => {
+    if (props.viewMode !== "diagram") setToolsExpanded(false);
+  }, [props.viewMode]);
+
   const toggle = (k: MenuKey) => setOpen(prev => (prev === k ? null : k));
 
-  // Tools menu: sticky — stays open on tool pick (user can keep picking).
-  // Re-clicking the Tools button itself closes it.
+  // Tools is inline — clicking the pill expands/collapses the chip strip
+  // directly in the bar, so tools are readily available while drawing
+  // instead of living behind a dropdown.
   const handleToolPick = (key: ToolKey) => {
     props.onPickTool(key);
-    // keep submenu open
+    // keep chips visible so the user can keep picking
   };
 
   // Other menus close on selection.
@@ -224,16 +233,41 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           </div>
         </div>
 
-        {/* Center: unified pill */}
+        {/* Center: unified pill.
+            Order is fixed — Tools, Page, Photos, Report, Diagram, View —
+            and never reorders across viewModes or orientations. Tools and
+            Page only render in diagram mode; the rest always render in
+            the same slot so the user's muscle memory holds. */}
         <div className="ubCenter">
           <div className="ubPill">
             {isDiagram && (
               <UbPillBtn
                 icon={<I.tools />}
                 label="Tools"
-                active={open === "tools" || !!props.currentTool}
-                onClick={() => toggle("tools")}
+                active={toolsExpanded || !!props.currentTool}
+                onClick={() => setToolsExpanded(v => !v)}
               />
+            )}
+            {isDiagram && toolsExpanded && (
+              <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
+                {TOOL_DEFS.map(t => {
+                  const IconEl = I[t.icon];
+                  const active = props.currentTool === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      type="button"
+                      className={`ubToolChip tool-${t.key}` + (active ? " active" : "")}
+                      onClick={() => handleToolPick(t.key)}
+                      title={t.label}
+                      aria-pressed={active}
+                    >
+                      <span className="ubToolIcon"><IconEl /></span>
+                      <span className="ubToolLabel">{t.short}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
             {isDiagram && (
               <UbPillBtn
@@ -255,14 +289,12 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               active={props.viewMode === "report"}
               onClick={() => { setOpen(null); props.onViewModeChange("report"); }}
             />
-            {!isDiagram && (
-              <UbPillBtn
-                icon={<I.tools />}
-                label="Diagram"
-                active={false}
-                onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
-              />
-            )}
+            <UbPillBtn
+              icon={<I.diagram />}
+              label="Diagram"
+              active={props.viewMode === "diagram"}
+              onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
+            />
             <UbPillBtn
               icon={<I.view />}
               label="View"
@@ -325,74 +357,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
       </div>
 
       {/* Submenus */}
-      {open === "tools" && isDiagram && (
-        <div className="ubMenu ubMenuCenter" role="menu" aria-label="Tools">
-          {TOOL_DEFS.map(t => {
-            const IconEl = I[t.icon];
-            const active = props.currentTool === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="menuitemradio"
-                aria-checked={active}
-                className={`ubToolBtn tool-${t.key}` + (active ? " active" : "")}
-                onClick={() => handleToolPick(t.key)}
-                title={t.label}
-              >
-                <span className="ubToolIcon"><IconEl /></span>
-                <span className="ubToolLabel">{t.short}</span>
-              </button>
-            );
-          })}
-          <div className="ubMenuDivider" />
-          <button
-            type="button"
-            role="menuitem"
-            className="ubMenuItem"
-            onClick={() => fire(props.onBeginScaleReference)}
-          >
-            Set Scale Reference…
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="ubMenuItem"
-            disabled={!props.scaleReferenceSet}
-            onClick={() => fire(props.onClearScaleReference)}
-          >
-            Clear Scale Reference
-          </button>
-          {(props.onLockAllItems || props.onUnlockAllItems) && (
-            <>
-              <div className="ubMenuDivider" />
-              {props.onLockAllItems && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="ubMenuItem"
-                  disabled={!!props.lockAllDisabled}
-                  onClick={() => fire(props.onLockAllItems!)}
-                >
-                  Lock All Items on Page
-                </button>
-              )}
-              {props.onUnlockAllItems && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="ubMenuItem"
-                  disabled={!!props.unlockAllDisabled}
-                  onClick={() => fire(props.onUnlockAllItems!)}
-                >
-                  Unlock All Items on Page
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
       {open === "page" && isDiagram && (
         <div className="ubMenu ubMenuCenter" role="menu" aria-label="Page actions">
           <div className="ubMenuRow">
@@ -479,6 +443,10 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
 
       {open === "more" && (
         <div className="ubMenu ubMenuRight" role="menu" aria-label="More actions">
+          <div className="ubMenuSection">File</div>
+          <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onSave)}>
+            Save
+          </button>
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onSaveAs)}>
             Save As (Download JSON)…
           </button>
@@ -488,7 +456,57 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onRecover)}>
             Recover Autosave…
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ubMenuItem"
+            onClick={() => fire(props.onExport)}
+            disabled={!!props.exportDisabled}
+          >
+            Export PDF…
+          </button>
+          {isDiagram && (
+            <>
+              <div className="ubMenuDivider" />
+              <div className="ubMenuSection">Tools</div>
+              <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onBeginScaleReference)}>
+                Set Scale Reference…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="ubMenuItem"
+                disabled={!props.scaleReferenceSet}
+                onClick={() => fire(props.onClearScaleReference)}
+              >
+                Clear Scale Reference
+              </button>
+              {props.onLockAllItems && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ubMenuItem"
+                  disabled={!!props.lockAllDisabled}
+                  onClick={() => fire(props.onLockAllItems!)}
+                >
+                  Lock All Items on Page
+                </button>
+              )}
+              {props.onUnlockAllItems && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="ubMenuItem"
+                  disabled={!!props.unlockAllDisabled}
+                  onClick={() => fire(props.onUnlockAllItems!)}
+                >
+                  Unlock All Items on Page
+                </button>
+              )}
+            </>
+          )}
           <div className="ubMenuDivider" />
+          <div className="ubMenuSection">Project</div>
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onEditProjectProperties)}>
             Project Properties…
           </button>

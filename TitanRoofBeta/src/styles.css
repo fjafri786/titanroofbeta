@@ -563,7 +563,7 @@
       }
       .sidebarDock {
         position: fixed;
-        left: 16px;
+        left: 14px;
         top: 50%;
         transform: translateY(-50%) !important;
 
@@ -571,20 +571,20 @@
         flex-direction: column;
         align-items: center;
         width: auto;
-        gap: 12px;
-        padding: 12px 8px;
+        gap: 8px;
+        padding: 8px 6px;
 
         background: #ffffff;
-        border-radius: 50px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border-radius: 40px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.07);
         z-index: 90;
 
         right: auto;
         bottom: auto;
       }
       .sidebarDock button {
-        width: 40px;
-        height: 40px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         padding: 0;
 
@@ -596,11 +596,11 @@
         background: transparent;
         color: #0F172A;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
       }
       .sidebarDock button svg {
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
         display: block;
       }
       .sidebarDock button:hover {
@@ -615,7 +615,7 @@
 
       .app{
         display:grid;
-        grid-template-columns: 1fr minmax(320px, 420px);
+        grid-template-columns: 1fr minmax(280px, 340px);
         padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height));
         /* 100dvh only (no 100vh fallback): on iPadOS Safari the two
            differ during rotation and the mismatch was pushing the
@@ -1546,12 +1546,12 @@
         display:flex;
         align-items:center;
         justify-content:space-between;
-        padding:10px 12px 6px;
-        gap:8px;
+        padding:7px 10px 5px;
+        gap:6px;
         border-bottom: 1px solid rgba(226,232,240,0.8);
       }
       .panelHeaderTitle{
-        font-size:12px;
+        font-size:11px;
         font-weight:800;
         color: var(--navy);
         letter-spacing:0.4px;
@@ -1872,15 +1872,16 @@
         display:flex;
         align-items:center;
         justify-content:center;
-        width:32px;
-        height:32px;
-        border-radius:10px;
-        background: rgba(15,23,42,0.08);
-        border:1px solid rgba(148,163,184,0.35);
+        width:26px;
+        height:26px;
+        border-radius:8px;
+        background: rgba(15,23,42,0.06);
+        border:1px solid rgba(148,163,184,0.3);
         cursor:pointer;
         color: var(--navy);
         touch-action: manipulation;
       }
+      .panelToggleBtn svg{ width:14px; height:14px; }
       .panelToggleBtn:hover{ background: rgba(15,23,42,0.18); }
       .panelBody{
         display:flex;
@@ -2067,10 +2068,10 @@
         scrollbar-gutter: stable both-edges;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch; /* iOS */
-        padding:10px;
+        padding:7px;
         display:flex;
         flex-direction:column;
-        gap:12px;
+        gap:9px;
         min-width:0;
         min-height:0;
         max-height:100%;
@@ -2103,15 +2104,15 @@
       .card{
         background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.95));
         border:1px solid rgba(226,232,240,0.9);
-        border-radius:16px;
-        padding:12px;
+        border-radius:13px;
+        padding:9px;
         box-shadow: var(--shadowSoft);
         min-width:0;
       }
       .itemsPanel{
         background: #fff;
-        border-radius:18px;
-        box-shadow: 0 14px 26px rgba(2,6,23,0.06);
+        border-radius:14px;
+        box-shadow: 0 12px 22px rgba(2,6,23,0.06);
       }
 
       .lbl{
@@ -2535,45 +2536,45 @@
         display:flex;
         align-items:center;
         justify-content:space-between;
-        gap:8px;
-        font-size:12px;
+        gap:6px;
+        font-size:11.5px;
         font-weight:800;
         text-transform:none;
         color:#0B1220;
-        letter-spacing:0.2px;
-        margin: 10px 0 10px 0;
-        padding:12px 14px;
-        border-radius:16px;
+        letter-spacing:0.15px;
+        margin: 7px 0 7px 0;
+        padding:8px 10px;
+        border-radius:12px;
         border:1px solid rgba(148,163,184,0.22);
         background:#FFFFFF;
-        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 10px 24px -18px rgba(2,6,23,0.2);
+        box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 8px 20px -18px rgba(2,6,23,0.2);
         cursor:pointer;
         transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease;
       }
       .groupHeader:hover{
         transform: translateY(-1px);
-        box-shadow: 0 14px 26px -16px rgba(2,6,23,0.3);
+        box-shadow: 0 12px 22px -16px rgba(2,6,23,0.3);
       }
       .groupHeader .groupTitle{
         display:flex;
         align-items:center;
-        gap:10px;
+        gap:8px;
       }
       .groupHeader .groupIcon{
         display:inline-flex;
         align-items:center;
         justify-content:center;
-        width:34px;
-        height:34px;
-        border-radius:10px;
+        width:26px;
+        height:26px;
+        border-radius:8px;
         background: rgba(148,163,184,0.12);
         border:1px solid rgba(148,163,184,0.25);
       }
-      .groupHeader .groupIcon svg{ width:20px; height:20px; }
+      .groupHeader .groupIcon svg{ width:15px; height:15px; }
       .groupHeader .groupCount{
-        font-size:11px;
+        font-size:10px;
         font-weight:800;
-        padding:3px 9px;
+        padding:2px 7px;
         border-radius:999px;
         border:1px solid rgba(148,163,184,0.35);
         background:#F8FAFC;
@@ -2581,8 +2582,8 @@
         text-transform:none;
       }
       .groupHeader .groupChevron{
-        width:26px;
-        height:26px;
+        width:22px;
+        height:22px;
         display:flex;
         align-items:center;
         justify-content:center;
@@ -2591,18 +2592,20 @@
         border:1px solid rgba(148,163,184,0.3);
         color: var(--sub);
       }
+      .groupHeader .groupChevron svg{ width:13px; height:13px; }
       .groupHeader .groupActions{
         display:flex;
         align-items:center;
-        gap:8px;
+        gap:6px;
         flex:0 0 auto;
       }
       .groupHeader .groupLockBtn{
-        width:30px;
-        height:30px;
-        border-radius:10px;
+        width:24px;
+        height:24px;
+        border-radius:8px;
         color: var(--sub);
       }
+      .groupHeader .groupLockBtn svg{ width:13px; height:13px; }
       .groupHeader .groupLockBtn.active{
         background: rgba(11,167,165,0.14);
         border-color: rgba(11,167,165,0.45);
@@ -2612,32 +2615,32 @@
         display:flex;
         align-items:center;
         justify-content:space-between;
-        gap:10px;
-        padding:10px 12px;
-        margin-bottom:8px;
-        border-radius:14px;
+        gap:8px;
+        padding:7px 10px;
+        margin-bottom:6px;
+        border-radius:11px;
         border:1px solid rgba(148,163,184,0.25);
         background: linear-gradient(90deg, rgba(248,250,252,0.9), rgba(255,255,255,0.95));
       }
       .itemsPanelBulkLabel{
-        font-size:12px;
+        font-size:11px;
         font-weight:700;
         color: var(--sub);
       }
       .itemsPanelBulkBtn{
         display:inline-flex;
         align-items:center;
-        gap:6px;
-        padding:6px 12px;
+        gap:5px;
+        padding:5px 10px;
         font-weight:800;
-        font-size:12px;
+        font-size:11px;
       }
       .itemsPanelBulkBtn.active{
         background: rgba(11,167,165,0.14);
         border-color: rgba(11,167,165,0.45);
         color: var(--teal);
       }
-      .itemsPanelBulkBtn svg{ width:16px; height:16px; }
+      .itemsPanelBulkBtn svg{ width:13px; height:13px; }
       .groupHeader.ts{
         border-left:3px solid var(--c-ts);
         background: linear-gradient(90deg, rgba(254,226,226,0.55), rgba(255,255,255,0.95) 60%);
@@ -2673,10 +2676,10 @@
         display:flex;
         align-items:flex-start;
         justify-content:space-between;
-        gap:10px;
-        padding: 12px 14px;
-        margin: 4px 0;
-        border-radius: 14px;
+        gap:8px;
+        padding: 8px 10px;
+        margin: 3px 0;
+        border-radius: 11px;
         border:1px solid rgba(148,163,184,0.22);
         background:#fff;
         cursor:pointer;
@@ -2684,10 +2687,10 @@
         border-left-width:3px;
         transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease, border-color 0.08s ease;
       }
-      .itemRow:hover{ transform: translateY(-1px); box-shadow: 0 12px 22px -14px rgba(2,6,23,0.25); background:#F8FAFC; }
+      .itemRow:hover{ transform: translateY(-1px); box-shadow: 0 10px 18px -14px rgba(2,6,23,0.25); background:#F8FAFC; }
       .itemRow.selected{
         border-color: rgba(14,165,233,0.6);
-        box-shadow: 0 14px 24px -12px rgba(14,165,233,0.35);
+        box-shadow: 0 12px 20px -12px rgba(14,165,233,0.35);
         background:#F0F9FF;
       }
       .itemInfo{
@@ -2697,8 +2700,8 @@
       .itemInfo b{
         display:flex;
         align-items:center;
-        gap:8px;
-        font-size:13px;
+        gap:6px;
+        font-size:12px;
         font-weight:800;
         white-space:normal;
         overflow-wrap:anywhere;
@@ -2707,9 +2710,9 @@
       }
       .itemInfo span{
         display:block;
-        font-size:12px;
+        font-size:11px;
         color: var(--sub);
-        margin-top:4px;
+        margin-top:3px;
         white-space:normal;
         overflow-wrap:anywhere;
         line-height:1.25;
@@ -5899,22 +5902,22 @@
 
       /* ========= Responsive ========= */
       @media (max-width: 1180px){
-        .app{ grid-template-columns: 1fr minmax(280px, 360px); }
+        .app{ grid-template-columns: 1fr minmax(260px, 320px); }
         .panelHeader{
-          padding:8px 10px 4px;
+          padding:6px 9px 4px;
         }
         .panelHeaderTitle{
-          font-size:11px;
+          font-size:10.5px;
         }
         .pScroll{
-          padding:8px;
+          padding:6px;
         }
         .card{
-          padding:10px;
+          padding:8px;
         }
       }
       @media (max-width: 980px){
-        .app{ grid-template-columns: 1fr minmax(300px, 360px); }
+        .app{ grid-template-columns: 1fr minmax(260px, 300px); }
       }
       @media (max-width: 820px){
         :root{
@@ -6320,12 +6323,13 @@
         font-weight: 600;
         letter-spacing: 0.1px;
         cursor: pointer;
-        transition: background 0.12s ease, color 0.12s ease;
+        transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
       }
       .ubPillBtn:hover{
         background: rgba(14,165,233,0.08);
         color: #0B1220;
       }
+      .ubPillBtn:active{ transform: scale(0.96); }
       .ubPillBtn.active{
         background: rgba(14,165,233,0.12);
         color: #0EA5E9;
@@ -6391,6 +6395,18 @@
       }
 
       /* ----- Submenus ----- */
+      @keyframes ubMenuReveal{
+        from{ opacity: 0; transform: translateY(-4px) scale(0.985); }
+        to{ opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes ubMenuRevealCentered{
+        from{ opacity: 0; transform: translate(-50%, -4px) scale(0.985); }
+        to{ opacity: 1; transform: translate(-50%, 0) scale(1); }
+      }
+      @keyframes ubStripSlideIn{
+        from{ opacity: 0; transform: translateX(-6px); max-width: 0; }
+        to{ opacity: 1; transform: translateX(0); max-width: 640px; }
+      }
       .ubMenu{
         position: absolute;
         top: calc(var(--unifiedbar-height) - 4px);
@@ -6406,10 +6422,13 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
+        transform-origin: top center;
+        animation: ubMenuReveal 0.14s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .ubMenuCenter{
         left: 50%;
         transform: translateX(-50%);
+        animation: ubMenuRevealCentered 0.14s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .ubMenuRight{
         right: 12px;
@@ -6418,6 +6437,15 @@
         height: 1px;
         background: rgba(148,163,184,0.24);
         margin: 6px 4px;
+      }
+      .ubMenuSection{
+        font-size: 9.5px;
+        font-weight: 800;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: #94A3B8;
+        padding: 4px 12px 2px;
+        pointer-events: none;
       }
       .ubMenuItem{
         display: inline-flex;
@@ -6518,6 +6546,69 @@
       .ubMenu .ubToolBtn.active.tool-wind .ubToolIcon{ color: var(--c-wind); }
       .ubMenu .ubToolBtn.active.tool-obs .ubToolIcon{ color: var(--c-obs); }
       .ubMenu .ubToolBtn.active.tool-free .ubToolIcon{ color: #0EA5E9; }
+
+      /* Inline tool strip — sits next to the Tools pill when diagram mode
+         is active and the user clicks Tools. Expands the bar sideways
+         instead of opening a dropdown, so tools are readily available
+         while drawing. Fast slide-in keeps it feeling snappy. */
+      .ubToolStrip{
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 4px;
+        padding: 2px 4px;
+        border-left: 1px solid rgba(148,163,184,0.28);
+        overflow: hidden;
+        animation: ubStripSlideIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .ubToolChip{
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.25px;
+        cursor: pointer;
+        transition: background 0.1s ease, color 0.1s ease, transform 0.1s ease;
+      }
+      .ubToolChip:hover{
+        background: rgba(14,165,233,0.08);
+        color: #0B1220;
+      }
+      .ubToolChip:active{ transform: scale(0.96); }
+      .ubToolChip .ubToolIcon{
+        display: inline-flex;
+        width: 16px;
+        height: 16px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        color: #64748B;
+      }
+      .ubToolChip .ubToolIcon .ubIcon{ width: 13px; height: 13px; }
+      .ubToolChip .ubToolLabel{ display: inline-block; }
+      .ubToolChip.active{
+        background: rgba(14,165,233,0.12);
+        color: #0EA5E9;
+      }
+      .ubToolChip.active.tool-ts .ubToolIcon{ color: var(--c-ts); }
+      .ubToolChip.active.tool-apt .ubToolIcon{ color: var(--c-apt); }
+      .ubToolChip.active.tool-ds .ubToolIcon{ color: var(--c-ds); }
+      .ubToolChip.active.tool-wind .ubToolIcon{ color: var(--c-wind); }
+      .ubToolChip.active.tool-obs .ubToolIcon{ color: var(--c-obs); }
+      .ubToolChip.active.tool-free .ubToolIcon{ color: #0EA5E9; }
+
+      /* Hide chip text labels on narrower widths to keep the bar
+         from pushing the tab cluster off-screen. Icons still visible. */
+      @media (max-width: 1180px){
+        .ubToolChip{ padding: 4px 6px; }
+        .ubToolChip .ubToolLabel{ display: none; }
+      }
 
       /* Compact layout adjustments by orientation.
          Portrait iPad (narrow): drop pill labels, keep icons only. The
