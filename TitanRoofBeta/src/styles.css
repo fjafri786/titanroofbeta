@@ -9,7 +9,7 @@
            downstream calc() (menu bar, properties bar, toolbar, .app
            padding-top) shifts down under the status bar on iPad
            rotation instead of sliding off-screen. */
-        --topbar-height: calc(24px + env(safe-area-inset-top, 0px));
+        --topbar-height: calc(28px + env(safe-area-inset-top, 0px));
         --propsbar-height: calc(56px * var(--ui-scale));
         --toolbar-height: calc(56px * var(--ui-scale));
         --navy:#0B2A3A;
@@ -75,42 +75,33 @@
         display:flex;
         align-items:center;
         justify-content:flex-start;
-        font-size:10px;
+        font-size:11px;
         font-weight:1200;
         letter-spacing:0.2px;
         color:#0B1220;
-        padding-left: 14px;
-        padding-right: 14px;
-        gap: 10px;
+        padding-left: 16px;
+        padding-right: 16px;
+        gap: 12px;
       }
       .topBarBadge{
         display:inline-flex;
         align-items:center;
-        padding: 2px 8px;
+        padding: 3px 10px;
         border-radius: 999px;
         background: linear-gradient(135deg, #0EA5E9, #3B82F6);
         color:#fff;
-        font-size:9px;
+        font-size:10px;
         font-weight:1300;
         letter-spacing:0.6px;
         text-transform:uppercase;
         line-height:1.1;
       }
-      .topBarLabel{
-        flex:1;
-        text-align:left;
-        color:#64748B;
-        font-size:10px;
-        font-weight:1100;
-        letter-spacing:0.2px;
-        text-transform:none;
-        overflow:hidden;
-        text-overflow:ellipsis;
-        white-space:nowrap;
+      .topBarSpacer{
+        flex:1 1 auto;
       }
       /* ========= MENU BAR (File / Edit / View / Tools / Help) ========= */
       :root{
-        --menubar-height: calc(32px * var(--ui-scale));
+        --menubar-height: calc(36px * var(--ui-scale));
       }
       .menuBar{
         position: fixed;
@@ -121,11 +112,11 @@
         z-index: 199;
         display: flex;
         align-items: center;
-        padding: 0 calc(14px * var(--ui-scale));
+        padding: 0 calc(16px * var(--ui-scale));
         background: #FFFFFF;
         border-bottom: 1px solid rgba(148,163,184,0.24);
         box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset, 0 4px 8px -6px rgba(2,6,23,0.1);
-        font-size: calc(12px * var(--ui-scale));
+        font-size: calc(13px * var(--ui-scale));
         font-weight: 1200;
         color: #0B1220;
       }
@@ -133,6 +124,7 @@
         display: inline-flex;
         align-items: stretch;
         height: 100%;
+        gap: calc(4px * var(--ui-scale));
       }
       .menuBarRight{
         margin-left: auto;
@@ -141,7 +133,7 @@
         gap: 10px;
       }
       .menuBarSaved{
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 1100;
         color: var(--sub);
       }
@@ -153,7 +145,7 @@
       .menuBarBtn{
         display: inline-flex;
         align-items: center;
-        padding: 0 calc(12px * var(--ui-scale));
+        padding: 0 calc(14px * var(--ui-scale));
         background: transparent;
         border: none;
         color: inherit;
@@ -6081,10 +6073,12 @@
         --topbar-height: var(--safe-top);
         --menubar-height: 0px;
         --propsbar-height: var(--unifiedbar-height);
+        --toolbar-height: 0px;
       }
       body.useUnifiedBar .topBar,
       body.useUnifiedBar .menuBar,
-      body.useUnifiedBar .propertiesBar{
+      body.useUnifiedBar .propertiesBar,
+      body.useUnifiedBar .toolbar{
         display: none !important;
       }
       .unifiedBar{

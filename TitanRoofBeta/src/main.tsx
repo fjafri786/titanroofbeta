@@ -7166,7 +7166,7 @@ const loadPdfJs = () => {
             />
           ) : (
             <>
-              <TopBar label="BETA" />
+              <TopBar />
               <MenuBar
                 onSave={() => saveState("manual")}
                 onSaveAs={exportTrp}
