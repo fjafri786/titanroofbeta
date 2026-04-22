@@ -28,20 +28,19 @@ export interface UnifiedBarProps {
   roofSummary: string;
   frontFaces: string;
 
-  // Pages
+  // Pages — summary is shown in the subtitle; full controls live in
+  // the sidebar so the bar stays focused on mode/tool actions.
   pages: { id: string; name: string }[];
   activePageId: string;
-  onPageChange: (id: string) => void;
-  onAddPage: () => void;
-  onEditPage: () => void;
-  onRotatePage: () => void;
-  onDeletePage?: () => void;
-  onPrevPage?: () => void;
-  onNextPage?: () => void;
 
   // View mode
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+
+  // Sidebar — a permanent toggle lives in the right cluster now,
+  // replacing the old floating chevron on the canvas.
+  sidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 
   // Tools (diagram mode only)
   currentTool: string | null;
@@ -77,7 +76,7 @@ export interface UnifiedBarProps {
   unlockAllDisabled?: boolean;
 }
 
-type MenuKey = "page" | "view" | "more" | null;
+type MenuKey = "view" | "more" | null;
 
 const initialsFor = (name: string): string => {
   if (!name) return "?";
@@ -103,9 +102,7 @@ const I = {
   share: () => (<svg {...sv}><path d="M12 3v13"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>),
   dots: () => (<svg {...sv}><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>),
 
-  tools: () => (<svg {...sv}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.8 2.8-2.1-2.1 2.9-2.7z"/></svg>),
   diagram: () => (<svg {...sv}><rect x="3" y="3" width="8" height="7" rx="1"/><rect x="13" y="3" width="8" height="4" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>),
-  page: () => (<svg {...sv}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg>),
   photos: () => (<svg {...sv}><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 8"/></svg>),
   report: () => (<svg {...sv}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>),
   view: () => (<svg {...sv}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>),
@@ -117,12 +114,7 @@ const I = {
   obs: () => (<svg {...sv}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>),
   free: () => (<svg {...sv}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>),
 
-  rotate: () => (<svg {...sv}><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v6h-6"/></svg>),
-  trash: () => (<svg {...sv}><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>),
-  plus: () => (<svg {...sv}><path d="M12 5v14"/><path d="M5 12h14"/></svg>),
-  pencil: () => (<svg {...sv}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>),
-  prev: () => (<svg {...sv}><path d="M15 18l-6-6 6-6"/></svg>),
-  next: () => (<svg {...sv}><path d="M9 18l6-6-6-6"/></svg>),
+  sidebar: () => (<svg {...sv}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>),
   zoomIn: () => (<svg {...sv}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/></svg>),
   zoomOut: () => (<svg {...sv}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6"/></svg>),
   fit: () => (<svg {...sv}><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg>),
@@ -143,7 +135,10 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   const { route, returnToDashboard } = useProject();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState<MenuKey>(null);
-  const [toolsExpanded, setToolsExpanded] = useState<boolean>(false);
+  // In diagram mode, the Tools tab exposes the tool chips inline and
+  // is expanded by default — that's the whole point of the mode. Other
+  // tabs shrink to icons in diagram mode, giving the tool chips room.
+  const [toolsExpanded, setToolsExpanded] = useState<boolean>(true);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -163,10 +158,10 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
     };
   }, [open]);
 
-  // When leaving diagram mode, collapse the inline tool strip so it doesn't
-  // flash back open the next time the user returns to the diagram.
+  // When returning to diagram mode, re-expand the inline tool strip
+  // so the drawing tools are immediately available.
   useEffect(() => {
-    if (props.viewMode !== "diagram") setToolsExpanded(false);
+    if (props.viewMode === "diagram") setToolsExpanded(true);
   }, [props.viewMode]);
 
   const toggle = (k: MenuKey) => setOpen(prev => (prev === k ? null : k));
@@ -190,6 +185,10 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   const pageSummary = props.pages.length > 0
     ? `Page ${activePageIndex + 1}/${props.pages.length}${activePage?.name ? ` · ${activePage.name}` : ""}`
     : "";
+
+  // In diagram mode, non-diagram tabs collapse to icon-only chips so
+  // the tool strip has room to breathe without the bar scrolling.
+  const compactOtherTabs = isDiagram;
 
   return (
     <div className="unifiedBar" ref={rootRef} role="banner">
@@ -234,20 +233,26 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
         </div>
 
         {/* Center: unified pill.
-            Order is fixed — Tools, Page, Photos, Report, Diagram, View —
-            and never reorders across viewModes or orientations. Tools and
-            Page only render in diagram mode; the rest always render in
-            the same slot so the user's muscle memory holds. */}
+            Tabs run Diagram → Photos → Report → View. In diagram mode
+            the Diagram tab toggles an inline Tools strip (expanded by
+            default), and the Photos / Report tabs shrink to icon-only
+            chips so the tool row has breathing room. */}
         <div className="ubCenter">
           <div className="ubPill">
-            {isDiagram && (
-              <UbPillBtn
-                icon={<I.tools />}
-                label="Tools"
-                active={toolsExpanded || !!props.currentTool}
-                onClick={() => setToolsExpanded(v => !v)}
-              />
-            )}
+            <UbPillBtn
+              icon={<I.diagram />}
+              label="Diagram"
+              active={props.viewMode === "diagram"}
+              onClick={() => {
+                setOpen(null);
+                if (props.viewMode === "diagram") {
+                  // Already in diagram mode — toggle the tool strip.
+                  setToolsExpanded(v => !v);
+                } else {
+                  props.onViewModeChange("diagram");
+                }
+              }}
+            />
             {isDiagram && toolsExpanded && (
               <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
                 {TOOL_DEFS.map(t => {
@@ -269,36 +274,25 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                 })}
               </div>
             )}
-            {isDiagram && (
-              <UbPillBtn
-                icon={<I.page />}
-                label="Page"
-                active={open === "page"}
-                onClick={() => toggle("page")}
-              />
-            )}
             <UbPillBtn
               icon={<I.photos />}
               label="Photos"
               active={props.viewMode === "photos"}
+              compact={compactOtherTabs && props.viewMode !== "photos"}
               onClick={() => { setOpen(null); props.onViewModeChange("photos"); }}
             />
             <UbPillBtn
               icon={<I.report />}
               label="Report"
               active={props.viewMode === "report"}
+              compact={compactOtherTabs && props.viewMode !== "report"}
               onClick={() => { setOpen(null); props.onViewModeChange("report"); }}
-            />
-            <UbPillBtn
-              icon={<I.diagram />}
-              label="Diagram"
-              active={props.viewMode === "diagram"}
-              onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
             />
             <UbPillBtn
               icon={<I.view />}
               label="View"
               active={open === "view"}
+              compact={compactOtherTabs}
               onClick={() => toggle("view")}
             />
           </div>
@@ -353,67 +347,25 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               {initialsFor(user.displayName)}
             </button>
           )}
+          {props.onToggleSidebar && (
+            <>
+              <span className="ubRightDivider" aria-hidden="true" />
+              <button
+                type="button"
+                className={"ubIconBtn ubSidebarToggle" + (!props.sidebarCollapsed ? " active" : "")}
+                onClick={props.onToggleSidebar}
+                title={props.sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                aria-label={props.sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+                aria-pressed={!props.sidebarCollapsed}
+              >
+                <I.sidebar />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Submenus */}
-      {open === "page" && isDiagram && (
-        <div className="ubMenu ubMenuCenter" role="menu" aria-label="Page actions">
-          <div className="ubMenuRow">
-            <button
-              type="button"
-              className="ubMenuIconBtn"
-              onClick={() => fire(props.onPrevPage ?? (() => {}))}
-              disabled={!props.onPrevPage || activePageIndex === 0}
-              title="Previous page"
-              aria-label="Previous page"
-            >
-              <I.prev />
-            </button>
-            <select
-              className="ubMenuSelect"
-              value={props.activePageId}
-              onChange={(e) => { props.onPageChange(e.target.value); setOpen(null); }}
-              aria-label="Select page"
-            >
-              {props.pages.map((p, i) => (
-                <option key={p.id} value={p.id}>{i + 1}. {p.name || "Untitled"}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="ubMenuIconBtn"
-              onClick={() => fire(props.onNextPage ?? (() => {}))}
-              disabled={!props.onNextPage || activePageIndex >= props.pages.length - 1}
-              title="Next page"
-              aria-label="Next page"
-            >
-              <I.next />
-            </button>
-          </div>
-          <div className="ubMenuDivider" />
-          <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onAddPage)}>
-            <I.plus /> <span>Add Page</span>
-          </button>
-          <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onEditPage)}>
-            <I.pencil /> <span>Rename Page</span>
-          </button>
-          <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onRotatePage)}>
-            <I.rotate /> <span>Rotate Page</span>
-          </button>
-          {props.onDeletePage && (
-            <button
-              type="button"
-              role="menuitem"
-              className="ubMenuItem danger"
-              onClick={() => fire(props.onDeletePage!)}
-            >
-              <I.trash /> <span>Delete Page</span>
-            </button>
-          )}
-        </div>
-      )}
-
       {open === "view" && (
         <div className="ubMenu ubMenuCenter" role="menu" aria-label="View options">
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onZoomIn)}>
@@ -523,17 +475,20 @@ interface PillBtnProps {
   icon: React.ReactNode;
   label: string;
   active: boolean;
+  compact?: boolean;
   onClick: () => void;
 }
-const UbPillBtn: React.FC<PillBtnProps> = ({ icon, label, active, onClick }) => (
+const UbPillBtn: React.FC<PillBtnProps> = ({ icon, label, active, compact, onClick }) => (
   <button
     type="button"
-    className={"ubPillBtn" + (active ? " active" : "")}
+    className={"ubPillBtn" + (active ? " active" : "") + (compact ? " compact" : "")}
     onClick={onClick}
     aria-pressed={active}
+    aria-label={label}
+    title={label}
   >
     <span className="ubPillIcon">{icon}</span>
-    <span className="ubPillLabel">{label}</span>
+    {!compact && <span className="ubPillLabel">{label}</span>}
   </button>
 );
 

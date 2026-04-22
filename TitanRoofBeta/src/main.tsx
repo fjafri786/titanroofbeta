@@ -7170,15 +7170,10 @@ const loadPdfJs = () => {
               frontFaces={frontFaces}
               pages={pages.map(p => ({ id: p.id, name: p.name }))}
               activePageId={activePageId}
-              onPageChange={setActivePageId}
-              onAddPage={insertBlankPageAfter}
-              onEditPage={startPageNameEdit}
-              onRotatePage={rotateActivePage}
-              onDeletePage={deleteActivePage}
-              onPrevPage={goToPrevPage}
-              onNextPage={goToNextPage}
               viewMode={viewMode as "diagram" | "photos" | "report"}
               onViewModeChange={setViewMode}
+              sidebarCollapsed={!isMobile && sidebarCollapsed}
+              onToggleSidebar={isMobile ? undefined : () => setSidebarCollapsed(v => !v)}
               currentTool={tool}
               onPickTool={(key) => handleToolSelect(key)}
               onBeginScaleReference={beginScaleReference}
@@ -8232,36 +8227,91 @@ const loadPdfJs = () => {
               )}
             </div>
 
-            {/* FLOATING SIDEBAR TOGGLE (when collapsed) */}
-            {!isMobile && sidebarCollapsed && (
-              <button
-                className="sidebarFloatingToggle"
-                type="button"
-                onClick={() => setSidebarCollapsed(false)}
-                title="Show sidebar"
-                aria-label="Show sidebar"
-              >
-                <Icon name="chevLeft" />
-              </button>
-            )}
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
               <div className="panelHeader">
                 <div className="panelHeaderTitle">
                   {panelView === "items" ? "Inspection Items" : "Properties"}
                 </div>
-                {!isMobile && (
-                  <button
-                    className="panelToggleBtn iconOnly"
-                    type="button"
-                    onClick={() => setSidebarCollapsed(true)}
-                    title="Hide sidebar"
-                    aria-label="Hide sidebar"
-                  >
-                    <Icon name="chevRight" />
-                  </button>
-                )}
               </div>
+              {viewMode === "diagram" && (
+                <div className="panelPageNav" role="group" aria-label="Page navigation">
+                  <div className="panelPageNavTop">
+                    <span className="panelPageIndex">
+                      Page {activePageIndex + 1} of {pages.length}
+                    </span>
+                    <div className="panelPageSelect">
+                      <select
+                        className="panelPageSelectInput"
+                        value={activePageId}
+                        onChange={(event) => setActivePageId(event.target.value)}
+                        aria-label="Select page"
+                      >
+                        {pages.map((page, index) => {
+                          const label = page.name?.trim();
+                          return (
+                            <option key={page.id} value={page.id}>
+                              {label ? `Page ${index + 1} • ${label}` : `Page ${index + 1}`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <Icon name="chevDown" className="panelPageSelectChevron" />
+                    </div>
+                  </div>
+                  <div className="panelPageNavTools">
+                    <button
+                      className="iconBtn nav"
+                      type="button"
+                      onClick={goToPrevPage}
+                      disabled={!canGoPrevPage}
+                      title="Previous page"
+                      aria-label="Previous page"
+                    >
+                      <Icon name="chevLeft" />
+                    </button>
+                    <button
+                      className="iconBtn nav"
+                      type="button"
+                      onClick={goToNextPage}
+                      disabled={!canGoNextPage}
+                      title="Next page"
+                      aria-label="Next page"
+                    >
+                      <Icon name="chevRight" />
+                    </button>
+                    <button className="iconBtn nav" type="button" onClick={insertBlankPageAfter} title="Add page" aria-label="Add page">
+                      <Icon name="plus" />
+                    </button>
+                    <button className="iconBtn nav" type="button" onClick={startPageNameEdit} title="Rename page" aria-label="Rename page">
+                      <Icon name="pencil" />
+                    </button>
+                    <button className="iconBtn nav" type="button" onClick={rotateActivePage} title="Rotate page" aria-label="Rotate page">
+                      <Icon name="rotate" />
+                    </button>
+                    <button
+                      className="iconBtn nav danger"
+                      type="button"
+                      onClick={deleteActivePage}
+                      disabled={pages.length <= 1}
+                      title="Delete page"
+                      aria-label="Delete page"
+                    >
+                      <Icon name="trash" />
+                    </button>
+                    <label className="iconBtn nav" title="Import pages" aria-label="Import pages">
+                      <Icon name="upload" />
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf,.pdf,.PDF"
+                        multiple
+                        style={{ display: "none" }}
+                        onChange={(e)=> e.target.files && addPagesFromFiles(e.target.files)}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
               <div className="panelBody">
                 <div className="pScroll">
                 {/* ITEMS LIST */}

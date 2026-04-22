@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useAuth } from "./AuthContext";
+import TitanRoofLogo from "../components/TitanRoofLogo";
 
 /**
  * Login screen with username/password form and a test-user bypass.
@@ -37,6 +38,9 @@ export const LoginScreen: React.FC = () => {
   return (
     <div className="loginRoot" role="dialog" aria-labelledby="loginHeading">
       <div className="loginCard">
+        <div className="loginLogo" aria-hidden="true">
+          <TitanRoofLogo size={56} fill="#0EA5E9" stroke="#0EA5E9" />
+        </div>
         <div className="loginBrand">TitanRoof Beta v4.0</div>
         <h1 id="loginHeading" className="loginTitle">Sign in to continue</h1>
         <p className="loginHint">

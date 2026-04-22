@@ -1,48 +1,61 @@
 import React from "react";
 
 /**
- * TitanRoofLogo — SVG rendition of the TitanRoof mark. Two stylized
- * "T" shapes form a stacked roof-peak monogram: a solid dark slate
- * block on the left and a hollow outline on the right, sharing a
- * shallow peak that reads as a roofline.
+ * TitanRoofLogo — SVG rendition of the TitanRoof mark. Two stacked "T"
+ * glyphs with angular roof-peak tops form a monogram that reads as a
+ * roofline: a solid block on the left and a hollow outline on the right.
  *
- * The viewBox is normalized to 64×56 so the component slots cleanly
- * into toolbar rows alongside 20-28px icons without distortion.
+ * Both colors default to currentColor so a parent can render the mark
+ * in white on a blue background (login / brand chip) or in slate on a
+ * light surface (default) by simply setting `color`. Explicit `fill`
+ * and `stroke` overrides remain available for fine control.
  */
 
 interface Props {
   size?: number;
   className?: string;
   title?: string;
+  fill?: string;
+  stroke?: string;
 }
 
-const TitanRoofLogo: React.FC<Props> = ({ size = 28, className, title = "TitanRoof" }) => {
-  const fill = "#1E2F3D";
-  const stroke = "#4F6C7F";
-  const aspect = 56 / 64;
+const TitanRoofLogo: React.FC<Props> = ({
+  size = 28,
+  className,
+  title = "TitanRoof",
+  fill,
+  stroke,
+}) => {
+  const aspect = 80 / 100;
+  const fillColor = fill ?? "#1E2F3D";
+  const strokeColor = stroke ?? fill ?? "#1E2F3D";
 
   return (
     <svg
       className={className}
       width={size}
       height={Math.round(size * aspect)}
-      viewBox="0 0 64 56"
+      viewBox="0 0 100 80"
       fill="none"
       role="img"
       aria-label={title}
     >
       <title>{title}</title>
-      {/* Left "T": filled dark slate, angled roof peak */}
+      {/* Left "T": filled block with sharp angular roof peak. Apex
+          sits at ~46/8; roof slopes down to the right, stem is a
+          vertical shaft that narrows slightly toward the bottom. */}
       <path
-        d="M3 14 L26 2 L30 10 L26 16 L26 54 L14 54 L14 18 L3 18 Z"
-        fill={fill}
+        d="M2 22 L46 4 L52 12 L46 20 L46 78 L24 78 L24 26 L2 26 Z"
+        fill={fillColor}
       />
-      {/* Right "T": hollow outline, lighter slate */}
+      {/* Right "T": hollow outline sharing the same angular peak
+          silhouette but smaller and shifted right, forming the
+          second letter of the monogram. */}
       <path
-        d="M30 18 L52 8 L61 16 L61 20 L49 24 L49 54 L39 54 L39 27 L30 27 Z"
+        d="M52 24 L88 8 L98 16 L98 22 L78 30 L78 78 L64 78 L64 34 L52 34 Z"
         fill="none"
-        stroke={stroke}
-        strokeWidth="2.2"
+        stroke={strokeColor}
+        strokeWidth="3"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
