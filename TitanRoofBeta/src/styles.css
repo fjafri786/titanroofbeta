@@ -9,8 +9,8 @@
            padding-top) shifts down under the status bar on iPad
            rotation instead of sliding off-screen. */
         --topbar-height: calc(28px + env(safe-area-inset-top, 0px));
-        --propsbar-height: 56px;
-        --toolbar-height: 56px;
+        --propsbar-height: 44px;
+        --toolbar-height: 40px;
         --navy:#0B2A3A;
         --navy2:#0E3348;
 
@@ -620,7 +620,7 @@
         padding-top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
       }
       .app.sidebarCollapsed{
-        grid-template-columns: 1fr 56px;
+        grid-template-columns: 1fr;
       }
 
       /* ========= CANVAS ZONE ========= */
@@ -727,23 +727,23 @@
 
       /* ========= TOOLBAR ========= */
       .toolbar{
-        --toolbar-control-size: calc(40px * var(--ui-scale));
+        --toolbar-control-size: calc(26px * var(--ui-scale));
         position: fixed;
         top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height));
         left: 0;
         right: 0;
         display:flex;
         align-items:center;
-        gap: calc(12px * var(--ui-scale));
-        padding: calc(6px * var(--ui-scale)) calc(16px * var(--ui-scale));
+        gap: calc(8px * var(--ui-scale));
+        padding: calc(3px * var(--ui-scale)) calc(10px * var(--ui-scale));
         height: var(--toolbar-height);
         min-height: var(--toolbar-height);
-        border-radius: 0 0 18px 18px;
+        border-radius: 0 0 12px 12px;
         background: rgba(255,255,255,0.98);
         backdrop-filter: blur(12px);
         border: 1px solid rgba(226,232,240,0.95);
         border-top: 0;
-        box-shadow: 0 12px 22px rgba(2,6,23,0.1);
+        box-shadow: 0 4px 10px rgba(2,6,23,0.06);
         z-index: 160;
         user-select:none;
         -webkit-user-select:none;
@@ -763,9 +763,9 @@
       .tbTools{
         display:flex;
         align-items:center;
-        gap: calc(6px * var(--ui-scale));
+        gap: calc(4px * var(--ui-scale));
         flex-wrap: nowrap;
-        margin-left: calc(18px * var(--ui-scale));
+        margin-left: calc(8px * var(--ui-scale));
         padding:0;
         border-radius:0;
         background: transparent;
@@ -1023,7 +1023,7 @@
       }
       .tbDivider{
         width:1px;
-        height: calc(28px * var(--ui-scale));
+        height: calc(18px * var(--ui-scale));
         background: rgba(148,163,184,0.35);
         border-radius: 999px;
         flex-shrink: 0;
@@ -1126,10 +1126,10 @@
       }
       .pageSelectInput{
         appearance:none;
-        border-radius:999px;
+        border-radius:8px;
         border:1px solid transparent;
-        padding: calc(6px * var(--ui-scale)) calc(28px * var(--ui-scale)) calc(6px * var(--ui-scale)) calc(12px * var(--ui-scale));
-        font-size: calc(12px * var(--ui-scale));
+        padding: calc(3px * var(--ui-scale)) calc(22px * var(--ui-scale)) calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale));
+        font-size: calc(11px * var(--ui-scale));
         font-weight:700;
         color: var(--navy);
         background: rgba(15,23,42,0.04);
@@ -1185,7 +1185,7 @@
         height: var(--toolbar-control-size);
       }
       .iconBtn{
-        border-radius:999px;
+        border-radius:8px;
         border:1px solid rgba(148,163,184,0.45);
         background:#fff;
         display:flex;
@@ -1197,7 +1197,7 @@
         opacity:0.45;
         cursor:not-allowed;
       }
-      .iconBtn svg{ width: calc(18px * var(--ui-scale)); height: calc(18px * var(--ui-scale)); }
+      .iconBtn svg{ width: calc(16px * var(--ui-scale)); height: calc(16px * var(--ui-scale)); }
       .iconBtn.active{
         background: rgba(15,23,42,0.08);
         border-color: rgba(15,23,42,0.28);
@@ -1225,7 +1225,7 @@
         align-items:center;
         justify-content:center;
         padding:0;
-        border-radius: 50%;
+        border-radius: 8px;
         border:1px solid var(--toolColor);
         background:#fff;
         cursor:pointer;
@@ -1244,18 +1244,19 @@
         border-radius:50%;
       }
       .toolBtn.iconLabel{
-        padding:0 calc(10px * var(--ui-scale));
-        min-width: calc(var(--toolbar-control-size) + (18px * var(--ui-scale)));
+        padding:0;
+        min-width: var(--toolbar-control-size);
+        width: var(--toolbar-control-size);
         height: var(--toolbar-control-size);
-        border-radius: 999px;
-        gap: calc(6px * var(--ui-scale));
+        border-radius: 8px;
+        gap: 0;
       }
       .toolBtn.iconLabel svg{
-        width: calc(22px * var(--ui-scale));
-        height: calc(22px * var(--ui-scale));
+        width: calc(16px * var(--ui-scale));
+        height: calc(16px * var(--ui-scale));
       }
       .toolBtn.iconLabel .toolText{
-        font-size: calc(11px * var(--ui-scale));
+        display:none;
       }
       .toolBtn.free{ --toolColor: #0EA5E9; }
       .toolbar.vertical .toolBtn.textLabel{
@@ -1263,8 +1264,8 @@
         justify-content:center;
       }
       .toolBtn svg{
-        width: calc(22px * var(--ui-scale));
-        height: calc(22px * var(--ui-scale));
+        width: calc(16px * var(--ui-scale));
+        height: calc(16px * var(--ui-scale));
       }
       .toolBtn .toolText{
         font-size: calc(11px * var(--ui-scale));
@@ -1347,14 +1348,14 @@
         gap:8px;
       }
       .toolbar .zReadout{
-        font-size:12px;
+        font-size:11px;
         font-weight:800;
         color: var(--navy);
-        padding:6px 12px;
-        border-radius:999px;
-        border:2px solid rgba(147,197,253,0.9);
+        padding:3px 8px;
+        border-radius:8px;
+        border:1px solid rgba(147,197,253,0.9);
         background: #fff;
-        min-width:64px;
+        min-width:50px;
         text-align:center;
       }
       .toolbar.mobile .tbPages{
@@ -1495,28 +1496,43 @@
         border-left: 1px solid var(--panelEdge);
         display:flex;
         flex-direction:column;
-        box-shadow: -10px 0 26px rgba(2,6,23,0.05);
         position:relative;
         min-width: 0;
         min-height: 0;
         height: 100%;
         backdrop-filter: blur(10px);
         transform: translateX(0);
-        transition: width 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+        transition: transform 0.25s ease;
       }
       .panel.collapsed{
-        width:56px;
-        min-width:56px;
-        border-left:1px solid var(--panelEdge);
-        opacity:1;
-        pointer-events:auto;
-        overflow:hidden;
-        align-items:center;
-        transform: translateX(10px);
+        display:none;
       }
-      .panel.collapsed .panelHeader{
-        justify-content:center;
-        padding:10px 0;
+      .sidebarFloatingToggle{
+        position: fixed;
+        top: calc(var(--topbar-height) + var(--menubar-height) + var(--propsbar-height) + var(--toolbar-height) + 12px);
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(148,163,184,0.4);
+        color: var(--navy);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 150;
+        box-shadow: 0 4px 12px rgba(2,6,23,0.08);
+        backdrop-filter: blur(10px);
+        touch-action: manipulation;
+      }
+      .sidebarFloatingToggle:hover{
+        background: #fff;
+        border-color: rgba(148,163,184,0.7);
+      }
+      .sidebarFloatingToggle svg{
+        width: 16px;
+        height: 16px;
       }
       .panelHeader{
         display:flex;
