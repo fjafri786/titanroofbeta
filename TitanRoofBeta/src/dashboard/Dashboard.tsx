@@ -4,6 +4,7 @@ import { projectStore, cryptoRandomId } from "../storage";
 import { useProject } from "../project/ProjectContext";
 import { useAuth } from "../auth/AuthContext";
 import ProjectCard from "./ProjectCard";
+import TitanRoofLogo from "../components/TitanRoofLogo";
 
 type ViewMode = "grid" | "list" | "table";
 
@@ -213,7 +214,9 @@ const Dashboard: React.FC = () => {
     <div className="dashRoot">
       <header className="dashHeader">
         <div className="dashBrand">
-          <span className="dashBrandDot" />
+          <span className="dashBrandMark" aria-hidden="true">
+            <TitanRoofLogo size={28} fill="#ffffff" />
+          </span>
           <div>
             <div className="dashBrandTitle">TitanRoof</div>
             <div className="dashBrandSub">Field Capture Dashboard</div>

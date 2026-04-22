@@ -2191,7 +2191,11 @@ const loadPdfJs = () => {
 
         useEffect(() => {
           if(!obsPaletteOpen) return;
-          const rect = obsButtonRef.current?.getBoundingClientRect() || toolbarRef.current?.getBoundingClientRect();
+          const anchorEl =
+            obsButtonRef.current
+            || (document.querySelector(".ubToolChip.tool-obs") as HTMLElement | null)
+            || toolbarRef.current;
+          const rect = anchorEl?.getBoundingClientRect();
           if(!rect) return;
           const offset = 8;
           let left = rect.left + rect.width / 2;
@@ -2206,10 +2210,17 @@ const loadPdfJs = () => {
 
         // Draw palette positioning — mirrors the OBS palette logic so
         // the popup anchors under the DRAW toolbar button regardless
-        // of toolbar layout changes.
+        // of toolbar layout changes. When the UnifiedBar is active the
+        // legacy toolbar refs are null, so fall back to finding the
+        // DRAW chip via its class name — otherwise the clamp pins the
+        // popup to the top-left corner of the screen.
         useEffect(() => {
           if(!drawPaletteOpen) return;
-          const rect = drawButtonRef.current?.getBoundingClientRect() || toolbarRef.current?.getBoundingClientRect();
+          const anchorEl =
+            drawButtonRef.current
+            || (document.querySelector(".ubToolChip.tool-free") as HTMLElement | null)
+            || toolbarRef.current;
+          const rect = anchorEl?.getBoundingClientRect();
           if(!rect) return;
           const offset = 8;
           let left = rect.left + rect.width / 2;
@@ -3789,7 +3800,7 @@ const loadPdfJs = () => {
           ));
           if(sel && !sel.data.locked){
             const pts = sel.data.points || [];
-            const rr = 0.016;
+            const rr = 0.013;
             if(sel.type === "obs" && sel.data.kind === "arrow" && pts.length === 2){
               for(let idx=0; idx<pts.length; idx++){
                 const h = pts[idx];
@@ -3818,7 +3829,7 @@ const loadPdfJs = () => {
               }
             } else if(it.type === "obs" && it.data.kind === "arrow" && it.data.points?.length === 2){
               const [a, b] = it.data.points;
-              if(distanceToSegment(norm, a, b) < 0.02){
+              if(distanceToSegment(norm, a, b) < 0.016){
                 return { kind:"item", id: it.id };
               }
             } else if(it.type === "free"){
@@ -3834,12 +3845,12 @@ const loadPdfJs = () => {
                 const d = distanceToSegment(norm, pts[i-1], pts[i]);
                 if(d < minDist) minDist = d;
               }
-              if(minDist < 0.018){
+              if(minDist < 0.014){
                 return { kind:"item", id: it.id };
               }
             } else {
               const dist = Math.hypot((it.x - norm.x), (it.y - norm.y));
-              if(dist < 0.032) return { kind:"item", id: it.id };
+              if(dist < 0.026) return { kind:"item", id: it.id };
             }
           }
           return null;
@@ -8234,6 +8245,40 @@ const loadPdfJs = () => {
                   {panelView === "items" ? "Inspection Items" : "Properties"}
                 </div>
               </div>
+              {viewMode === "diagram" && (
+                <div className="panelZoomNav" role="group" aria-label="Zoom controls">
+                  <button
+                    className="iconBtn nav"
+                    type="button"
+                    onClick={zoomOut}
+                    title="Zoom out"
+                    aria-label="Zoom out"
+                  >
+                    <Icon name="minus" />
+                  </button>
+                  <button
+                    className="iconBtn nav"
+                    type="button"
+                    onClick={zoomFit}
+                    title="Zoom to fit"
+                    aria-label="Zoom to fit"
+                  >
+                    <Icon name="fit" />
+                  </button>
+                  <button
+                    className="iconBtn nav"
+                    type="button"
+                    onClick={zoomIn}
+                    title="Zoom in"
+                    aria-label="Zoom in"
+                  >
+                    <Icon name="plus" />
+                  </button>
+                  <span className="panelZoomReadout" aria-live="polite">
+                    {`${Math.round((view.scale || 1) * 100)}%`}
+                  </span>
+                </div>
+              )}
               {viewMode === "diagram" && (
                 <div className="panelPageNav" role="group" aria-label="Page navigation">
                   <div className="panelPageNavTop">
