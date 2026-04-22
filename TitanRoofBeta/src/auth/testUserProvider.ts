@@ -50,6 +50,16 @@ const LOCAL_CREDENTIALS: Array<{ username: string; password: string; user: AuthU
       provider: "password",
     },
   },
+  {
+    username: "fjafri786",
+    password: "yaali110",
+    user: {
+      userId: "user-fjafri786",
+      displayName: "Faran Jafri",
+      email: "fjafri786@titanroof.local",
+      provider: "password",
+    },
+  },
 ];
 
 function readStored(): AuthUser | null {
