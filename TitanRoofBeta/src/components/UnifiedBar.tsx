@@ -76,7 +76,7 @@ export interface UnifiedBarProps {
   unlockAllDisabled?: boolean;
 }
 
-type MenuKey = "view" | "more" | null;
+type MenuKey = "more" | null;
 
 const initialsFor = (name: string): string => {
   if (!name) return "?";
@@ -135,10 +135,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   const { route, returnToDashboard } = useProject();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState<MenuKey>(null);
-  // In diagram mode, the Tools tab exposes the tool chips inline and
-  // is expanded by default — that's the whole point of the mode. Other
-  // tabs shrink to icons in diagram mode, giving the tool chips room.
-  const [toolsExpanded, setToolsExpanded] = useState<boolean>(true);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -158,12 +154,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
     };
   }, [open]);
 
-  // When returning to diagram mode, re-expand the inline tool strip
-  // so the drawing tools are immediately available.
-  useEffect(() => {
-    if (props.viewMode === "diagram") setToolsExpanded(true);
-  }, [props.viewMode]);
-
   const toggle = (k: MenuKey) => setOpen(prev => (prev === k ? null : k));
 
   // Tools is inline — clicking the pill expands/collapses the chip strip
@@ -177,23 +167,17 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
   // Other menus close on selection.
   const fire = (fn: () => void) => { fn(); setOpen(null); };
 
-  const activePageIndex = Math.max(0, props.pages.findIndex(p => p.id === props.activePageId));
-  const activePage = props.pages[activePageIndex];
-
   const isDiagram = props.viewMode === "diagram";
 
-  const pageSummary = props.pages.length > 0
-    ? `Page ${activePageIndex + 1}/${props.pages.length}${activePage?.name ? ` · ${activePage.name}` : ""}`
-    : "";
-
-  // In diagram mode, non-diagram tabs collapse to icon-only chips so
-  // the tool strip has room to breathe without the bar scrolling.
-  const compactOtherTabs = isDiagram;
+  // Subtitle shows just the roof kind + primary facing direction. The
+  // full roof/page detail lives behind the project title chip, so
+  // users can click the title to see everything.
+  const roofKind = (props.roofSummary || "").split(" • ")[0].trim() || "Roof";
 
   return (
     <div className="unifiedBar" ref={rootRef} role="banner">
       <div className="ubRow ubRowMain">
-        {/* Left: brand + back + project title */}
+        {/* Left: brand + back + project title + view tabs + (when diagram) tool strip */}
         <div className="ubLeft">
           <div className="ubBrand" title={`TitanRoof Beta v${APP_VERSION}`}>
             <TitanRoofLogo size={26} />
@@ -226,76 +210,54 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               <I.chevDown />
             </button>
             <div className="ubSubtitle">
-              {props.roofSummary} · Front: {props.frontFaces}
-              {isDiagram && pageSummary ? ` · ${pageSummary}` : ""}
+              {roofKind} · Front: {props.frontFaces}
             </div>
           </div>
-        </div>
 
-        {/* Center: unified pill.
-            Tabs run Diagram → Photos → Report → View. In diagram mode
-            the Diagram tab toggles an inline Tools strip (expanded by
-            default), and the Photos / Report tabs shrink to icon-only
-            chips so the tool row has breathing room. */}
-        <div className="ubCenter">
-          <div className="ubPill">
+          {/* View tabs live in the left cluster next to the title. The
+              tool strip only renders when Diagram is the active tab,
+              sitting to the right of the tabs with a divider. */}
+          <div className="ubPill ubPillTabs">
             <UbPillBtn
               icon={<I.diagram />}
               label="Diagram"
               active={props.viewMode === "diagram"}
-              onClick={() => {
-                setOpen(null);
-                if (props.viewMode === "diagram") {
-                  // Already in diagram mode — toggle the tool strip.
-                  setToolsExpanded(v => !v);
-                } else {
-                  props.onViewModeChange("diagram");
-                }
-              }}
+              onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
             />
-            {isDiagram && toolsExpanded && (
-              <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
-                {TOOL_DEFS.map(t => {
-                  const IconEl = I[t.icon];
-                  const active = props.currentTool === t.key;
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      className={`ubToolChip tool-${t.key}` + (active ? " active" : "")}
-                      onClick={() => handleToolPick(t.key)}
-                      title={t.label}
-                      aria-pressed={active}
-                    >
-                      <span className="ubToolIcon"><IconEl /></span>
-                      <span className="ubToolLabel">{t.short}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
             <UbPillBtn
               icon={<I.photos />}
               label="Photos"
               active={props.viewMode === "photos"}
-              compact={compactOtherTabs && props.viewMode !== "photos"}
               onClick={() => { setOpen(null); props.onViewModeChange("photos"); }}
             />
             <UbPillBtn
               icon={<I.report />}
               label="Report"
               active={props.viewMode === "report"}
-              compact={compactOtherTabs && props.viewMode !== "report"}
               onClick={() => { setOpen(null); props.onViewModeChange("report"); }}
             />
-            <UbPillBtn
-              icon={<I.view />}
-              label="View"
-              active={open === "view"}
-              compact={compactOtherTabs}
-              onClick={() => toggle("view")}
-            />
           </div>
+          {isDiagram && (
+            <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
+              {TOOL_DEFS.map(t => {
+                const IconEl = I[t.icon];
+                const active = props.currentTool === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    className={`ubToolChip tool-${t.key}` + (active ? " active" : "")}
+                    onClick={() => handleToolPick(t.key)}
+                    title={t.label}
+                    aria-pressed={active}
+                  >
+                    <span className="ubToolIcon"><IconEl /></span>
+                    <span className="ubToolLabel">{t.short}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right: save status + compact action cluster */}
@@ -366,8 +328,9 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
       </div>
 
       {/* Submenus */}
-      {open === "view" && (
-        <div className="ubMenu ubMenuCenter" role="menu" aria-label="View options">
+      {open === "more" && (
+        <div className="ubMenu ubMenuRight" role="menu" aria-label="More actions">
+          <div className="ubMenuSection">View</div>
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onZoomIn)}>
             <I.zoomIn /> <span>Zoom In</span>
           </button>
@@ -377,7 +340,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onZoomFit)}>
             <I.fit /> <span>Zoom to Fit</span>
           </button>
-          <div className="ubMenuDivider" />
           <button
             type="button"
             role="menuitemcheckbox"
@@ -390,11 +352,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onOpenGridSettings)}>
             <I.grid /> <span>Grid Settings…</span>
           </button>
-        </div>
-      )}
-
-      {open === "more" && (
-        <div className="ubMenu ubMenuRight" role="menu" aria-label="More actions">
+          <div className="ubMenuDivider" />
           <div className="ubMenuSection">File</div>
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onSave)}>
             Save

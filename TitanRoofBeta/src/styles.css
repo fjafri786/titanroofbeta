@@ -2710,6 +2710,13 @@
         font-weight:700;
         color: var(--sub);
       }
+      .itemsPanelBulkActions{
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        flex-wrap:wrap;
+        justify-content:flex-end;
+      }
       .itemsPanelBulkBtn{
         display:inline-flex;
         align-items:center;
@@ -6339,6 +6346,7 @@
         gap: 8px;
         min-width: 0;
         flex: 1 1 0;
+        overflow: hidden;
       }
       .ubBack{
         flex: 0 0 auto;
@@ -6363,8 +6371,10 @@
         margin-left: 2px;
         /* Constrain the whole block so the title/subtitle share one
            clamped width instead of the title pushing the chevron far
-           to the right. */
-        max-width: min(42vw, 460px);
+           to the right. The tabs + tool strip sit to the right of
+           this block, so keep it narrower than before. */
+        max-width: min(28vw, 300px);
+        flex: 0 1 auto;
       }
       .ubTitleBtn{
         display: inline-flex;
@@ -6410,17 +6420,11 @@
         max-width: 100%;
         padding: 0 4px;
       }
-      .ubCenter{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-      }
       .ubRight{
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        flex: 1 1 0;
+        flex: 0 0 auto;
       }
       .ubPill{
         display: inline-flex;
@@ -6438,6 +6442,12 @@
         padding: 0;
         border: none;
         background: transparent;
+      }
+      /* Tabs pill sits in the left cluster next to the project title,
+         with a small gap so it reads as its own control group. */
+      .ubPillTabs{
+        margin-left: 6px;
+        flex: 0 0 auto;
       }
       .ubPillBtn{
         display: inline-flex;
@@ -6735,18 +6745,19 @@
       .ubMenu .ubToolBtn.active.tool-obs .ubToolIcon{ color: var(--c-obs); }
       .ubMenu .ubToolBtn.active.tool-free .ubToolIcon{ color: #0EA5E9; }
 
-      /* Inline tool strip — sits next to the Tools pill when diagram mode
-         is active and the user clicks Tools. Expands the bar sideways
-         instead of opening a dropdown, so tools are readily available
-         while drawing. Fast slide-in keeps it feeling snappy. */
+      /* Tool strip — renders to the right of the view tabs whenever
+         Diagram is the active tab, separated from the tabs by a
+         divider so it reads as its own control group. */
       .ubToolStrip{
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        margin-left: 4px;
-        padding: 2px 4px;
-        border-left: 1px solid rgba(148,163,184,0.28);
+        margin-left: 10px;
+        padding: 2px 0 2px 10px;
+        border-left: 1px solid rgba(148,163,184,0.35);
         overflow: hidden;
+        flex: 0 1 auto;
+        min-width: 0;
         animation: ubStripSlideIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
       }
       .ubToolChip{
@@ -6814,14 +6825,14 @@
       @media (max-width: 820px){
         .ubTitle{ font-size: 14px; }
         .ubSubtitle{ font-size: 10px; }
-        .ubTitleBlock{ max-width: min(50vw, 340px); }
+        .ubTitleBlock{ max-width: min(36vw, 260px); }
         .ubPillLabel{ display: none; }
         .ubPillBtn{ padding: 7px 9px; }
       }
       @media (orientation: portrait) and (max-width: 1180px){
         .ubPillLabel{ display: none; }
         .ubPillBtn{ padding: 7px 9px; }
-        .ubTitleBlock{ max-width: min(46vw, 380px); }
+        .ubTitleBlock{ max-width: min(32vw, 280px); }
       }
       /* Tools dropdown scrolls horizontally on very narrow widths */
       @media (max-width: 600px){
