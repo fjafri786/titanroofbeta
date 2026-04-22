@@ -82,19 +82,6 @@
         padding-right: 16px;
         gap: 12px;
       }
-      .topBarBadge{
-        display:inline-flex;
-        align-items:center;
-        padding: 3px 10px;
-        border-radius: 999px;
-        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
-        color:#fff;
-        font-size:10px;
-        font-weight:900;
-        letter-spacing:0.6px;
-        text-transform:uppercase;
-        line-height:1.1;
-      }
       .topBarSpacer{
         flex:1 1 auto;
       }
@@ -219,6 +206,20 @@
         font-weight: 700;
         color: var(--sub);
         letter-spacing: 0.2px;
+      }
+      .menuBarBetaBadge{
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: calc(6px * var(--ui-scale));
+        padding: 0 4px;
+        cursor: help;
+        opacity: 0.85;
+        transition: opacity 0.12s ease, transform 0.12s ease;
+      }
+      .menuBarBetaBadge:hover{
+        opacity: 1;
+        transform: scale(1.08);
       }
 
       /* Project properties modal tabs */

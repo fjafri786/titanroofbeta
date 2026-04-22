@@ -4,11 +4,9 @@ import { useProject } from "../project/ProjectContext";
 import SaveIndicator from "../autosave/SaveIndicator";
 
 /**
- * Thin top strip rendered above the menu bar.
- *
- * Single compact "Beta v4.0" badge on the left, save indicator in the
- * middle, user controls on the right. No redundant label — the badge
- * already tells the version story.
+ * Thin top strip rendered above the menu bar. The beta indicator now
+ * lives next to the Help menu item; this row is purely save status
+ * and user controls.
  */
 const TopBar: React.FC = () => {
   const { user, logout } = useAuth();
@@ -16,7 +14,6 @@ const TopBar: React.FC = () => {
 
   return (
     <div className="topBar">
-      <span className="topBarBadge">Beta v4.0</span>
       <span className="topBarSpacer" />
       {route === "workspace" && <SaveIndicator />}
       {user && (
