@@ -4482,10 +4482,16 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="800" fontSize="14">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="700" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+16} fill="var(--c-ts)" fontWeight="800" fontSize="11">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+30} fill="var(--c-ts)" fontWeight="700" fontSize="10">
+                {ts.data.dir}
               </text>
+              {ts.data.locked && (
+                <g transform={`translate(${toPxX(bb.minX)+8 + (ts.data.dir?.length || 0)*6 + 4}, ${toPxY(bb.minY)+22})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="4" width="10" height="7" rx="1.2" fill="var(--c-ts)" />
+                  <path d="M2 4V2.5a3 3 0 016 0V4" fill="none" strokeWidth="1.3" strokeLinecap="round" />
+                </g>
+              )}
 
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
               <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
@@ -4515,10 +4521,16 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-ts)" fontWeight="800" fontSize="14">{ts.name}</text>
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+36} fill="var(--c-ts)" fontWeight="700" fontSize="12">
-                {ts.data.dir}{ts.data.locked ? " 🔒" : ""}
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+16} fill="var(--c-ts)" fontWeight="800" fontSize="11">{ts.name}</text>
+              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+30} fill="var(--c-ts)" fontWeight="700" fontSize="10">
+                {ts.data.dir}
               </text>
+              {ts.data.locked && (
+                <g transform={`translate(${toPxX(bb.minX)+8 + (ts.data.dir?.length || 0)*6 + 4}, ${toPxY(bb.minY)+22})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="4" width="10" height="7" rx="1.2" fill="var(--c-ts)" />
+                  <path d="M2 4V2.5a3 3 0 016 0V4" fill="none" strokeWidth="1.3" strokeLinecap="round" />
+                </g>
+              )}
               <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
               <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
                 {(ts.data.bruises||[]).length}
