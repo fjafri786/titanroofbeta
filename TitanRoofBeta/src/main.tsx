@@ -7907,12 +7907,46 @@ const loadPdfJs = () => {
                 </div>
               </div>
 
-              {showResetView && (
-                <button className="resetViewBtn" type="button" onClick={zoomReset}>
-                  <Icon name="reset" />
-                  Reset view
+              <div className="zoomPill" role="group" aria-label="Zoom controls">
+                <button
+                  className="zoomPillBtn"
+                  type="button"
+                  onClick={zoomOut}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <Icon name="minus" />
                 </button>
-              )}
+                <button
+                  className="zoomPillReadout"
+                  type="button"
+                  onClick={zoomFit}
+                  aria-label="Zoom to fit"
+                  title="Zoom to fit"
+                >
+                  {`${Math.round((view.scale || 1) * 100)}%`}
+                </button>
+                <button
+                  className="zoomPillBtn"
+                  type="button"
+                  onClick={zoomIn}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <Icon name="plus" />
+                </button>
+                <span className="zoomPillDivider" aria-hidden="true" />
+                <button
+                  className="zoomPillBtn"
+                  type="button"
+                  onClick={zoomReset}
+                  disabled={!showResetView}
+                  aria-label="Reset view"
+                  title="Reset view"
+                >
+                  <Icon name="reset" />
+                </button>
+              </div>
 
               {scaleCaptureStep !== "idle" && (
                 <div className="scaleBanner" role="status">
@@ -8242,47 +8276,13 @@ const loadPdfJs = () => {
 
             {/* SIDEBAR */}
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
-              <div className="panelHeader">
-                <div className="panelHeaderTitle">
-                  {panelView === "props" ? "Item Properties" : "Properties"}
+              {panelView === "props" && (
+                <div className="panelHeader">
+                  <div className="panelHeaderTitle">Item Properties</div>
                 </div>
-              </div>
-              {viewMode === "diagram" && panelView === "items" && (
-                <div className="panelSubhead">Page Setup</div>
               )}
               {viewMode === "diagram" && panelView === "items" && (
-                <div className="panelZoomNav" role="group" aria-label="Zoom controls">
-                  <button
-                    className="iconBtn nav"
-                    type="button"
-                    onClick={zoomOut}
-                    title="Zoom out"
-                    aria-label="Zoom out"
-                  >
-                    <Icon name="minus" />
-                  </button>
-                  <button
-                    className="iconBtn nav"
-                    type="button"
-                    onClick={zoomFit}
-                    title="Zoom to fit"
-                    aria-label="Zoom to fit"
-                  >
-                    <Icon name="fit" />
-                  </button>
-                  <button
-                    className="iconBtn nav"
-                    type="button"
-                    onClick={zoomIn}
-                    title="Zoom in"
-                    aria-label="Zoom in"
-                  >
-                    <Icon name="plus" />
-                  </button>
-                  <span className="panelZoomReadout" aria-live="polite">
-                    {`${Math.round((view.scale || 1) * 100)}%`}
-                  </span>
-                </div>
+                <div className="panelSubhead">Pages</div>
               )}
               {viewMode === "diagram" && panelView === "items" && (
                 <div className="panelPageNav" role="group" aria-label="Page navigation">
