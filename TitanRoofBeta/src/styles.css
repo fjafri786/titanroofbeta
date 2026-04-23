@@ -6958,27 +6958,52 @@
       .ubToolChip.active.tool-obs{ background: rgba(147,51,234,0.12); color: var(--c-obs); }
       .ubToolChip.active.tool-free{ background: rgba(14,165,233,0.12); color: #0EA5E9; }
 
-      /* Hide chip text labels on narrower widths to keep the bar
-         from pushing the tab cluster off-screen. Icons still visible. */
+      /* iPad / tablet scaling: shrink everything so all six tool chips
+         fit alongside the tabs without clipping. Desktop (≥1181px) is
+         untouched. */
       @media (max-width: 1180px){
-        .ubToolChip{ padding: 6px 8px; }
+        :root{ --unifiedbar-height: 88px; }
+        .ubRowMain{ gap: 6px; }
+        .ubLeft{ gap: 6px; }
+        .ubBrand{ padding: 6px 10px 6px 8px; margin-right: 6px; gap: 8px; }
+        .ubBrandName{ font-size: 14px; }
+        .ubBrandMeta{ font-size: 9px; margin-top: 2px; }
+        .ubBack{ width: 32px; height: 32px; }
+        .ubBack .ubIcon{ width: 20px; height: 20px; }
+        .ubTitle{ font-size: 17px; }
+        .ubTitleBtn{ padding: 2px 5px; }
+        .ubPill{ padding: 2px; gap: 1px; }
+        .ubPillBtn{ padding: 5px 9px; min-height: 26px; gap: 6px; font-size: 13px; }
+        .ubPillIcon .ubIcon{ width: 18px; height: 18px; }
+        .ubToolStrip{ gap: 2px; margin-left: 4px; padding: 2px 0 2px 8px; }
+        .ubToolChip{ padding: 4px 6px; min-height: 30px; gap: 4px; }
         .ubToolChip .ubToolLabel{ display: none; }
+        .ubToolChip .ubToolIcon{ width: 22px; height: 22px; }
+        .ubToolChip .ubToolIcon .ubIcon{ width: 18px; height: 18px; }
+        .ubIconBtn{ width: 34px; height: 34px; }
+        .ubIconBtn .ubIcon{ width: 20px; height: 20px; }
+        .ubUserBtn{ width: 32px; height: 32px; margin-left: 6px; font-size: 12px; }
+        .ubRightDivider{ margin: 0 6px; height: 20px; }
+        /* Tab labels hide here too — on iPad landscape the labels alone
+           eat the space that the tool strip needs. */
+        .ubPillLabel{ display: none; }
       }
 
-      /* Compact layout adjustments by orientation.
-         Portrait iPad (narrow): drop pill labels, keep icons only. The
-         bar stays a single 56px row across all tablet sizes. */
+      /* Portrait iPad / small tablets: additional tightening so the
+         title + tabs + six tool icons still fit on one row. */
       @media (max-width: 820px){
+        :root{ --unifiedbar-height: 82px; }
         .ubTitle{ font-size: 14px; }
         .ubSubtitle{ font-size: 10px; }
-        .ubTitleBlock{ max-width: min(36vw, 260px); }
-        .ubPillLabel{ display: none; }
-        .ubPillBtn{ padding: 7px 9px; }
-      }
-      @media (orientation: portrait) and (max-width: 1180px){
-        .ubPillLabel{ display: none; }
-        .ubPillBtn{ padding: 7px 9px; }
-        .ubTitleBlock{ max-width: min(32vw, 280px); }
+        .ubTitleBlock{ max-width: min(32vw, 220px); }
+        .ubPillBtn{ padding: 5px 7px; min-height: 24px; }
+        .ubPillIcon .ubIcon{ width: 17px; height: 17px; }
+        .ubToolStrip{ margin-left: 2px; padding: 2px 0 2px 6px; }
+        .ubToolChip{ padding: 3px 5px; min-height: 28px; }
+        .ubToolChip .ubToolIcon{ width: 20px; height: 20px; }
+        .ubToolChip .ubToolIcon .ubIcon{ width: 16px; height: 16px; }
+        .ubIconBtn{ width: 30px; height: 30px; }
+        .ubIconBtn .ubIcon{ width: 18px; height: 18px; }
       }
       /* Tools dropdown scrolls horizontally on very narrow widths */
       @media (max-width: 600px){
