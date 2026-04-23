@@ -617,6 +617,90 @@ const loadPdfJs = () => {
         return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
       }
 
+      // Shoelace area, in squared sheet-pixels, for a polygon whose
+      // points are stored as normalized [0..1] coords.
+      function polygonAreaPx(pts, sheetWidth, sheetHeight){
+        if(!pts || pts.length < 3) return 0;
+        let a = 0;
+        for(let i = 0, n = pts.length; i < n; i++){
+          const p = pts[i], q = pts[(i + 1) % n];
+          a += (p.x * sheetWidth) * (q.y * sheetHeight) - (q.x * sheetWidth) * (p.y * sheetHeight);
+        }
+        return Math.abs(a) / 2;
+      }
+
+      // Polyline length in sheet pixels. `closed` closes the loop.
+      function polylineLengthPx(pts, sheetWidth, sheetHeight, closed = false){
+        if(!pts || pts.length < 2) return 0;
+        let total = 0;
+        for(let i = 1; i < pts.length; i++){
+          const a = pts[i - 1], b = pts[i];
+          total += Math.hypot((b.x - a.x) * sheetWidth, (b.y - a.y) * sheetHeight);
+        }
+        if(closed){
+          const a = pts[pts.length - 1], b = pts[0];
+          total += Math.hypot((b.x - a.x) * sheetWidth, (b.y - a.y) * sheetHeight);
+        }
+        return total;
+      }
+
+      // Length-unit conversions. Base is meters. Supports the four
+      // units the scale-reference capture accepts today.
+      const SCALE_UNIT_TO_M: Record<string, number> = {
+        ft: 0.3048,
+        in: 0.0254,
+        m: 1,
+        cm: 0.01,
+      };
+      function convertLength(value: number, from: string, to: string){
+        const f = SCALE_UNIT_TO_M[from] ?? 1;
+        const t = SCALE_UNIT_TO_M[to] ?? 1;
+        return (value * f) / t;
+      }
+
+      // Sheet-pixels that correspond to 1 unit of scaleRef.unit.
+      // Returns null when no usable scale reference is set.
+      function scalePxPerUnit(scaleRef, sheetWidth, sheetHeight){
+        if(!scaleRef || !scaleRef.realDistance) return null;
+        const dx = (scaleRef.b.x - scaleRef.a.x) * sheetWidth;
+        const dy = (scaleRef.b.y - scaleRef.a.y) * sheetHeight;
+        const pxDist = Math.hypot(dx, dy);
+        if(pxDist <= 0) return null;
+        return pxDist / scaleRef.realDistance;
+      }
+
+      // Round for display. Sub-1 values keep 2 decimals, up to 100 keep
+      // 1, everything else goes to whole numbers.
+      function formatMeasurement(value: number){
+        if(!Number.isFinite(value)) return "—";
+        const abs = Math.abs(value);
+        if(abs >= 100) return value.toFixed(0);
+        if(abs >= 10) return value.toFixed(1);
+        if(abs >= 1) return value.toFixed(2);
+        return value.toFixed(3);
+      }
+
+      // Pretty-print a pixel length as a real-world distance.
+      // Returns null when no scale is set.
+      function formatLengthFromPx(pxLength: number, scaleRef, sheetWidth, sheetHeight, displayUnit?: string){
+        const pxPerUnit = scalePxPerUnit(scaleRef, sheetWidth, sheetHeight);
+        if(!pxPerUnit) return null;
+        const unit = displayUnit || scaleRef.unit;
+        const inScale = pxLength / pxPerUnit;
+        const asDisplay = convertLength(inScale, scaleRef.unit, unit);
+        return `${formatMeasurement(asDisplay)} ${unit}`;
+      }
+
+      // Pretty-print a pixel² area as a real-world area.
+      function formatAreaFromPx2(pxArea: number, scaleRef, sheetWidth, sheetHeight, displayUnit?: string){
+        const pxPerUnit = scalePxPerUnit(scaleRef, sheetWidth, sheetHeight);
+        if(!pxPerUnit) return null;
+        const unit = displayUnit || scaleRef.unit;
+        const perAxis = convertLength(1, scaleRef.unit, unit);
+        const inDisplay = (pxArea / (pxPerUnit * pxPerUnit)) * perAxis * perAxis;
+        return `${formatMeasurement(inDisplay)} ${unit}²`;
+      }
+
       function distanceToSegment(pt, a, b){
         const dx = b.x - a.x;
         const dy = b.y - a.y;
@@ -1251,8 +1335,9 @@ const loadPdfJs = () => {
         // --- Grid + ruler/scale state (Pass 3 menu bar feature) ---
         const [gridEnabled, setGridEnabled] = usePersistedState<boolean>("titanroof.view.grid", true);
         const [gridSettings, setGridSettings] = usePersistedState<{
-          spacing: number; color: string; thickness: number;
-        }>("titanroof.view.gridSettings", { spacing: 40, color: "#EEF2F7", thickness: 1 });
+          spacing: number; color: string; thickness: number; unit?: "px" | "ft" | "in" | "m" | "cm";
+        }>("titanroof.view.gridSettings", { spacing: 40, color: "#EEF2F7", thickness: 1, unit: "px" });
+        const gridUnit = (gridSettings.unit || "px");
         const [gridSettingsOpen, setGridSettingsOpen] = useState(false);
 
         // Scale reference: two points on the sheet (normalized) + a
@@ -4477,6 +4562,20 @@ const loadPdfJs = () => {
           ? { transform: `rotate(${sheetMetrics.rotation}deg)` }
           : undefined;
 
+        // When the grid unit is a real-world distance (ft/in/m/cm) and a
+        // scale reference is set, translate that spacing into sheet
+        // pixels. Pure "px" spacing (or missing scale) falls back to
+        // the raw persisted value so existing projects behave the same.
+        const gridSpacingPx = useMemo(() => {
+          const raw = Math.max(2, gridSettings.spacing || 0);
+          if(gridUnit === "px" || !scaleRef) return raw;
+          const pxPerScaleUnit = scalePxPerUnit(scaleRef, sheetWidth, sheetHeight);
+          if(!pxPerScaleUnit) return raw;
+          const scalePerGridUnit = convertLength(1, gridUnit, scaleRef.unit);
+          const pxPerGridUnit = pxPerScaleUnit * scalePerGridUnit;
+          return Math.max(2, raw * pxPerGridUnit);
+        }, [gridSettings.spacing, gridUnit, scaleRef, sheetWidth, sheetHeight]);
+
         // Fit when BG first set
         const bgWasSetRef = useRef(false);
         useEffect(() => {
@@ -4495,6 +4594,9 @@ const loadPdfJs = () => {
 
           const bb = bboxFromPoints(pts);
           const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
+          const areaLabel = scaleRef
+            ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
+            : null;
 
           return (
             <g key={ts.id}>
@@ -4508,6 +4610,11 @@ const loadPdfJs = () => {
               <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
                 {ts.data.dir}
               </text>
+              {areaLabel && (
+                <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+34} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+                  {areaLabel}
+                </text>
+              )}
               {ts.data.locked && (
                 <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
                   <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
@@ -4535,6 +4642,9 @@ const loadPdfJs = () => {
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
           const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
+          const areaLabel = scaleRef
+            ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
+            : null;
           return (
             <g key={`print-${ts.id}`}>
               <polygon
@@ -4547,6 +4657,11 @@ const loadPdfJs = () => {
               <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
                 {ts.data.dir}
               </text>
+              {areaLabel && (
+                <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+34} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+                  {areaLabel}
+                </text>
+              )}
               {ts.data.locked && (
                 <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
                   <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
@@ -4566,6 +4681,9 @@ const loadPdfJs = () => {
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const isSel = selectedId === obs.id;
           const bb = bboxFromPoints(pts);
+          const areaLabel = scaleRef
+            ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
+            : null;
           return (
             <g key={obs.id}>
               <polygon
@@ -4577,6 +4695,11 @@ const loadPdfJs = () => {
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
+              {areaLabel && (
+                <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+32} fill="var(--c-obs)" fontWeight="700" fontSize="11">
+                  {areaLabel}
+                </text>
+              )}
               {isSel && !obs.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
                   <circle className="handleObs" cx={toPxX(p.x)} cy={toPxY(p.y)} r="7" />
@@ -4618,6 +4741,14 @@ const loadPdfJs = () => {
           const labelAnchorY = isLabelStart ? ay : by;
           const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
           const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
+          const lengthLabel = scaleRef
+            ? formatLengthFromPx(Math.hypot(bx - ax, by - ay), scaleRef, sheetWidth, sheetHeight)
+            : null;
+          const midX = (ax + bx) / 2;
+          const midY = (ay + by) / 2;
+          const perpOffset = 10;
+          const perpX = -Math.sin(angle) * perpOffset;
+          const perpY = Math.cos(angle) * perpOffset;
           return (
             <g key={obs.id}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={isSel ? 3 : 2} />
@@ -4626,6 +4757,11 @@ const loadPdfJs = () => {
               {obs.data.label && (
                 <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
                   {obs.data.label}
+                </text>
+              )}
+              {lengthLabel && (
+                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="10" textAnchor="middle">
+                  {lengthLabel}
                 </text>
               )}
               {isSel && !obs.data.locked && (
@@ -4644,6 +4780,9 @@ const loadPdfJs = () => {
           const pts = obs.data.points || [];
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
+          const areaLabel = scaleRef
+            ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
+            : null;
           return (
             <g key={`print-${obs.id}`}>
               <polygon
@@ -4655,6 +4794,11 @@ const loadPdfJs = () => {
               <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
                 {obs.name} • {obs.data.code}
               </text>
+              {areaLabel && (
+                <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+32} fill="var(--c-obs)" fontWeight="700" fontSize="11">
+                  {areaLabel}
+                </text>
+              )}
             </g>
           );
         };
@@ -4689,6 +4833,14 @@ const loadPdfJs = () => {
           const labelAnchorY = isLabelStart ? ay : by;
           const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
           const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
+          const lengthLabel = scaleRef
+            ? formatLengthFromPx(Math.hypot(bx - ax, by - ay), scaleRef, sheetWidth, sheetHeight)
+            : null;
+          const midX = (ax + bx) / 2;
+          const midY = (ay + by) / 2;
+          const perpOffset = 10;
+          const perpX = -Math.sin(angle) * perpOffset;
+          const perpY = Math.cos(angle) * perpOffset;
           return (
             <g key={`print-${obs.id}`}>
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={2} />
@@ -4697,6 +4849,11 @@ const loadPdfJs = () => {
               {obs.data.label && (
                 <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
                   {obs.data.label}
+                </text>
+              )}
+              {lengthLabel && (
+                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="10" textAnchor="middle">
+                  {lengthLabel}
                 </text>
               )}
             </g>
@@ -6692,20 +6849,48 @@ const loadPdfJs = () => {
               </div>
               <div className="modalBody gridSettingsBody">
                 <div className="tiny">
-                  These settings control the on-canvas grid. When a scale reference is set, grid spacing is measured in sheet pixels so you can size it to match the real-world units you care about.
+                  These settings control the on-canvas grid. Pick a unit below to tie grid spacing to the scale reference — e.g. a 5&nbsp;ft grid that resizes itself as you recalibrate.
+                  {gridUnit !== "px" && !scaleRef && (
+                    <div style={{marginTop:6, color:"#B45309"}}>
+                      No scale reference set yet — set a scale so the grid can use real-world units. Spacing falls back to pixels until then.
+                    </div>
+                  )}
                 </div>
                 <div className="gridSettingsRow">
                   <div className="gridSettingsField">
-                    <div className="lbl">Spacing (px)</div>
+                    <div className="lbl">Spacing ({gridUnit})</div>
                     <input
                       className="inp"
                       type="number"
-                      min={4}
-                      max={400}
-                      step={1}
+                      min={gridUnit === "px" ? 4 : 0.1}
+                      max={gridUnit === "px" ? 400 : 1000}
+                      step={gridUnit === "px" ? 1 : 0.5}
                       value={gridSettings.spacing}
-                      onChange={(e) => setGridSettings(s => ({ ...s, spacing: Math.max(4, Math.min(400, parseInt(e.target.value, 10) || 40)) }))}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        if(!Number.isFinite(v)) return;
+                        const minV = gridUnit === "px" ? 4 : 0.1;
+                        const maxV = gridUnit === "px" ? 400 : 1000;
+                        setGridSettings(s => ({ ...s, spacing: Math.max(minV, Math.min(maxV, v)) }));
+                      }}
                     />
+                  </div>
+                  <div className="gridSettingsField">
+                    <div className="lbl">Unit</div>
+                    <select
+                      className="inp"
+                      value={gridUnit}
+                      onChange={(e) => {
+                        const unit = e.target.value as "px" | "ft" | "in" | "m" | "cm";
+                        setGridSettings(s => ({ ...s, unit }));
+                      }}
+                    >
+                      <option value="px">px (fixed)</option>
+                      <option value="ft">ft (scale)</option>
+                      <option value="in">in (scale)</option>
+                      <option value="m">m (scale)</option>
+                      <option value="cm">cm (scale)</option>
+                    </select>
                   </div>
                   <div className="gridSettingsField">
                     <div className="lbl">Line Thickness (px)</div>
@@ -6720,18 +6905,40 @@ const loadPdfJs = () => {
                     />
                   </div>
                 </div>
-                <div>
-                  <div className="lbl">Line Color</div>
-                  <input
-                    className="inp"
-                    type="color"
-                    value={gridSettings.color}
-                    onChange={(e) => setGridSettings(s => ({ ...s, color: e.target.value }))}
-                  />
+                <div className="drawPaletteSection">
+                  <div className="drawPaletteLabel">Line Color</div>
+                  <div className="drawPaletteColors">
+                    {[
+                      "#FFFFFF", "#000000", "#DC2626", "#2563EB", "#16A34A",
+                      "#F97316", "#EAB308", "#9333EA", "#EC4899", "#92400E",
+                    ].map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={"drawColorDot" + (gridSettings.color.toUpperCase() === c.toUpperCase() ? " active" : "")}
+                        style={{ background: c }}
+                        onClick={() => setGridSettings(s => ({ ...s, color: c }))}
+                        aria-label={`Color ${c}`}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                  <div className="drawPaletteCustomRow">
+                    <label className="drawColorCustomBtn" title="Pick a custom color">
+                      <span className="drawColorCustomSwatch" />
+                      <span className="drawColorCustomLabel">Custom</span>
+                      <input
+                        type="color"
+                        value={gridSettings.color}
+                        onChange={(e) => setGridSettings(s => ({ ...s, color: e.target.value }))}
+                      />
+                    </label>
+                    <span className="drawColorCurrent" style={{ background: gridSettings.color }} aria-hidden="true" />
+                  </div>
                 </div>
               </div>
               <div className="modalActions">
-                <button className="btn" type="button" onClick={() => setGridSettings({ spacing: 40, color: "#EEF2F7", thickness: 1 })}>Reset</button>
+                <button className="btn" type="button" onClick={() => setGridSettings({ spacing: 40, color: "#EEF2F7", thickness: 1, unit: "px" })}>Reset</button>
                 <button className="btn btnPrimary" type="button" onClick={() => setGridSettingsOpen(false)}>Done</button>
               </div>
             </div>
@@ -7582,7 +7789,7 @@ const loadPdfJs = () => {
                     </div>
                     <div className="drawPaletteCustomRow">
                       <label className="drawColorCustomBtn" title="Pick a custom color">
-                        <span className="drawColorCustomSwatch" style={{ background: freeDrawColor }} />
+                        <span className="drawColorCustomSwatch" />
                         <span className="drawColorCustomLabel">Custom</span>
                         <input
                           type="color"
@@ -7672,9 +7879,9 @@ const loadPdfJs = () => {
 
                     <svg className="gridSvg" width="100%" height="100%">
                       <defs>
-                        <pattern id="grid" width={gridSettings.spacing} height={gridSettings.spacing} patternUnits="userSpaceOnUse">
+                        <pattern id="grid" width={gridSpacingPx} height={gridSpacingPx} patternUnits="userSpaceOnUse">
                           <path
-                            d={`M ${gridSettings.spacing} 0 L 0 0 0 ${gridSettings.spacing}`}
+                            d={`M ${gridSpacingPx} 0 L 0 0 0 ${gridSpacingPx}`}
                             fill="none"
                             stroke={gridSettings.color}
                             strokeWidth={gridSettings.thickness}
@@ -7712,6 +7919,46 @@ const loadPdfJs = () => {
                             <polygon points={`${bx},${by} ${hx1},${hy1} ${hx2},${hy2}`} fill={color} />
                           );
                         }
+                        let measureLabel = null;
+                        if(scaleRef){
+                          const bb = bboxFromPoints(pts);
+                          const w = (bb.maxX - bb.minX) * sheetWidth;
+                          const h = (bb.maxY - bb.minY) * sheetHeight;
+                          const fmtL = (px) => formatLengthFromPx(px, scaleRef, sheetWidth, sheetHeight);
+                          const fmtA = (px2) => formatAreaFromPx2(px2, scaleRef, sheetWidth, sheetHeight);
+                          let text: string | null = null;
+                          let x = bb.minX * sheetWidth;
+                          let y = bb.minY * sheetHeight - 4;
+                          if(shape === "rect"){
+                            text = `${fmtL(w)} × ${fmtL(h)} (${fmtA(w * h)})`;
+                          } else if(shape === "circle"){
+                            const rxL = fmtL(w / 2), ryL = fmtL(h / 2);
+                            const area = Math.PI * (w / 2) * (h / 2);
+                            text = Math.abs(w - h) < 1
+                              ? `ø ${fmtL(w)} (${fmtA(area)})`
+                              : `${rxL} × ${ryL} (${fmtA(area)})`;
+                          } else if(shape === "line" || shape === "arrow"){
+                            const a = pts[0], b = pts[pts.length - 1];
+                            const len = Math.hypot((b.x - a.x) * sheetWidth, (b.y - a.y) * sheetHeight);
+                            text = fmtL(len);
+                            x = ((a.x + b.x) / 2) * sheetWidth;
+                            y = ((a.y + b.y) / 2) * sheetHeight - 6;
+                          } else if(shape === "triangle"){
+                            text = fmtA(polygonAreaPx(pts, sheetWidth, sheetHeight));
+                          } else if(i.data.closed){
+                            text = fmtA(polygonAreaPx(pts, sheetWidth, sheetHeight));
+                          } else {
+                            const len = polylineLengthPx(pts, sheetWidth, sheetHeight, false);
+                            text = fmtL(len);
+                          }
+                          if(text){
+                            measureLabel = (
+                              <text x={x} y={y} fill={color} fontSize="10" fontWeight="700" style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.8)", strokeWidth: 3 } as any}>
+                                {text}
+                              </text>
+                            );
+                          }
+                        }
                         return (
                           <g key={i.id} opacity={isSel ? 1 : 0.95} style={{ cursor: "pointer" }}>
                             <path
@@ -7723,6 +7970,7 @@ const loadPdfJs = () => {
                               strokeLinejoin="round"
                             />
                             {arrowHead}
+                            {measureLabel}
                           </g>
                         );
                       })}
@@ -9131,7 +9379,7 @@ const loadPdfJs = () => {
                               </div>
                               <div className="drawPaletteCustomRow">
                                 <label className="drawColorCustomBtn" title="Pick a custom color">
-                                  <span className="drawColorCustomSwatch" style={{ background: currentColor }} />
+                                  <span className="drawColorCustomSwatch" />
                                   <span className="drawColorCustomLabel">Custom</span>
                                   <input
                                     type="color"
