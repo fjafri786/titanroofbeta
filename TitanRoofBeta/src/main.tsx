@@ -9,6 +9,7 @@ import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
 import { AutosaveProvider } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
+import { legacyBlobGet, legacyBlobPut, legacyBlobDelete } from "./storage/legacyBlobStore";
 // Phase 6 foundation: Tailwind + design tokens. Imported before
 // styles.css so the legacy hand-written rules win any specificity
 // ties while we migrate surfaces over incrementally.
@@ -1868,25 +1869,49 @@ const loadPdfJs = () => {
         const saveNoticeTimeoutRef = useRef(null);
         const [saveNotice, setSaveNotice] = useState(null);
 
-        const readAutoSaveHistory = useCallback(() => {
-          const raw = localStorage.getItem(AUTOSAVE_HISTORY_KEY);
-          if(!raw) return [];
-          try{
-            const parsed = JSON.parse(raw);
-            if(!Array.isArray(parsed)) return [];
-            return parsed.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
-          }catch(err){
-            console.warn("Failed to parse autosave history", err);
-            return [];
-          }
+        // Autosave history lives in IndexedDB (not localStorage) because it
+        // holds up to six full snapshots — the single biggest consumer of the
+        // ~5 MB Safari/iPad localStorage quota. An in-memory ref keeps the
+        // save path synchronous; IDB is hydrated on mount and written on
+        // every update.
+        const autoSaveHistoryRef = useRef([]);
+
+        useEffect(() => {
+          let cancelled = false;
+          (async () => {
+            try{
+              const fromIdb = await legacyBlobGet(AUTOSAVE_HISTORY_KEY);
+              if(cancelled) return;
+              if(Array.isArray(fromIdb)){
+                autoSaveHistoryRef.current = fromIdb.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
+                // One-shot migration: if localStorage still has the legacy
+                // key, drop it so its bytes are returned to the quota.
+                try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
+                return;
+              }
+              // Migrate any history that was previously kept in localStorage.
+              const raw = localStorage.getItem(AUTOSAVE_HISTORY_KEY);
+              if(!raw) return;
+              const parsed = JSON.parse(raw);
+              if(!Array.isArray(parsed)) return;
+              const cleaned = parsed.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
+              autoSaveHistoryRef.current = cleaned;
+              try{ await legacyBlobPut(AUTOSAVE_HISTORY_KEY, cleaned); }catch{}
+              try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
+            }catch(err){
+              console.warn("Failed to load autosave history", err);
+            }
+          })();
+          return () => { cancelled = true; };
         }, []);
 
+        const readAutoSaveHistory = useCallback(() => autoSaveHistoryRef.current.slice(), []);
+
         const saveAutoSaveHistory = useCallback((history) => {
-          try{
-            localStorage.setItem(AUTOSAVE_HISTORY_KEY, JSON.stringify(history));
-          }catch(err){
+          autoSaveHistoryRef.current = history;
+          legacyBlobPut(AUTOSAVE_HISTORY_KEY, history).catch(err => {
             console.warn("Failed to save autosave history", err);
-          }
+          });
         }, []);
 
         const pushAutoSaveSnapshot = useCallback((snapshot) => {
@@ -1919,17 +1944,41 @@ const loadPdfJs = () => {
 
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
+          const serialized = JSON.stringify(snapshot);
+          let localOk = false;
           try{
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-            if(source === "auto"){
-              pushAutoSaveSnapshot(snapshot);
-            }
+            localStorage.setItem(STORAGE_KEY, serialized);
+            localOk = true;
           }catch(err){
-            console.warn("Failed to save project data", err);
-            if(source === "manual"){
-              window.alert("Save failed on this device. Please use Save As to export a backup file immediately.");
+            // Safari/iPad localStorage is capped near 5 MB. If any legacy
+            // autosave history is still occupying bytes here, drop it and
+            // retry — that alone is usually enough to land the save.
+            try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
+            try{
+              localStorage.setItem(STORAGE_KEY, serialized);
+              localOk = true;
+            }catch(retryErr){
+              console.warn("localStorage save failed, falling back to IndexedDB", retryErr);
             }
-            return false;
+          }
+          // Always mirror to IndexedDB so a quota-blocked localStorage no
+          // longer strands the user's work. Fire-and-forget; we only care
+          // about the failure case to suppress the alert.
+          const idbPromise = legacyBlobPut(STORAGE_KEY, snapshot).catch(err => {
+            console.warn("IndexedDB fallback save failed", err);
+            return err;
+          });
+          if(source === "auto"){
+            pushAutoSaveSnapshot(snapshot);
+          }
+          if(!localOk){
+            // Don't block the save path — but if the IDB write also rejects,
+            // surface the alert asynchronously so the user still knows.
+            idbPromise.then(result => {
+              if(result instanceof Error && source === "manual"){
+                window.alert("Save failed on this device. Please use Save As to export a backup file immediately.");
+              }
+            });
           }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
           setLastSavedAt({ source, time: timeString });
@@ -1964,8 +2013,11 @@ const loadPdfJs = () => {
           try{
             localStorage.setItem(STORAGE_KEY, JSON.stringify(chosen.snapshot));
           }catch(err){
-            console.warn("Failed to persist recovered state", err);
+            console.warn("Failed to persist recovered state to localStorage", err);
           }
+          legacyBlobPut(STORAGE_KEY, chosen.snapshot).catch(err => {
+            console.warn("Failed to persist recovered state to IndexedDB", err);
+          });
         }, [applySnapshot, readAutoSaveHistory]);
 
         const exportTrp = useCallback(() => {
@@ -2019,6 +2071,9 @@ const loadPdfJs = () => {
               }catch(persistErr){
                 console.warn("Failed to persist imported state to localStorage", persistErr);
               }
+              legacyBlobPut(STORAGE_KEY, snapshot).catch(persistErr => {
+                console.warn("Failed to persist imported state to IndexedDB", persistErr);
+              });
             }catch(err){
               console.warn("Failed to import project file", err);
               window.alert("Could not open that project file. Please pick a valid TitanRoof .json export.");
@@ -2028,19 +2083,38 @@ const loadPdfJs = () => {
         }, [applySnapshot]);
 
         useEffect(() => {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if(!raw) return;
-          try{
-            const parsed = JSON.parse(raw);
-            applySnapshot(parsed, "restore");
-          }catch(err){
-            console.warn("Failed to restore saved state", err);
+          let cancelled = false;
+          (async () => {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if(raw){
+              try{
+                const parsed = JSON.parse(raw);
+                if(!cancelled) applySnapshot(parsed, "restore");
+                return;
+              }catch(err){
+                console.warn("Failed to restore saved state from localStorage", err);
+              }
+            }
+            // localStorage missing or corrupt — fall through to the
+            // IndexedDB mirror that saveState keeps in sync.
+            try{
+              const fromIdb = await legacyBlobGet(STORAGE_KEY);
+              if(cancelled) return;
+              if(fromIdb && typeof fromIdb === "object"){
+                applySnapshot(fromIdb, "restore");
+                return;
+              }
+            }catch(err){
+              console.warn("Failed to restore saved state from IndexedDB", err);
+            }
+            if(cancelled) return;
             const history = readAutoSaveHistory();
             const fallback = history[history.length - 1];
             if(fallback?.snapshot){
               applySnapshot(fallback.snapshot, "recovery");
             }
-          }
+          })();
+          return () => { cancelled = true; };
         }, [applySnapshot, readAutoSaveHistory]);
 
         useEffect(() => {
@@ -2058,17 +2132,27 @@ const loadPdfJs = () => {
             clearTimeout(silentAutoSaveRef.current);
           }
           silentAutoSaveRef.current = setTimeout(() => {
+            const snapshot = buildState();
+            let wrote = false;
             try{
-              const snapshot = buildState();
               localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-              setLastSavedAt(prev => prev?.source === "manual"
-                ? prev
-                : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
+              wrote = true;
             }catch(err){
-              // localStorage may be full on iPad — fail silently; the 5-minute checkpoint
-              // will still surface a hard error via saveState("auto") on quota exceeded.
-              console.warn("Silent autosave skipped", err);
+              // localStorage may be full on iPad — the IndexedDB mirror
+              // below still lands the snapshot.
+              console.warn("Silent autosave localStorage skipped", err);
             }
+            legacyBlobPut(STORAGE_KEY, snapshot).then(() => {
+              wrote = true;
+            }).catch(err => {
+              console.warn("Silent autosave IndexedDB skipped", err);
+            }).finally(() => {
+              if(wrote){
+                setLastSavedAt(prev => prev?.source === "manual"
+                  ? prev
+                  : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
+              }
+            });
           }, 2000);
           return () => {
             if(silentAutoSaveRef.current){
@@ -3653,6 +3737,9 @@ const loadPdfJs = () => {
           counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1, free:1 };
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
+          autoSaveHistoryRef.current = [];
+          legacyBlobDelete(STORAGE_KEY).catch(() => {});
+          legacyBlobDelete(AUTOSAVE_HISTORY_KEY).catch(() => {});
           setLastSavedAt(null);
           setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false, free:false });
         };
