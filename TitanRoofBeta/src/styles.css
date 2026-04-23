@@ -710,6 +710,69 @@
         width:14px;
         height:14px;
       }
+      /* Unified zoom cluster: zoom out / current % / zoom in / reset all
+         live in one pill at the bottom-right of the canvas, so the
+         sidebar doesn't need to double up. */
+      .zoomPill{
+        position:absolute;
+        right:16px;
+        bottom:16px;
+        display:inline-flex;
+        align-items:center;
+        gap:2px;
+        padding:4px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.35);
+        background: rgba(255,255,255,0.96);
+        box-shadow: var(--shadowSoft);
+        color: var(--navy);
+        z-index:70;
+      }
+      .zoomPillBtn{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:32px;
+        height:32px;
+        border:none;
+        border-radius:999px;
+        background:transparent;
+        color: var(--navy);
+        cursor:pointer;
+      }
+      .zoomPillBtn:hover:not(:disabled){
+        background: rgba(14,165,233,0.12);
+        color:#0EA5E9;
+      }
+      .zoomPillBtn:disabled{
+        opacity: 0.35;
+        cursor:not-allowed;
+      }
+      .zoomPillBtn svg{ width:16px; height:16px; }
+      .zoomPillReadout{
+        min-width:52px;
+        padding:4px 10px;
+        border:none;
+        border-radius:999px;
+        background:transparent;
+        font-size:12px;
+        font-weight:800;
+        color: var(--navy);
+        cursor:pointer;
+        font-variant-numeric: tabular-nums;
+        text-align:center;
+      }
+      .zoomPillReadout:hover{
+        background: rgba(14,165,233,0.08);
+        color:#0EA5E9;
+      }
+      .zoomPillDivider{
+        display:inline-block;
+        width:1px;
+        height:20px;
+        margin:0 2px;
+        background: rgba(148,163,184,0.45);
+      }
       .stage{
         position:absolute;
         left:50%;
@@ -1673,18 +1736,19 @@
       .panel.collapsed .panelHeaderTitle{
         display:none;
       }
-      /* Subheadings inside the sidebar group the Page Setup controls and
-         the Inspection Items list under the single "Properties" header. */
+      /* Section headings inside the sidebar: "Pages" and "Inspection
+         Items" stand on their own — there's no wrapping "Properties"
+         header anymore, so these read as the top-level sidebar groups. */
       .panelSubhead{
-        padding:10px 12px 4px;
-        font-size:10px;
+        padding:14px 14px 6px;
+        font-size:11px;
         font-weight:800;
-        letter-spacing:0.5px;
+        letter-spacing:0.6px;
         text-transform:uppercase;
-        color:#64748B;
+        color:#475569;
       }
       .panelSubheadItems{
-        padding:4px 2px 6px;
+        padding:12px 2px 8px;
       }
 
       /* Header with 3 lines + single edit icon */
@@ -6313,9 +6377,10 @@
          Single-row 56px bar: the title block carries the page summary
          inline so we don't burn a second row on one label. */
       :root{
-        /* 44px base + 25% for the two-row title cluster: project name on
-           row 1, view tabs + tool strip on row 2. */
-        --unifiedbar-height: 55px;
+        /* Two-row title cluster: project name on row 1 (~20px), view
+           tabs + tool strip on row 2 (~35px). Total sits inside the
+           90-120px design band. */
+        --unifiedbar-height: 100px;
       }
       body.useUnifiedBar{
         --topbar-height: var(--safe-top);
@@ -6338,7 +6403,7 @@
         z-index: 195;
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 16px;
         background: #FFFFFF;
         color: #0B1220;
         border-bottom: 1px solid rgba(148,163,184,0.32);
@@ -6351,10 +6416,10 @@
       .ubBrand{
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 5px 12px 5px 10px;
-        margin-right: 8px;
-        border-radius: 10px;
+        gap: 10px;
+        padding: 8px 14px 8px 12px;
+        margin-right: 10px;
+        border-radius: 12px;
         background: linear-gradient(135deg, #0EA5E9 0%, #2563EB 50%, #1E40AF 100%);
         box-shadow: 0 6px 14px -8px rgba(14,165,233,0.55);
         color: #ffffff;
@@ -6371,18 +6436,18 @@
         min-width: 0;
       }
       .ubBrandName{
-        font-size: 13px;
+        font-size: 16px;
         font-weight: 900;
         letter-spacing: 0.2px;
         color: #ffffff;
       }
       .ubBrandMeta{
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.6px;
         text-transform: uppercase;
         color: rgba(255,255,255,0.8);
-        margin-top: 3px;
+        margin-top: 4px;
       }
       .ubBrandVersion{
         font-weight: 600;
@@ -6414,27 +6479,27 @@
       }
       .ubBack{
         flex: 0 0 auto;
-        width: 30px;
-        height: 30px;
+        width: 38px;
+        height: 38px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: 6px;
+        border-radius: 8px;
         border: none;
         background: transparent;
         color: #475569;
         cursor: pointer;
       }
       .ubBack:hover{ background: rgba(14,165,233,0.1); color: #0B1220; }
-      .ubBack .ubIcon{ width: 18px; height: 18px; }
+      .ubBack .ubIcon{ width: 22px; height: 22px; }
       .ubTitleCluster{
         display: flex;
         flex-direction: column;
         align-items: flex-start;
         justify-content: center;
         min-width: 0;
-        gap: 1px;
-        margin-left: 2px;
+        gap: 4px;
+        margin-left: 4px;
         flex: 1 1 auto;
         overflow: hidden;
       }
@@ -6462,11 +6527,11 @@
         align-items: center;
         /* Chevron sits tight against the title text — no extra gap so
            the dropdown affordance reads as part of the title. */
-        gap: 2px;
+        gap: 4px;
         background: transparent;
         border: none;
-        padding: 2px 4px 2px 4px;
-        border-radius: 6px;
+        padding: 3px 6px 3px 6px;
+        border-radius: 8px;
         color: #0B1220;
         cursor: pointer;
         min-width: 0;
@@ -6474,7 +6539,7 @@
       }
       .ubTitleBtn:hover{ background: rgba(14,165,233,0.08); }
       .ubTitle{
-        font-size: 13px;
+        font-size: 20px;
         font-weight: 800;
         letter-spacing: 0.1px;
         white-space: nowrap;
@@ -6484,9 +6549,9 @@
         color: #0B1220;
       }
       .ubTitleBtn .ubIcon{
-        width: 12px;
-        height: 12px;
-        opacity: 0.55;
+        width: 16px;
+        height: 16px;
+        opacity: 0.6;
         color: #64748B;
         flex: 0 0 auto;
       }
@@ -6534,13 +6599,14 @@
         align-items: center;
         /* Consistent padding regardless of active/compact state so tabs
            don't jitter when switching modes. */
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: 7px;
+        gap: 8px;
+        padding: 7px 12px;
+        min-height: 29px;
+        border-radius: 8px;
         border: none;
         background: transparent;
         color: #475569;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 600;
         letter-spacing: 0.1px;
         cursor: pointer;
@@ -6560,7 +6626,7 @@
         box-shadow: 0 1px 2px rgba(2,6,23,0.08), 0 0 0 1px rgba(14,165,233,0.18);
       }
       .ubPillBtn.compact{
-        padding: 6px 10px;
+        padding: 7px 12px;
       }
       .ubPillBtn.compact .ubPillLabel{
         display: none;
@@ -6570,7 +6636,7 @@
         align-items: center;
         justify-content: center;
       }
-      .ubPillIcon .ubIcon{ width: 17px; height: 17px; }
+      .ubPillIcon .ubIcon{ width: 22px; height: 22px; }
       .ubPillLabel{
         display: inline-block;
       }
@@ -6578,10 +6644,10 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 30px;
-        height: 30px;
+        width: 40px;
+        height: 40px;
         border: none;
-        border-radius: 7px;
+        border-radius: 8px;
         background: transparent;
         color: #475569;
         cursor: pointer;
@@ -6589,7 +6655,7 @@
       .ubIconBtn:hover{ background: rgba(14,165,233,0.1); color: #0B1220; }
       .ubIconBtn.active{ background: rgba(14,165,233,0.14); color: #0EA5E9; }
       .ubIconBtn[disabled]{ opacity: 0.35; cursor: not-allowed; }
-      .ubIconBtn .ubIcon{ width: 17px; height: 17px; }
+      .ubIconBtn .ubIcon{ width: 22px; height: 22px; }
       .ubSaveStatus{
         display: inline-flex;
         align-items: center;
@@ -6639,14 +6705,14 @@
         .ubSaveStatus .saveIndicatorTime{ display: none; }
       }
       .ubUserBtn{
-        margin-left: 8px;
-        width: 28px;
-        height: 28px;
+        margin-left: 10px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         border: 1px solid rgba(148,163,184,0.35);
         background: #F1F5F9;
         color: #0B1220;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 800;
         letter-spacing: 0.3px;
         cursor: pointer;
@@ -6831,8 +6897,8 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        margin-left: 4px;
-        padding: 2px 0 2px 10px;
+        margin-left: 6px;
+        padding: 2px 0 2px 12px;
         border-left: 1px solid rgba(148,163,184,0.35);
         overflow: hidden;
         flex: 0 1 auto;
@@ -6842,13 +6908,14 @@
       .ubToolChip{
         display: inline-flex;
         align-items: center;
-        gap: 5px;
-        padding: 4px 8px;
-        border-radius: 6px;
+        gap: 7px;
+        padding: 6px 12px;
+        min-height: 35px;
+        border-radius: 8px;
         border: none;
         background: transparent;
         color: #334155;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 800;
         letter-spacing: 0.25px;
         cursor: pointer;
@@ -6861,14 +6928,14 @@
       .ubToolChip:active{ transform: scale(0.96); }
       .ubToolChip .ubToolIcon{
         display: inline-flex;
-        width: 16px;
-        height: 16px;
+        width: 26px;
+        height: 26px;
         align-items: center;
         justify-content: center;
-        border-radius: 4px;
+        border-radius: 6px;
         color: #64748B;
       }
-      .ubToolChip .ubToolIcon .ubIcon{ width: 13px; height: 13px; }
+      .ubToolChip .ubToolIcon .ubIcon{ width: 22px; height: 22px; }
       .ubToolChip .ubToolLabel{ display: inline-block; }
       /* Color mode: tool chips carry their tool color on the icon at
          rest, not only when active, so the strip reads as a colorful
@@ -6894,7 +6961,7 @@
       /* Hide chip text labels on narrower widths to keep the bar
          from pushing the tab cluster off-screen. Icons still visible. */
       @media (max-width: 1180px){
-        .ubToolChip{ padding: 4px 6px; }
+        .ubToolChip{ padding: 6px 8px; }
         .ubToolChip .ubToolLabel{ display: none; }
       }
 
