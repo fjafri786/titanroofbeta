@@ -3800,7 +3800,7 @@ const loadPdfJs = () => {
           ));
           if(sel && !sel.data.locked){
             const pts = sel.data.points || [];
-            const rr = 0.013;
+            const rr = 0.010;
             if(sel.type === "obs" && sel.data.kind === "arrow" && pts.length === 2){
               for(let idx=0; idx<pts.length; idx++){
                 const h = pts[idx];
@@ -3829,7 +3829,7 @@ const loadPdfJs = () => {
               }
             } else if(it.type === "obs" && it.data.kind === "arrow" && it.data.points?.length === 2){
               const [a, b] = it.data.points;
-              if(distanceToSegment(norm, a, b) < 0.016){
+              if(distanceToSegment(norm, a, b) < 0.010){
                 return { kind:"item", id: it.id };
               }
             } else if(it.type === "free"){
@@ -3845,12 +3845,12 @@ const loadPdfJs = () => {
                 const d = distanceToSegment(norm, pts[i-1], pts[i]);
                 if(d < minDist) minDist = d;
               }
-              if(minDist < 0.014){
+              if(minDist < 0.008){
                 return { kind:"item", id: it.id };
               }
             } else {
               const dist = Math.hypot((it.x - norm.x), (it.y - norm.y));
-              if(dist < 0.026) return { kind:"item", id: it.id };
+              if(dist < 0.014) return { kind:"item", id: it.id };
             }
           }
           return null;
@@ -6291,6 +6291,8 @@ const loadPdfJs = () => {
             isMobile={isMobile}
             mobileMenuOpen={mobileMenuOpen}
             onMobileMenuToggle={() => setMobileMenuOpen(v => !v)}
+            mobileSidebarOpen={mobilePanelOpen}
+            onMobileSidebarToggle={() => setMobilePanelOpen(v => !v)}
           />
         );
 
@@ -8242,10 +8244,13 @@ const loadPdfJs = () => {
             <div className={"panel" + (isMobile && mobilePanelOpen ? " mobileOpen" : "") + (!isMobile && sidebarCollapsed ? " collapsed" : "")}>
               <div className="panelHeader">
                 <div className="panelHeaderTitle">
-                  {panelView === "items" ? "Inspection Items" : "Properties"}
+                  {panelView === "props" ? "Item Properties" : "Properties"}
                 </div>
               </div>
-              {viewMode === "diagram" && (
+              {viewMode === "diagram" && panelView === "items" && (
+                <div className="panelSubhead">Page Setup</div>
+              )}
+              {viewMode === "diagram" && panelView === "items" && (
                 <div className="panelZoomNav" role="group" aria-label="Zoom controls">
                   <button
                     className="iconBtn nav"
@@ -8279,7 +8284,7 @@ const loadPdfJs = () => {
                   </span>
                 </div>
               )}
-              {viewMode === "diagram" && (
+              {viewMode === "diagram" && panelView === "items" && (
                 <div className="panelPageNav" role="group" aria-label="Page navigation">
                   <div className="panelPageNavTop">
                     <span className="panelPageIndex">
@@ -8359,6 +8364,9 @@ const loadPdfJs = () => {
               )}
               <div className="panelBody">
                 <div className="pScroll">
+                {panelView === "items" && (
+                  <div className="panelSubhead panelSubheadItems">Inspection Items</div>
+                )}
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
@@ -9332,11 +9340,10 @@ const loadPdfJs = () => {
               )}
 
               {reportTab === "project" && (() => {
-                // Completion signals used by the bubble status dots:
-                // a filled "name + address + date" trio marks the
-                // Project bubble Ready; a single party with name and
-                // role marks Parties Ready. Partial = at least one
-                // input; empty = nothing entered.
+                // Parties Present is rendered only under the Background
+                // tab (Present Parties / Contacts) to avoid duplicating
+                // the same input in two places. The Project tab keeps
+                // just the "Project Information" bubble.
                 const p = reportData.project;
                 const has = (v: unknown) => v != null && String(v).trim() !== "";
                 const projectKeys = [has(residenceName), has(p.address), has(p.inspectionDate)];
@@ -9344,9 +9351,6 @@ const loadPdfJs = () => {
                 const projectStatus: "ready" | "partial" | "empty" =
                   projectFilled === projectKeys.length ? "ready" :
                   projectFilled > 0 ? "partial" : "empty";
-                const partiesStatus: "ready" | "partial" | "empty" =
-                  !p.parties.length ? "empty" :
-                  p.parties.some(x => has(x.name) && has(x.role)) ? "ready" : "partial";
                 return (
                 <>
                   {renderReportBubble({
@@ -9397,54 +9401,6 @@ const loadPdfJs = () => {
                           </select>
                         </div>
                       </div>
-                    ),
-                  })}
-                  {renderReportBubble({
-                    tone: "parties",
-                    title: "Parties Present",
-                    subtitle: "List everyone present during the inspection.",
-                    status: partiesStatus,
-                    sectionKey: "project.parties",
-                    children: (
-                      <>
-                        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
-                          <div className="tiny">{reportData.project.parties.length} {reportData.project.parties.length === 1 ? "person" : "people"} listed</div>
-                          <button className="btn btnPrimary" type="button" onClick={addParty}>Add Person</button>
-                        </div>
-                        <div style={{display:"flex", flexDirection:"column", gap:12}}>
-                          {reportData.project.parties.map(person => (
-                            <div key={person.id} className="personRow">
-                              <div>
-                                <div className="lbl">Name</div>
-                                <input className="inp" value={person.name} onChange={(e)=>updateParty(person.id, "name", e.target.value)} placeholder="Name" />
-                              </div>
-                              <div>
-                                <div className="lbl">Role</div>
-                                <select className="inp" value={person.role} onChange={(e)=>updateParty(person.id, "role", e.target.value)}>
-                                  <option value="">Select</option>
-                                  {PARTY_ROLES.map(role => (
-                                    <option key={role} value={role}>{role}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <div className="lbl">Company</div>
-                                <input className="inp" value={person.company} onChange={(e)=>updateParty(person.id, "company", e.target.value)} placeholder="Company (optional)" />
-                              </div>
-                              <div>
-                                <div className="lbl">Contact</div>
-                                <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone/email (optional)" />
-                              </div>
-                              <div className="personActions">
-                                <button className="btn btnDanger" type="button" onClick={() => removeParty(person.id)}>Remove</button>
-                              </div>
-                            </div>
-                          ))}
-                          {!reportData.project.parties.length && (
-                            <div className="tiny">No parties added yet.</div>
-                          )}
-                        </div>
-                      </>
                     ),
                   })}
                 </>
@@ -10654,6 +10610,14 @@ const loadPdfJs = () => {
                     <div className="mobileMenuGrid">
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => setHdrEditOpen(true))}>
                         Edit Property
+                      </button>
+                      <button
+                        className={`btn ${mobilePanelOpen ? "btnPrimary" : ""}`}
+                        type="button"
+                        aria-pressed={mobilePanelOpen}
+                        onClick={() => handleMobileAction(() => setMobilePanelOpen(v => !v))}
+                      >
+                        {mobilePanelOpen ? "Hide Sidebar" : "Show Sidebar"}
                       </button>
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => { setPanelView("items"); setMobilePanelOpen(true); })}>
                         Items ({items.length})

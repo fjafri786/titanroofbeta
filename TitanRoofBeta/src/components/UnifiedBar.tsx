@@ -199,65 +199,66 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               <I.back />
             </button>
           )}
-          <div className="ubTitleBlock">
-            <button
-              type="button"
-              className="ubTitleBtn"
-              onClick={props.onEditProjectProperties}
-              title="Click to edit project properties"
-            >
-              <span className="ubTitle">{props.residenceName || "Project"}</span>
-              <I.chevDown />
-            </button>
-            <div className="ubSubtitle">
-              {roofKind} · Front: {props.frontFaces}
+          <div className="ubTitleCluster">
+            <div className="ubTitleBlock">
+              <button
+                type="button"
+                className="ubTitleBtn"
+                onClick={props.onEditProjectProperties}
+                title={`${roofKind} · Front: ${props.frontFaces} — click to edit project properties`}
+              >
+                <span className="ubTitle">{props.residenceName || "Project"}</span>
+                <I.chevDown />
+              </button>
             </div>
-          </div>
 
-          {/* View tabs live in the left cluster next to the title. The
-              tool strip only renders when Diagram is the active tab,
-              sitting to the right of the tabs with a divider. */}
-          <div className="ubPill ubPillTabs">
-            <UbPillBtn
-              icon={<I.diagram />}
-              label="Diagram"
-              active={props.viewMode === "diagram"}
-              onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
-            />
-            <UbPillBtn
-              icon={<I.photos />}
-              label="Photos"
-              active={props.viewMode === "photos"}
-              onClick={() => { setOpen(null); props.onViewModeChange("photos"); }}
-            />
-            <UbPillBtn
-              icon={<I.report />}
-              label="Report"
-              active={props.viewMode === "report"}
-              onClick={() => { setOpen(null); props.onViewModeChange("report"); }}
-            />
-          </div>
-          {isDiagram && (
-            <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
-              {TOOL_DEFS.map(t => {
-                const IconEl = I[t.icon];
-                const active = props.currentTool === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className={`ubToolChip tool-${t.key}` + (active ? " active" : "")}
-                    onClick={() => handleToolPick(t.key)}
-                    title={t.label}
-                    aria-pressed={active}
-                  >
-                    <span className="ubToolIcon"><IconEl /></span>
-                    <span className="ubToolLabel">{t.short}</span>
-                  </button>
-                );
-              })}
+            {/* Second row beneath the project title: view-mode tabs plus
+                the tool strip (diagram only). Grouping these under the
+                title keeps the row dedicated to "this project" actions. */}
+            <div className="ubTitleSubRow">
+              <div className="ubPill ubPillTabs">
+                <UbPillBtn
+                  icon={<I.diagram />}
+                  label="Diagram"
+                  active={props.viewMode === "diagram"}
+                  onClick={() => { setOpen(null); props.onViewModeChange("diagram"); }}
+                />
+                <UbPillBtn
+                  icon={<I.photos />}
+                  label="Photos"
+                  active={props.viewMode === "photos"}
+                  onClick={() => { setOpen(null); props.onViewModeChange("photos"); }}
+                />
+                <UbPillBtn
+                  icon={<I.report />}
+                  label="Report"
+                  active={props.viewMode === "report"}
+                  onClick={() => { setOpen(null); props.onViewModeChange("report"); }}
+                />
+              </div>
+              {isDiagram && (
+                <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
+                  {TOOL_DEFS.map(t => {
+                    const IconEl = I[t.icon];
+                    const active = props.currentTool === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        className={`ubToolChip tool-${t.key}` + (active ? " active" : "")}
+                        onClick={() => handleToolPick(t.key)}
+                        title={t.label}
+                        aria-pressed={active}
+                      >
+                        <span className="ubToolIcon"><IconEl /></span>
+                        <span className="ubToolLabel">{t.short}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Right: save status + compact action cluster */}
