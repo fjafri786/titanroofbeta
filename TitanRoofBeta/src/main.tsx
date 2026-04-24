@@ -10,6 +10,7 @@ import { ProjectProvider } from "./project/ProjectContext";
 import { AutosaveProvider } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
 import { legacyBlobGet, legacyBlobPut, legacyBlobDelete } from "./storage/legacyBlobStore";
+import { registerPreLeaveFlush } from "./storage";
 // Phase 6 foundation: Tailwind + design tokens. Imported before
 // styles.css so the legacy hand-written rules win any specificity
 // ties while we migrate surfaces over incrementally.
@@ -2127,6 +2128,28 @@ const loadPdfJs = () => {
         // accidental reload. The 5-minute interval above still creates the retained
         // checkpoints used by Recover.
         const silentAutoSaveRef = useRef(null);
+        // Synchronous flush used by "back to dashboard" and beforeunload.
+        // Mirrors the silent autosave payload but skips the 2-second
+        // debounce, so edits made in the last moments before leaving are
+        // still written to the legacy key that the project store reads.
+        const flushStateSync = useCallback(() => {
+          if(silentAutoSaveRef.current){
+            clearTimeout(silentAutoSaveRef.current);
+            silentAutoSaveRef.current = null;
+          }
+          const snapshot = buildState();
+          try{
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+          }catch(err){
+            console.warn("Pre-leave flush localStorage skipped", err);
+          }
+          legacyBlobPut(STORAGE_KEY, snapshot).catch(err => {
+            console.warn("Pre-leave flush IndexedDB skipped", err);
+          });
+          setLastSavedAt(prev => prev?.source === "manual"
+            ? prev
+            : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
+        }, [buildState]);
         useEffect(() => {
           if(silentAutoSaveRef.current){
             clearTimeout(silentAutoSaveRef.current);
@@ -2160,6 +2183,23 @@ const loadPdfJs = () => {
             }
           };
         }, [buildState]);
+
+        // Expose the synchronous flush so returnToDashboard (in
+        // ProjectContext) can land the latest in-memory state before it
+        // snapshots localStorage. Also run it on tab close so field work
+        // is not lost if the user hits the home button, swipes the tab
+        // away, or the browser backgrounds and kills the page.
+        useEffect(() => {
+          const unregister = registerPreLeaveFlush(flushStateSync);
+          const onPageLeave = () => { flushStateSync(); };
+          window.addEventListener("beforeunload", onPageLeave);
+          window.addEventListener("pagehide", onPageLeave);
+          return () => {
+            unregister();
+            window.removeEventListener("beforeunload", onPageLeave);
+            window.removeEventListener("pagehide", onPageLeave);
+          };
+        }, [flushStateSync]);
 
         useEffect(() => {
           if(!exportMode) return;
@@ -5989,17 +6029,21 @@ const loadPdfJs = () => {
           return photos;
         };
 
-        const renderFileName = (photo, className = "") => {
-          if(!photo?.name) return null;
-          const classes = ["fileMeta", className].filter(Boolean).join(" ");
-          return <div className={classes}>File: {photo.name}</div>;
-        };
-        const renderPhotoPreview = (photo, className = "") => {
+        // Properties-panel thumbnail: show the attached image plus its
+        // filename so the inspector can verify at a glance which photo
+        // is attached. Only renders when the photo actually carries
+        // image data — legacy records occasionally serialized a `name`
+        // with no surviving dataUrl (failed upload, serialization gap),
+        // which used to show as a ghost filename and made the
+        // inspector think a photo had been captured when nothing was
+        // saved.
+        const renderPhotoThumb = (photo, className = "") => {
           if(!photo?.url) return null;
-          const classes = ["photoPreview", className].filter(Boolean).join(" ");
+          const classes = ["propsPhotoThumb", className].filter(Boolean).join(" ");
           return (
             <div className={classes}>
-              <img src={photo.url} alt={photo.name || "Observation preview"} />
+              <img src={photo.url} alt={photo.name || "Attached photo"} />
+              <div className="propsPhotoName">{photo.name || "image"}</div>
             </div>
           );
         };
@@ -8917,7 +8961,7 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Test Square Overview Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setTsOverviewPhoto(e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoThumb(activeItem.data.overviewPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -8942,7 +8986,7 @@ const loadPdfJs = () => {
                                     </label>
                                     <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteBruise(b.id)}>Del</button>
                                   </div>
-                                  {renderFileName(b.photo, "indent")}
+                                  {renderPhotoThumb(b.photo, "indent")}
                                 </div>
                               ))}
                             </div>
@@ -8970,7 +9014,7 @@ const loadPdfJs = () => {
                                     </label>
                                     <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteTsCondition(c.id)}>Del</button>
                                   </div>
-                                  {renderFileName(c.photo, "indent")}
+                                  {renderPhotoThumb(c.photo, "indent")}
                                 </div>
                               ))}
                             </div>
@@ -9036,7 +9080,7 @@ const loadPdfJs = () => {
                                     </label>
                                     <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteDamageEntry(entry.id)}>Del</button>
                                   </div>
-                                  {renderFileName(entry.photo, "indent")}
+                                  {renderPhotoThumb(entry.photo, "indent")}
                                 </div>
                               ))}
                               {!(activeItem.data.damageEntries || []).length && (
@@ -9047,13 +9091,13 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Appurtenance Detail Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.detailPhoto)}
+                              {renderPhotoThumb(activeItem.data.detailPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo (optional)</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoThumb(activeItem.data.overviewPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -9132,7 +9176,7 @@ const loadPdfJs = () => {
                                     </label>
                                     <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteDamageEntry(entry.id)}>Del</button>
                                   </div>
-                                  {renderFileName(entry.photo, "indent")}
+                                  {renderPhotoThumb(entry.photo, "indent")}
                                 </div>
                               ))}
                               {!(activeItem.data.damageEntries || []).length && (
@@ -9143,13 +9187,13 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Downspout Detail Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.detailPhoto)}
+                              {renderPhotoThumb(activeItem.data.detailPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo (optional)</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoThumb(activeItem.data.overviewPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -9274,13 +9318,13 @@ const loadPdfJs = () => {
                                 <div style={{marginBottom:10}}>
                                   <div className="lbl">Creased Photo</div>
                                   <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("creasedPhoto", e.target.files[0])}/>
-                                  {renderFileName(activeItem.data.creasedPhoto)}
+                                  {renderPhotoThumb(activeItem.data.creasedPhoto)}
                                 </div>
 
                                 <div style={{marginBottom:10}}>
                                   <div className="lbl">Torn/Missing Photo</div>
                                   <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("tornMissingPhoto", e.target.files[0])}/>
-                                  {renderFileName(activeItem.data.tornMissingPhoto)}
+                                  {renderPhotoThumb(activeItem.data.tornMissingPhoto)}
                                 </div>
                               </>
                             )}
@@ -9288,7 +9332,7 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo (optional)</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setWindPhoto("overviewPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoThumb(activeItem.data.overviewPhoto)}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -9403,8 +9447,7 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Observation Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setObsPhoto(e.target.files[0])}/>
-                              {renderFileName(activeItem.data.photo)}
-                              {renderPhotoPreview(activeItem.data.photo, "indent")}
+                              {renderPhotoThumb(activeItem.data.photo)}
                             </div>
 
                             <div style={{marginBottom:10}}>

@@ -2630,6 +2630,38 @@
         object-fit:cover;
       }
 
+      /* Properties-panel photo thumbnail: inline preview + filename so
+         the inspector can verify at a glance which photo is attached. */
+      .propsPhotoThumb{
+        margin-top:8px;
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:6px;
+        border-radius:12px;
+        border:1px solid rgba(226,232,240,0.95);
+        background:#fff;
+        box-shadow: var(--shadowSoft);
+      }
+      .propsPhotoThumb.indent{
+        margin-left:44px;
+      }
+      .propsPhotoThumb img{
+        width:72px;
+        height:72px;
+        flex:0 0 auto;
+        border-radius:8px;
+        object-fit:cover;
+        background:#F1F5F9;
+      }
+      .propsPhotoName{
+        font-size:12px;
+        color: var(--sub);
+        word-break:break-word;
+        flex:1;
+        min-width:0;
+      }
+
       /* Items list */
       .drawToolbar{
         display:flex;
