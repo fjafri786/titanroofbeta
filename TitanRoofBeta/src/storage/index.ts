@@ -18,3 +18,4 @@ export * from "./types";
 export { redundantProjectStore as projectStore, putWithRedundancy } from "./redundantProjectStore";
 export { indexedDbProjectStore as indexedDbProjectStoreDirect } from "./indexedDbProjectStore";
 export { localStorageProjectStore as fallbackLocalStorageProjectStore } from "./localStorageProjectStore";
+export { registerPreLeaveFlush, invokePreLeaveFlush } from "./preLeaveFlush";

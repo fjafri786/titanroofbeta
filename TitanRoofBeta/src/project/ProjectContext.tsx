@@ -4,6 +4,7 @@ import {
   createBlankProjectRecord,
   cryptoRandomId,
   approximateSize,
+  invokePreLeaveFlush,
   type EngineName,
   type ProjectRecord,
   type ProjectSummary,
@@ -162,6 +163,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCurrentProject(null);
       return;
     }
+
+    // The legacy workspace writes localStorage via a 2-second
+    // debounced autosave, so edits made in the last couple of seconds
+    // are still only in React state. Flush them synchronously before
+    // we snapshot, otherwise "back to dashboard" silently drops the
+    // most recent annotation / photo / note.
+    invokePreLeaveFlush();
 
     // Snapshot the current workspace state back into the record.
     let legacyState: unknown = null;
