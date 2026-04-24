@@ -26,8 +26,15 @@ const STATUS_FILTERS: { key: "active" | "archived" | "all"; label: string }[] = 
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
-  const { summaries, openProject, createProject, refreshSummaries, isLoadingSummaries } =
-    useProject();
+  const {
+    summaries,
+    openProject,
+    createProject,
+    importProjectFromFile,
+    refreshSummaries,
+    isLoadingSummaries,
+  } = useProject();
+  const openFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<ProjectSort>("recent");
@@ -106,6 +113,21 @@ const Dashboard: React.FC = () => {
     if (name === null) return;
     void createProject({ name: name || "Untitled Project", engine: "legacy-v4" });
   }, [createProject]);
+
+  const handleOpenFileClick = useCallback(() => {
+    openFileInputRef.current?.click();
+  }, []);
+
+  const handleOpenFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      // Reset so selecting the same file again still fires onChange.
+      e.target.value = "";
+      if (!file) return;
+      await importProjectFromFile(file);
+    },
+    [importProjectFromFile],
+  );
 
   const handleCreatePreview = useCallback(() => {
     const name = window.prompt(
@@ -243,6 +265,21 @@ const Dashboard: React.FC = () => {
           >
             + Preview (tldraw)
           </button>
+          <button
+            type="button"
+            className="dashSecondaryBtn"
+            onClick={handleOpenFileClick}
+            title="Open a TitanRoof project .json file"
+          >
+            Open File…
+          </button>
+          <input
+            ref={openFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: "none" }}
+            onChange={(e) => { void handleOpenFileChange(e); }}
+          />
           <button type="button" className="dashPrimaryBtn" onClick={handleCreate}>
             + New Project
           </button>

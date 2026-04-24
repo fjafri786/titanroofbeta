@@ -2358,6 +2358,15 @@
       .row{ display:flex; gap:10px; align-items:center; min-width:0; }
       .rowTop{ display:flex; gap:10px; align-items:flex-start; min-width:0; }
       .row > *{ flex:1; min-width:0; }
+      /* Entry rows (Hail / Wind / TS Conditions) that hold a numeric
+         prefix, one or more dropdowns, a Photo button and a Del button.
+         On narrow panels (iPad props sidebar, small windows) these used
+         to overflow horizontally and clip their dropdown arrows. Allow
+         them to wrap onto a new line instead, and give the dropdowns a
+         reasonable minimum width so the selected value stays visible. */
+      .row.entryRow{ flex-wrap:wrap; row-gap:6px; }
+      .row.entryRow > select.inp{ flex:1 1 72px; min-width:72px; }
+      .row.entryRow > .btn{ flex:0 0 auto; }
       .mapZoomControls{
         display:flex;
         align-items:center;
@@ -5137,6 +5146,11 @@
           #F6F8FC;
         padding: 32px 36px 48px;
         font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        /* Scale dashboard chrome with window height so a 1080p desktop
+           and a ~785px-tall iPad share the same visual density. The
+           workspace's own styles already pick up --ui-scale inline;
+           the dashboard uses hard pixel sizes, so zoom it as a whole. */
+        zoom: var(--ui-scale, 1);
       }
       .dashHeader{
         display:flex;
