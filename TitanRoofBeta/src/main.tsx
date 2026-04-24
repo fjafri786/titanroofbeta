@@ -2482,6 +2482,24 @@ const loadPdfJs = () => {
           return () => body.classList.remove("useUnifiedBar");
         }, [useUnifiedBar]);
 
+        // Tablet detection: a 12.9" iPad Pro in landscape is 1366px
+        // wide, past every max-width breakpoint we use for compact
+        // layout. Flag the body so CSS can force the icon-only top
+        // bar on iPad regardless of orientation. Covers classic iPad
+        // UAs (iPad/iPhone/iPod) and iPadOS 13+ which spoofs
+        // "Macintosh" but reports maxTouchPoints > 1.
+        useLayoutEffect(() => {
+          const body = document.body;
+          const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+          const touchPoints = typeof navigator !== "undefined" ? (navigator.maxTouchPoints || 0) : 0;
+          const isIosDevice = /iPad|iPhone|iPod/i.test(ua);
+          const isIpadOsDesktopUa = /Macintosh/i.test(ua) && touchPoints > 1;
+          const isTabletLike = isIosDevice || isIpadOsDesktopUa;
+          if(isTabletLike) body.classList.add("isTabletLike");
+          else body.classList.remove("isTabletLike");
+          return () => body.classList.remove("isTabletLike");
+        }, []);
+
         useEffect(() => {
           document.documentElement.style.setProperty("--mobile-scale", String(mobileScale));
         }, [mobileScale]);
