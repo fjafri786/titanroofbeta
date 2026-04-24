@@ -7055,10 +7055,33 @@
       .ubToolChip.active.tool-free{ background: rgba(14,165,233,0.12); color: #0EA5E9; }
 
       /* Hide chip text labels on narrower widths to keep the bar
-         from pushing the tab cluster off-screen. Icons still visible. */
+         from pushing the tab cluster off-screen. Icons still visible.
+         Also shrink chip/strip metrics so all six tools fit at iPad
+         widths in both orientations. */
       @media (max-width: 1180px){
-        .ubToolChip{ padding: 6px 8px; }
+        .ubToolChip{ padding: 4px 6px; min-height: 32px; gap: 0; }
         .ubToolChip .ubToolLabel{ display: none; }
+        .ubToolChip .ubToolIcon{ width: 22px; height: 22px; }
+        .ubToolChip .ubToolIcon .ubIcon{ width: 20px; height: 20px; }
+        .ubToolStrip{ gap: 2px; margin-left: 4px; padding-left: 6px; }
+        /* Free space from neighboring clusters so the strip doesn't
+           get clipped on iPad landscape. */
+        .ubRowMain{ gap: 6px; }
+        .ubBack{ width: 32px; height: 32px; }
+        .ubIconBtn{ width: 36px; height: 36px; }
+        .ubIconBtn .ubIcon{ width: 20px; height: 20px; }
+        .ubRightDivider{ margin: 0 4px; }
+        .ubUserBtn{ width: 32px; height: 32px; margin-left: 6px; }
+      }
+
+      /* iPad landscape (≤1080px): hide brand text and tab labels so
+         the full six-tool strip fits without clipping. */
+      @media (max-width: 1080px){
+        .ubBrandText{ display: none; }
+        .ubBrand{ margin-right: 4px; padding: 5px 8px; gap: 0; }
+        .ubPillLabel{ display: none; }
+        .ubPillBtn{ padding: 6px 9px; }
+        .ubTitle{ font-size: 17px; }
       }
 
       /* Compact layout adjustments by orientation.
@@ -7069,11 +7092,15 @@
         .ubSubtitle{ font-size: 10px; }
         .ubTitleBlock{ max-width: min(36vw, 260px); }
         .ubPillLabel{ display: none; }
-        .ubPillBtn{ padding: 7px 9px; }
+        .ubPillBtn{ padding: 6px 8px; }
+        .ubToolChip{ padding: 3px 5px; min-height: 30px; }
+        .ubToolChip .ubToolIcon{ width: 20px; height: 20px; }
+        .ubToolChip .ubToolIcon .ubIcon{ width: 18px; height: 18px; }
+        .ubToolStrip{ padding-left: 4px; margin-left: 2px; }
       }
       @media (orientation: portrait) and (max-width: 1180px){
         .ubPillLabel{ display: none; }
-        .ubPillBtn{ padding: 7px 9px; }
+        .ubPillBtn{ padding: 6px 8px; }
         .ubTitleBlock{ max-width: min(32vw, 280px); }
       }
       /* Tools dropdown scrolls horizontally on very narrow widths */
