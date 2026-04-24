@@ -5314,7 +5314,7 @@ const loadPdfJs = () => {
             </div>
             {(item.data.windEntries || []).map((entry, idx) => (
               <div key={entry.id} style={{marginBottom:8}}>
-                <div className="row">
+                <div className="row entryRow">
                   <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                   <select className="inp" value={entry.condition} onChange={(e)=>updateWindEntry(entry.id, { condition: e.target.value })}>
                     {WIND_CONDITIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
@@ -8023,7 +8023,7 @@ const loadPdfJs = () => {
           <input
             ref={trpInputRef}
             type="file"
-            accept=".json,application/json,.trp,application/trp+json"
+            accept=".json,application/json"
             style={{ display: "none" }}
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -9457,7 +9457,7 @@ const loadPdfJs = () => {
 
                               {(activeItem.data.bruises||[]).map((b, idx) => (
                                 <div key={b.id} style={{marginBottom:8}}>
-                                  <div className="row">
+                                  <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={b.size} onChange={(e)=>updateBruise(b.id, "size", e.target.value)}>
                                       {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
@@ -9485,7 +9485,7 @@ const loadPdfJs = () => {
 
                               {(activeItem.data.conditions||[]).map((c, idx) => (
                                 <div key={c.id} style={{marginBottom:8}}>
-                                  <div className="row">
+                                  <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={c.code} onChange={(e)=>updateTsCondition(c.id, "code", e.target.value)}>
                                       {TS_CONDITIONS.map(x => <option key={x.code} value={x.code}>{x.label}</option>)}
@@ -9548,7 +9548,7 @@ const loadPdfJs = () => {
 
                               {(activeItem.data.damageEntries || []).map((entry, idx) => (
                                 <div key={entry.id} style={{marginBottom:8}}>
-                                  <div className="row">
+                                  <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
@@ -9649,7 +9649,7 @@ const loadPdfJs = () => {
 
                               {(activeItem.data.damageEntries || []).map((entry, idx) => (
                                 <div key={entry.id} style={{marginBottom:8}}>
-                                  <div className="row">
+                                  <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
@@ -9807,7 +9807,7 @@ const loadPdfJs = () => {
 
                               {(activeItem.data.damageEntries || []).map((entry, idx) => (
                                 <div key={entry.id} style={{marginBottom:8}}>
-                                  <div className="row">
+                                  <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
                                       {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}

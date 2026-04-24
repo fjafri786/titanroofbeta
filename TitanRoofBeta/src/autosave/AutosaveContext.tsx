@@ -58,7 +58,6 @@ interface AutosaveContextValue {
 const AutosaveContext = createContext<AutosaveContextValue | null>(null);
 
 const AUTOSAVE_INTERVAL_MS = 10_000;
-const SAVED_DISPLAY_MS = 5_000;
 const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
 
 export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -83,6 +82,16 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // fresh open immediately snapshots even if the serialized form
     // happens to match.
     lastSerializedRef.current = null;
+    // Opening an existing project is, from the user's perspective,
+    // already "Saved": the record came straight out of the local
+    // store. Reflect that in the indicator right away instead of
+    // showing "Autosave ready" until the first kickoff tick runs.
+    if (currentProject) {
+      setLastSavedAt((prev) => prev ?? currentProject.updatedAt ?? new Date().toISOString());
+      setStatus((prev) =>
+        prev === "saving" || prev === "error" || prev === "backup" ? prev : "saved",
+      );
+    }
   }, [currentProject]);
 
   // Online / offline tracking.
@@ -191,16 +200,10 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [isOnline]);
 
-  // Let the "Saved" confirmation fade back to idle after a short
-  // display window so the indicator doesn't look stuck forever when
-  // nothing else has changed.
-  useEffect(() => {
-    if (status !== "saved") return;
-    const timer = window.setTimeout(() => {
-      setStatus((prev) => (prev === "saved" ? "idle" : prev));
-    }, SAVED_DISPLAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [status, lastSavedAt]);
+  // The "Saved" confirmation is the resting state while a project is
+  // open — it used to fade back to "Autosave ready" after a short
+  // window, but that made freshly-opened files look unsaved. Keep it
+  // pinned until another status (saving / offline / error) takes over.
 
   // 10-second ticker while a project is open in the workspace.
   useEffect(() => {

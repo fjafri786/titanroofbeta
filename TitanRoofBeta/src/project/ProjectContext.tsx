@@ -33,6 +33,11 @@ interface ProjectContextValue {
   isLoadingSummaries: boolean;
   openProject: (projectId: string) => Promise<void>;
   createProject: (opts?: { name?: string; engine?: EngineName }) => Promise<void>;
+  /** Import a project JSON file exported from the dashboard
+   *  "Download" action, store it under the current user and open it
+   *  in the workspace. Resolves to the new projectId so the dashboard
+   *  can surface feedback. */
+  importProjectFromFile: (file: File) => Promise<string | null>;
   returnToDashboard: () => Promise<void>;
   refreshSummaries: () => Promise<void>;
 }
@@ -161,6 +166,55 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     [userId],
   );
 
+  const importProjectFromFile = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!userId) return null;
+      let parsed: unknown;
+      try {
+        const text = await file.text();
+        parsed = JSON.parse(text);
+      } catch (err) {
+        console.warn("Could not parse project file", err);
+        window.alert("That file isn't a valid TitanRoof project (.json).");
+        return null;
+      }
+
+      const record = coerceImportedRecord(parsed, userId);
+      if (!record) {
+        window.alert("That JSON doesn't look like a TitanRoof project export.");
+        return null;
+      }
+
+      try {
+        await projectStore.put(record);
+      } catch (err) {
+        console.warn("Failed to store imported project", err);
+        window.alert("Could not save the imported project. See console for details.");
+        return null;
+      }
+
+      // Hydrate the legacy workspace key and navigate into the new
+      // project, matching the behavior of openProject().
+      const page = record.sections[0]?.pages[0];
+      const legacyBlob = page?.engine?.state;
+      try {
+        if (legacyBlob && typeof legacyBlob === "object") {
+          const seeded = { ...(legacyBlob as Record<string, unknown>), residenceName: record.name };
+          localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seeded));
+        } else {
+          localStorage.removeItem(LEGACY_STATE_KEY);
+        }
+      } catch (err) {
+        console.warn("Could not hydrate workspace state for imported project", err);
+      }
+
+      setCurrentProject(record);
+      setRoute("workspace");
+      return record.projectId;
+    },
+    [userId],
+  );
+
   const returnToDashboard = useCallback(async () => {
     if (!userId || !currentProject) {
       setRoute("dashboard");
@@ -250,10 +304,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isLoadingSummaries,
       openProject,
       createProject,
+      importProjectFromFile,
       returnToDashboard,
       refreshSummaries,
     }),
-    [route, currentProject, summaries, isLoadingSummaries, openProject, createProject, returnToDashboard, refreshSummaries],
+    [route, currentProject, summaries, isLoadingSummaries, openProject, createProject, importProjectFromFile, returnToDashboard, refreshSummaries],
   );
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
@@ -266,6 +321,44 @@ export function useProject(): ProjectContextValue {
 }
 
 // --- helpers --------------------------------------------------------
+
+function coerceImportedRecord(parsed: unknown, userId: string): ProjectRecord | null {
+  if (!parsed || typeof parsed !== "object") return null;
+
+  // The dashboard "Download" action wraps the record in a small envelope
+  // ({ format: "titanroof-project", data: ProjectRecord }). Accept either
+  // the envelope or a bare ProjectRecord so power users can re-import
+  // hand-edited files too.
+  const maybeEnvelope = parsed as { format?: unknown; data?: unknown };
+  const body =
+    maybeEnvelope.format === "titanroof-project" && maybeEnvelope.data
+      ? maybeEnvelope.data
+      : parsed;
+
+  if (!body || typeof body !== "object") return null;
+  const candidate = body as Partial<ProjectRecord> & Record<string, unknown>;
+  if (!Array.isArray(candidate.sections)) return null;
+
+  const now = new Date().toISOString();
+  const newId = cryptoRandomId();
+  return {
+    ...candidate,
+    projectId: newId,
+    userId,
+    name:
+      typeof candidate.name === "string" && candidate.name.trim()
+        ? candidate.name.trim()
+        : "Imported Project",
+    tags: Array.isArray(candidate.tags) ? candidate.tags : [],
+    createdAt:
+      typeof candidate.createdAt === "string" ? candidate.createdAt : now,
+    updatedAt: now,
+    status: candidate.status === "archived" ? "archived" : "active",
+    sections: candidate.sections,
+    attachments: Array.isArray(candidate.attachments) ? candidate.attachments : [],
+    schemaVersion: 1,
+  } as ProjectRecord;
+}
 
 function extractResidenceName(legacy: unknown): string | undefined {
   if (!legacy || typeof legacy !== "object") return undefined;
