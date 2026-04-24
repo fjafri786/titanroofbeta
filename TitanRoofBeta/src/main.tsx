@@ -90,6 +90,7 @@ const loadPdfJs = () => {
         { code: "EMT", label: "Electrical / Utility Meter" },
         { code: "LFX", label: "Light Fixture" },
         { code: "SCM", label: "Security Camera" },
+        { code: "GAR", label: "Garage" },
         { code: "OTH", label: "Other Exterior Component" }
       ];
 
@@ -5253,6 +5254,12 @@ const loadPdfJs = () => {
           return { bg:"#111", label:"", radius:"3px" };
         };
 
+        const renderFileName = (photo, extraClass = "") => {
+          if(!photo?.name) return null;
+          const classes = ["fileMeta", extraClass].filter(Boolean).join(" ");
+          return <div className={classes}>{photo.name}</div>;
+        };
+
         // Shared wind-indicators editor used by DS / APT / EAPT. Keeps
         // the markup in one place so every exterior marker gets the same
         // "displaced / detached / loose" workflow next to its hail
@@ -5299,7 +5306,6 @@ const loadPdfJs = () => {
           { key:"apt", label:"Appurtenance", shortLabel:"APT", icon:"apt", cls:"apt" },
           { key:"ds", label:"Downspout", shortLabel:"DS", icon:"ds", cls:"ds" },
           { key:"eapt", label:"Exterior Item", shortLabel:"EXT", icon:"apt", cls:"eapt" },
-          { key:"garage", label:"Garage", shortLabel:"GAR", icon:"apt", cls:"garage" },
           { key:"wind", label:"Wind", shortLabel:"W", icon:"wind", cls:"wind" },
           { key:"obs", label:"Observation", shortLabel:"OBS", icon:"obs", cls:"obs" },
           { key:"free", label:"Free Draw (Pencil)", shortLabel:"DRAW", icon:"free", cls:"free" },
@@ -9654,13 +9660,42 @@ const loadPdfJs = () => {
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Location Side</div>
+                              <div className="lbl">{activeItem.data.type === "GAR" ? "Facing Direction" : "Location Side"}</div>
                               <div className="radioGrid">
                                 {CARDINAL_DIRS.map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
                                 ))}
                               </div>
                             </div>
+
+                            {activeItem.data.type === "GAR" && (
+                              <div style={{marginBottom:10}}>
+                                <div className="lbl">Bay Count</div>
+                                <div className="row">
+                                  <button
+                                    className="btn"
+                                    style={{flex:"0 0 auto"}}
+                                    onClick={()=>updateItemData("bayCount", Math.max(0, (activeItem.data.bayCount || 0) - 1))}
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    className="inp"
+                                    type="number"
+                                    min="0"
+                                    value={activeItem.data.bayCount || 0}
+                                    onChange={(e)=>updateItemData("bayCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                  />
+                                  <button
+                                    className="btn"
+                                    style={{flex:"0 0 auto"}}
+                                    onClick={()=>updateItemData("bayCount", (activeItem.data.bayCount || 0) + 1)}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            )}
 
                             {/* Dimensions — primarily for Windows but any
                                 exterior item can record a rough footprint
