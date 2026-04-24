@@ -25,6 +25,8 @@
         --c-ds:#2563EB;   /* blue */
         --c-wind:#16A34A; /* green */
         --c-obs:#9333EA;  /* purple */
+        --c-eapt:#0891B2; /* cyan — exterior appurtenance */
+        --c-garage:#B45309; /* amber — garage */
 
         --teal:#0BA7A5;
 
@@ -1406,6 +1408,8 @@
       .toolBtn.ts{ --toolColor: var(--c-ts); }
       .toolBtn.apt{ --toolColor: var(--c-apt); }
       .toolBtn.ds{ --toolColor: var(--c-ds); }
+      .toolBtn.eapt{ --toolColor: var(--c-eapt); }
+      .toolBtn.garage{ --toolColor: var(--c-garage); }
       .toolBtn.wind{ --toolColor: var(--c-wind); }
       .toolBtn.obs{ --toolColor: var(--c-obs); }
 
@@ -2887,6 +2891,60 @@
         background: linear-gradient(90deg, rgba(224,242,254,0.55), rgba(255,255,255,0.95) 60%);
       }
       .groupHeader.free .groupIcon{ background: rgba(14,165,233,0.12); border-color: rgba(14,165,233,0.28); color: #0EA5E9; }
+      .groupHeader.eapt{
+        border-left:3px solid var(--c-eapt);
+        background: linear-gradient(90deg, rgba(207,250,254,0.55), rgba(255,255,255,0.95) 60%);
+      }
+      .groupHeader.eapt .groupIcon{ background: rgba(8,145,178,0.12); border-color: rgba(8,145,178,0.28); color: var(--c-eapt); }
+      .groupHeader.garage{
+        border-left:3px solid var(--c-garage);
+        background: linear-gradient(90deg, rgba(254,243,199,0.55), rgba(255,255,255,0.95) 60%);
+      }
+      .groupHeader.garage .groupIcon{ background: rgba(180,83,9,0.12); border-color: rgba(180,83,9,0.28); color: var(--c-garage); }
+
+      /* Scope visibility toggle — the small "Roof" / "Exterior" eye row
+         that sits above the items list so the inspector can isolate
+         damage by category. */
+      .scopeToggleRow{
+        display:flex;
+        gap:6px;
+        align-items:center;
+        padding:6px 10px 8px;
+        border-bottom:1px solid rgba(226,232,240,0.7);
+        background: rgba(248,250,252,0.55);
+      }
+      .scopeToggleRow .scopeLabel{
+        font-size:10px;
+        font-weight:800;
+        letter-spacing:0.03em;
+        color: var(--sub);
+        text-transform:uppercase;
+        margin-right:4px;
+      }
+      .scopeToggleBtn{
+        display:inline-flex;
+        align-items:center;
+        gap:5px;
+        padding:3px 9px;
+        border-radius:999px;
+        border:1px solid rgba(148,163,184,0.45);
+        background: rgba(255,255,255,0.9);
+        font-size:11px;
+        font-weight:700;
+        color: var(--sub);
+        cursor:pointer;
+      }
+      .scopeToggleBtn.roof.active{
+        background: rgba(220,38,38,0.1);
+        border-color: rgba(220,38,38,0.45);
+        color: var(--c-ts);
+      }
+      .scopeToggleBtn.exterior.active{
+        background: rgba(8,145,178,0.1);
+        border-color: rgba(8,145,178,0.45);
+        color: var(--c-eapt);
+      }
+      .scopeToggleBtn svg{ width:12px; height:12px; }
 
       .itemRow{
         display:flex;
@@ -2950,20 +3008,20 @@
       .marker{
         position:absolute;
         transform: translate(-50%,-50%);
-        width: 16px;
-        height: 16px;
+        width: 13px;
+        height: 13px;
         display:flex;
         align-items:center;
         justify-content:center;
         color:#fff;
         font-weight:800;
-        font-size:7.5px;
+        font-size:6.5px;
         border:1px solid rgba(255,255,255,0.92);
         box-shadow: 0 1px 1px rgba(2,6,23,0.14);
         user-select:none;
       }
       .markerWind{
-        font-size:7px;
+        font-size:6px;
         line-height:1.05;
       }
       .windMarker{
@@ -5964,14 +6022,14 @@
           padding:24px;
         }
         .printSheet .marker{
-          width: 20px;
-          height: 20px;
-          font-size: 9px;
-          border-width: 1.25px;
+          width: 16px;
+          height: 16px;
+          font-size: 7.5px;
+          border-width: 1px;
           box-shadow: none;
         }
         .printSheet .markerWind{
-          font-size: 8px;
+          font-size: 7px;
         }
         @page{
           size: portrait;
@@ -6887,6 +6945,8 @@
       .ubMenu .ubToolBtn.active.tool-ts .ubToolIcon{ color: var(--c-ts); }
       .ubMenu .ubToolBtn.active.tool-apt .ubToolIcon{ color: var(--c-apt); }
       .ubMenu .ubToolBtn.active.tool-ds .ubToolIcon{ color: var(--c-ds); }
+      .ubMenu .ubToolBtn.active.tool-eapt .ubToolIcon{ color: var(--c-eapt); }
+      .ubMenu .ubToolBtn.active.tool-garage .ubToolIcon{ color: var(--c-garage); }
       .ubMenu .ubToolBtn.active.tool-wind .ubToolIcon{ color: var(--c-wind); }
       .ubMenu .ubToolBtn.active.tool-obs .ubToolIcon{ color: var(--c-obs); }
       .ubMenu .ubToolBtn.active.tool-free .ubToolIcon{ color: #0EA5E9; }
@@ -6944,6 +7004,8 @@
       .ubToolChip.tool-ts .ubToolIcon{ color: var(--c-ts); }
       .ubToolChip.tool-apt .ubToolIcon{ color: var(--c-apt); }
       .ubToolChip.tool-ds .ubToolIcon{ color: var(--c-ds); }
+      .ubToolChip.tool-eapt .ubToolIcon{ color: var(--c-eapt); }
+      .ubToolChip.tool-garage .ubToolIcon{ color: var(--c-garage); }
       .ubToolChip.tool-wind .ubToolIcon{ color: var(--c-wind); }
       .ubToolChip.tool-obs .ubToolIcon{ color: var(--c-obs); }
       .ubToolChip.tool-free .ubToolIcon{ color: #0EA5E9; }
@@ -6954,6 +7016,8 @@
       .ubToolChip.active.tool-ts{ background: rgba(220,38,38,0.12); color: var(--c-ts); }
       .ubToolChip.active.tool-apt{ background: rgba(17,24,39,0.1); color: var(--c-apt); }
       .ubToolChip.active.tool-ds{ background: rgba(37,99,235,0.12); color: var(--c-ds); }
+      .ubToolChip.active.tool-eapt{ background: rgba(8,145,178,0.12); color: var(--c-eapt); }
+      .ubToolChip.active.tool-garage{ background: rgba(180,83,9,0.12); color: var(--c-garage); }
       .ubToolChip.active.tool-wind{ background: rgba(22,163,74,0.14); color: var(--c-wind); }
       .ubToolChip.active.tool-obs{ background: rgba(147,51,234,0.12); color: var(--c-obs); }
       .ubToolChip.active.tool-free{ background: rgba(14,165,233,0.12); color: #0EA5E9; }

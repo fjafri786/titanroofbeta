@@ -75,8 +75,35 @@ const loadPdfJs = () => {
         { code: "SV", label: "Static Vent" },
         { code: "TV", label: "Turtle Vent" },
         { code: "CH", label: "Chimney" },
-        { code: "SK", label: "Skylight" }
+        { code: "SK", label: "Skylight" },
+        { code: "SAT", label: "Satellite Dish" }
       ];
+
+      // Exterior appurtenances: windows, HVAC condensers, meters,
+      // light fixtures, security cameras. Shares the same hail/wind
+      // entry shape as APT/DS so the inspector can document spatter +
+      // displacement on a single marker regardless of subtype.
+      const EAPT_TYPES = [
+        { code: "WIN", label: "Window" },
+        { code: "HVC", label: "HVAC Condenser" },
+        { code: "EMT", label: "Electrical / Utility Meter" },
+        { code: "LFX", label: "Light Fixture" },
+        { code: "SCM", label: "Security Camera" },
+        { code: "OTH", label: "Other Exterior Component" }
+      ];
+
+      // Wind damage condition codes shared by DS, APT, EAPT markers.
+      // Separate from hail "modes" because wind damage is evaluated
+      // by displacement/fastening rather than spatter/dent size.
+      const WIND_CONDITIONS = [
+        { key: "displaced", label: "Displaced" },
+        { key: "detached", label: "Detached" },
+        { key: "loose", label: "Loose" },
+        { key: "bent", label: "Bent" },
+        { key: "missing", label: "Missing" }
+      ];
+
+      const GARAGE_FACINGS = ["N", "S", "E", "W"];
 
       const OBS_CODES = [
         { code: "DDM", label: "Deferred Maintenance" },
@@ -1150,6 +1177,24 @@ const loadPdfJs = () => {
             </svg>
           );
         }
+        if(name === "eye"){
+          return (
+            <svg {...common}>
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          );
+        }
+        if(name === "eyeOff"){
+          return (
+            <svg {...common}>
+              <path d="M3 3l18 18"/>
+              <path d="M10.6 6.1A10 10 0 0 1 12 6c6.5 0 10 6 10 6a16 16 0 0 1-3 3.7"/>
+              <path d="M6.7 7a16 16 0 0 0-4.7 5s3.5 6 10 6a10 10 0 0 0 4.4-1"/>
+              <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
+            </svg>
+          );
+        }
         if(name === "line"){
           return (<svg {...common}><path d="M4 20L20 4"/></svg>);
         }
@@ -1296,6 +1341,13 @@ const loadPdfJs = () => {
         const [aptLastType, setAptLastType] = usePersistedState<string>("titanroof.tool.aptType", "EF");
         const [aptLastDir, setAptLastDir] = usePersistedState<string>("titanroof.tool.aptDir", "N");
         const [dsLastDir, setDsLastDir] = usePersistedState<string>("titanroof.tool.dsDir", "N");
+        const [eaptLastType, setEaptLastType] = usePersistedState<string>("titanroof.tool.eaptType", "WIN");
+        const [eaptLastDir, setEaptLastDir] = usePersistedState<string>("titanroof.tool.eaptDir", "N");
+        const [garageLastFacing, setGarageLastFacing] = usePersistedState<string>("titanroof.tool.garageFacing", "S");
+        const [scopeVisibility, setScopeVisibility] = usePersistedState<{ roof: boolean; exterior: boolean }>(
+          "titanroof.view.scopeVisibility",
+          { roof: true, exterior: true }
+        );
         // TS / WIND / OBS last-used sub-selections. Mirrors the APT/DS
         // pattern above — when the inspector changes one of these fields
         // on an existing item, the next freshly placed item of the same
@@ -1361,7 +1413,7 @@ const loadPdfJs = () => {
         const [drag, setDrag] = useState(null);
 
         // counters
-        const counts = useRef({ ts:1, apt:1, wind:1, obs:1, ds:1, free:1 });
+        const counts = useRef({ ts:1, apt:1, wind:1, obs:1, ds:1, free:1, eapt:1, garage:1 });
 
         // Free draw: stroke in progress + hold-to-perfect recognizer
         const [freeStroke, setFreeStroke] = useState(null); // { points:[{x,y}], inputType, pressure }
@@ -1456,7 +1508,7 @@ const loadPdfJs = () => {
         // Dash collapse
         const [lastSavedAt, setLastSavedAt] = useState(null);
         const [exportMode, setExportMode] = useState(false);
-        const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, obs:false, wind:false, free:false });
+        const [groupOpen, setGroupOpen] = useState({ ts:false, apt:false, ds:false, eapt:false, garage:false, obs:false, wind:false, free:false });
         const [dashFocusDir, setDashFocusDir] = useState(null);
         const [photoSectionsOpen, setPhotoSectionsOpen] = useState({});
         const [photoLightbox, setPhotoLightbox] = useState(null);
@@ -1464,9 +1516,30 @@ const loadPdfJs = () => {
         const activePage = useMemo(() => pages.find(page => page.id === activePageId) || pages[0], [pages, activePageId]);
         const pageItems = useMemo(() => items.filter(item => item.pageId === (activePage?.id || activePageId)), [items, activePage, activePageId]);
         const dashVisibleItems = useMemo(() => {
-          if(!dashFocusDir) return pageItems;
-          return pageItems.filter(item => item.data?.dir === dashFocusDir);
-        }, [dashFocusDir, pageItems]);
+          // Scope filter — items explicitly scoped to "roof" or
+          // "exterior" can be hidden via the sidebar eye toggles so
+          // the inspector can isolate categories while drawing.
+          // Duplicated inline (vs reusing itemScope) so this useMemo
+          // doesn't have a forward reference to a later declaration.
+          const scopeOf = (item) => {
+            if(!item) return null;
+            if(item.type === "ts" || item.type === "apt") return "roof";
+            if(item.type === "ds" || item.type === "eapt" || item.type === "garage") return "exterior";
+            if(item.type === "wind") return item.data?.scope === "exterior" ? "exterior" : "roof";
+            if(item.type === "obs"){
+              if(item.data?.area === "roof") return "roof";
+              if(item.data?.area === "ext") return "exterior";
+            }
+            return null;
+          };
+          const scopeFiltered = pageItems.filter(item => {
+            const s = scopeOf(item);
+            if(!s) return true;
+            return !!scopeVisibility[s];
+          });
+          if(!dashFocusDir) return scopeFiltered;
+          return scopeFiltered.filter(item => item.data?.dir === dashFocusDir);
+        }, [dashFocusDir, pageItems, scopeVisibility]);
         const activeItem = items.find(i => i.id === selectedId);
         const activePageIndex = useMemo(() => pages.findIndex(page => page.id === activePageId), [pages, activePageId]);
         const mapZoom = activePage?.map?.zoom || 18;
@@ -1854,13 +1927,15 @@ const loadPdfJs = () => {
               wind: parsed.counts.wind ?? 1,
               obs: parsed.counts.obs ?? 1,
               ds: parsed.counts.ds ?? 1,
-              free: parsed.counts.free ?? 1
+              free: parsed.counts.free ?? 1,
+              eapt: parsed.counts.eapt ?? 1,
+              garage: parsed.counts.garage ?? 1
             };
           } else {
             counts.current = revivedItems.reduce((acc, it) => {
               acc[it.type] = Math.max(acc[it.type] || 1, parseInt((it.name || "").split("-")[1], 10) + 1 || 1);
               return acc;
-            }, { ts:1, apt:1, wind:1, obs:1, ds:1, free:1 });
+            }, { ts:1, apt:1, wind:1, obs:1, ds:1, free:1, eapt:1, garage:1 });
           }
           setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
         }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
@@ -2897,16 +2972,27 @@ const loadPdfJs = () => {
           };
           const localDirLabel = (dir = "") => ({ N: "north", S: "south", E: "east", W: "west" }[dir] || String(dir || "").toLowerCase());
           const localComponentLabel = (item, dir) => {
-            const base = item.type === "apt"
-              ? (APT_TYPES.find(entry => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase()
-              : "downspout";
+            let base;
+            if(item.type === "apt"){
+              base = (APT_TYPES.find(entry => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase();
+            } else if(item.type === "ds"){
+              base = "downspout";
+            } else if(item.type === "eapt"){
+              base = (EAPT_TYPES.find(entry => entry.code === item.data?.type)?.label || "exterior component").toLowerCase();
+            } else {
+              base = "component";
+            }
             const direction = localDirLabel(dir || item.data?.dir);
             return direction ? `${direction} ${base}` : base;
           };
 
           const byDir = { N: { creased: 0, torn: 0 }, S: { creased: 0, torn: 0 }, E: { creased: 0, torn: 0 }, W: { creased: 0, torn: 0 }, Ridge: { creased: 0, torn: 0 }, Hip: { creased: 0, torn: 0 }, Valley: { creased: 0, torn: 0 } };
           const windByScope = { roof: [], exterior: [] };
-          const hailByType = { apt: [], ds: [] };
+          // EAPT hail rolls into the exterior bucket; APT hail is roof.
+          // DS hail is exterior too (gutters). The report already used
+          // the combined list, so we just extend the scan.
+          const hailByType = { apt: [], ds: [], eapt: [] };
+          const windIndicatorEntries = []; // displaced / detached / loose on DS/APT/EAPT
 
           pageItems.forEach(item => {
             if(item.type === "wind"){
@@ -2917,9 +3003,13 @@ const loadPdfJs = () => {
               }
               windByScope[item.data.scope === "exterior" ? "exterior" : "roof"].push(item);
             }
-            if(item.type === "apt" || item.type === "ds"){
+            if(item.type === "apt" || item.type === "ds" || item.type === "eapt"){
               const entries = (item.data.damageEntries || []).filter(entry => (entry.mode || "").trim());
               if(entries.length) hailByType[item.type].push({ item, entries });
+              (item.data.windEntries || []).forEach(entry => {
+                if(!entry?.condition) return;
+                windIndicatorEntries.push({ item, entry });
+              });
             }
           });
 
@@ -2945,11 +3035,24 @@ const loadPdfJs = () => {
             ? localJoinReadableList(selectedExteriorComponents)
             : "fascia, trim, siding, downspouts, and other exterior components";
 
-          const exteriorWindText = windByScope.exterior.length
-            ? `We inspected the exterior elevations including ${exteriorScopeText}. We noted localized wind-related conditions at ${localJoinReadableList(windByScope.exterior.map(entry => `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`))}.`
+          // Fold per-marker wind indicator entries (displaced / detached
+          // / loose on DS, APT, EAPT markers) into the exterior wind
+          // narrative alongside the dedicated WIND markers.
+          const windIndicatorPhrases = windIndicatorEntries.map(({ item, entry }) => {
+            const cond = WIND_CONDITIONS.find(c => c.key === entry.condition);
+            const condLabel = cond ? cond.label.toLowerCase() : (entry.condition || "wind-damaged");
+            return `${condLabel} ${localComponentLabel(item, entry.dir || item.data?.dir)}`;
+          });
+
+          const windMarkerPhrases = windByScope.exterior.map(entry =>
+            `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`
+          );
+          const combinedExteriorWindPhrases = [...windMarkerPhrases, ...windIndicatorPhrases];
+          const exteriorWindText = combinedExteriorWindPhrases.length
+            ? `We inspected the exterior elevations including ${exteriorScopeText}. We noted localized wind-related conditions at ${localJoinReadableList(combinedExteriorWindPhrases)}.`
             : `We inspected the exterior elevations including ${exteriorScopeText}. We found no detached, loose, missing, or displaced exterior components.`;
 
-          const hailEntries = ["apt", "ds"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
+          const hailEntries = ["apt", "ds", "eapt"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
             entries.map(entry => `${entry.mode === "both" ? "spatter and dent" : entry.mode} up to ${entry.size}" on ${localComponentLabel(item, entry.dir || item.data.dir)}`)
           )));
 
@@ -3248,7 +3351,8 @@ const loadPdfJs = () => {
               caption: "",
               detailPhoto: null,
               overviewPhoto: null,
-              damageEntries: []
+              damageEntries: [],
+              windEntries: []
             };
           }
 
@@ -3265,7 +3369,44 @@ const loadPdfJs = () => {
               caption: "",
               detailPhoto: null,
               overviewPhoto: null,
-              damageEntries: []
+              damageEntries: [],
+              windEntries: []
+            };
+          }
+
+          if(type === "eapt"){
+            counts.current.eapt = counts.current.eapt || 0;
+            const n = ++counts.current.eapt;
+            base.name = `EXT-${n}`;
+            base.data = {
+              type: eaptLastType || "WIN",
+              dir: eaptLastDir || "N",
+              locked: false,
+              // Optional dimensions — primarily used when documenting
+              // windows (height/width in inches). Kept generic so HVAC
+              // units or meters can also record footprint if needed.
+              dimsEnabled: false,
+              widthIn: "",
+              heightIn: "",
+              caption: "",
+              detailPhoto: null,
+              overviewPhoto: null,
+              damageEntries: [],
+              windEntries: []
+            };
+          }
+
+          if(type === "garage"){
+            counts.current.garage = counts.current.garage || 0;
+            const n = ++counts.current.garage;
+            base.name = `GAR-${n}`;
+            base.data = {
+              facing: garageLastFacing || "S",
+              bayCount: 2,
+              locked: false,
+              caption: "",
+              overviewPhoto: null,
+              detailPhoto: null
             };
           }
 
@@ -3369,6 +3510,13 @@ const loadPdfJs = () => {
             if(k === "area" && typeof v === "string") setObsLastArea(v);
             if(k === "arrowType" && typeof v === "string") setObsLastArrowType(v);
             if(k === "arrowLabelPosition" && typeof v === "string") setObsLastArrowLabelPosition(v);
+          }
+          if(it.type === "eapt"){
+            if(k === "type" && typeof v === "string") setEaptLastType(v);
+            if(k === "dir" && typeof v === "string") setEaptLastDir(v);
+          }
+          if(it.type === "garage"){
+            if(k === "facing" && typeof v === "string") setGarageLastFacing(v);
           }
         };
 
@@ -3734,14 +3882,14 @@ const loadPdfJs = () => {
           setItems([]);
           setSelectedId(null);
           setPanelView("items");
-          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1, free:1 };
+          counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1, free:1, eapt:1, garage:1 };
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
           autoSaveHistoryRef.current = [];
           legacyBlobDelete(STORAGE_KEY).catch(() => {});
           legacyBlobDelete(AUTOSAVE_HISTORY_KEY).catch(() => {});
           setLastSavedAt(null);
-          setGroupOpen({ ts:false, apt:false, ds:false, obs:false, wind:false, free:false });
+          setGroupOpen({ ts:false, apt:false, ds:false, eapt:false, garage:false, obs:false, wind:false, free:false });
         };
 
         const setTsOverviewPhoto = async (file) => {
@@ -3920,6 +4068,66 @@ const loadPdfJs = () => {
           }));
         };
 
+        // Wind indicator entries — parallel to damageEntries (hail) but
+        // tracking fastening conditions (displaced / detached / loose)
+        // instead of impact size. Shared by DS, APT, EAPT items.
+        const addWindEntry = (condition = "displaced") => {
+          const entry = { id: uid(), condition, dir: "N", photo: null };
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                windEntries: [...(i.data.windEntries || []), entry]
+              }
+            };
+          }));
+        };
+
+        const updateWindEntry = (entryId, patch) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                windEntries: (i.data.windEntries || []).map(entry =>
+                  entry.id === entryId ? { ...entry, ...patch } : entry
+                )
+              }
+            };
+          }));
+        };
+
+        const deleteWindEntry = (entryId) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const entry = (i.data.windEntries || []).find(e => e.id === entryId);
+            if(entry?.photo) revokeFileObj(entry.photo);
+            return {
+              ...i,
+              data: {
+                ...i.data,
+                windEntries: (i.data.windEntries || []).filter(e => e.id !== entryId)
+              }
+            };
+          }));
+        };
+
+        const setWindEntryPhoto = async (entryId, file) => {
+          const photoObj = await fileToObj(file);
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            const entries = (i.data.windEntries || []).map(entry => {
+              if(entry.id !== entryId) return entry;
+              revokeFileObj(entry.photo);
+              return { ...entry, photo: photoObj };
+            });
+            return { ...i, data: { ...i.data, windEntries: entries } };
+          }));
+        };
+
         // === Delete selected ===
         const deleteSelected = () => {
           const target = items.find(i => i.id === selectedId);
@@ -3933,11 +4141,23 @@ const loadPdfJs = () => {
               revokeFileObj(target.data.detailPhoto);
               revokeFileObj(target.data.overviewPhoto);
               (target.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+              (target.data.windEntries || []).forEach(entry => revokeFileObj(entry.photo));
             }
             if(target.type === "ds"){
               revokeFileObj(target.data.detailPhoto);
               revokeFileObj(target.data.overviewPhoto);
               (target.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+              (target.data.windEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(target.type === "eapt"){
+              revokeFileObj(target.data.detailPhoto);
+              revokeFileObj(target.data.overviewPhoto);
+              (target.data.damageEntries || []).forEach(entry => revokeFileObj(entry.photo));
+              (target.data.windEntries || []).forEach(entry => revokeFileObj(entry.photo));
+            }
+            if(target.type === "garage"){
+              revokeFileObj(target.data.detailPhoto);
+              revokeFileObj(target.data.overviewPhoto);
             }
             if(target.type === "wind"){
               revokeFileObj(target.data.overviewPhoto);
@@ -4599,7 +4819,7 @@ const loadPdfJs = () => {
 
         // === Grouped list ===
         const grouped = useMemo(() => {
-          const g = { ts:[], apt:[], ds:[], obs:[], wind:[], free:[] };
+          const g = { ts:[], apt:[], ds:[], eapt:[], garage:[], obs:[], wind:[], free:[] };
           pageItems.forEach(i => g[i.type] && g[i.type].push(i));
           return g;
         }, [pageItems]);
@@ -4693,24 +4913,24 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+13} fill="var(--c-ts)" fontWeight="800" fontSize="9">{ts.name}</text>
-              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+20} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                 {ts.data.dir}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+34} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+                <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+28} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                   {areaLabel}
                 </text>
               )}
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
-                  <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
-                  <path d="M1.4 3V2a2.1 2.1 0 014.2 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
+                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+14})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="3" width="6" height="4" rx="1" fill="var(--c-ts)" />
+                  <path d="M1.2 3V2a1.8 1.8 0 013.6 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
               )}
 
-              <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
+              <circle cx={topRight.x} cy={topRight.y} r="9" fill="var(--c-ts)" />
+              <text x={topRight.x} y={topRight.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
 
@@ -4740,23 +4960,23 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+13} fill="var(--c-ts)" fontWeight="800" fontSize="9">{ts.name}</text>
-              <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+24} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+20} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                 {ts.data.dir}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+6} y={toPxY(bb.minY)+34} fill="var(--c-ts)" fontWeight="700" fontSize="8">
+                <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+28} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                   {areaLabel}
                 </text>
               )}
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+6 + (ts.data.dir?.length || 0)*4.5 + 3}, ${toPxY(bb.minY)+17})`} fill="var(--c-ts)" stroke="var(--c-ts)">
-                  <rect x="0" y="3" width="7" height="5" rx="1" fill="var(--c-ts)" />
-                  <path d="M1.4 3V2a2.1 2.1 0 014.2 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
+                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+14})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                  <rect x="0" y="3" width="6" height="4" rx="1" fill="var(--c-ts)" />
+                  <path d="M1.2 3V2a1.8 1.8 0 013.6 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
               )}
-              <circle cx={topRight.x} cy={topRight.y} r="12" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+4} fill="#fff" textAnchor="middle" fontSize="11" fontWeight="800">
+              <circle cx={topRight.x} cy={topRight.y} r="9" fill="var(--c-ts)" />
+              <text x={topRight.x} y={topRight.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
             </g>
@@ -4779,11 +4999,11 @@ const loadPdfJs = () => {
                 stroke="var(--c-obs)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
+              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill="var(--c-obs)" fontWeight="800" fontSize="10">
                 {obs.name} • {obs.data.code}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+32} fill="var(--c-obs)" fontWeight="700" fontSize="11">
+                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill="var(--c-obs)" fontWeight="700" fontSize="9">
                   {areaLabel}
                 </text>
               )}
@@ -4842,12 +5062,12 @@ const loadPdfJs = () => {
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="10">
                   {obs.data.label}
                 </text>
               )}
               {lengthLabel && (
-                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="10" textAnchor="middle">
+                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="8" textAnchor="middle">
                   {lengthLabel}
                 </text>
               )}
@@ -4878,11 +5098,11 @@ const loadPdfJs = () => {
                 stroke="var(--c-obs)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+18} fill="var(--c-obs)" fontWeight="800" fontSize="13">
+              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill="var(--c-obs)" fontWeight="800" fontSize="10">
                 {obs.name} • {obs.data.code}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+8} y={toPxY(bb.minY)+32} fill="var(--c-obs)" fontWeight="700" fontSize="11">
+                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill="var(--c-obs)" fontWeight="700" fontSize="9">
                   {areaLabel}
                 </text>
               )}
@@ -4934,12 +5154,12 @@ const loadPdfJs = () => {
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="12">
+                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="10">
                   {obs.data.label}
                 </text>
               )}
               {lengthLabel && (
-                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="10" textAnchor="middle">
+                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="8" textAnchor="middle">
                   {lengthLabel}
                 </text>
               )}
@@ -4950,10 +5170,24 @@ const loadPdfJs = () => {
         // === Marker meta (DS shows number) ===
         const markerMeta = (i) => {
           if(i.type === "apt"){
-            return { bg:"var(--c-apt)", label: i.data.type, radius:"14px" };
+            return { bg:"var(--c-apt)", label: i.data.type, radius:"3px" };
           }
           if(i.type === "ds"){
-            return { bg:"var(--c-ds)", label: String(i.data.index || "?"), radius:"14px" };
+            return { bg:"var(--c-ds)", label: String(i.data.index || "?"), radius:"3px" };
+          }
+          if(i.type === "eapt"){
+            // Exterior appurtenance — same pattern as APT but with a
+            // distinct color and the type code as the label (WIN, HVC,
+            // EMT, LFX, SCM).
+            return { bg:"var(--c-eapt)", label: i.data.type || "EXT", radius:"3px" };
+          }
+          if(i.type === "garage"){
+            // Facing arrow label — a tiny directional glyph so the
+            // inspector can see orientation at a glance (e.g. "↓ 2" for
+            // a south-facing two-bay garage).
+            const facing = i.data.facing || "S";
+            const arrow = facing === "N" ? "↑" : facing === "E" ? "→" : facing === "W" ? "←" : "↓";
+            return { bg:"var(--c-garage)", label: `${arrow}${i.data.bayCount || ""}`, radius:"3px" };
           }
           if(i.type === "wind"){
             if(i.data.scope === "exterior"){
@@ -4976,13 +5210,56 @@ const loadPdfJs = () => {
           if(i.type === "obs"){
             return { bg:"var(--c-obs)", label:(i.data.code||"OB").substring(0,2), radius:"999px" };
           }
-          return { bg:"#111", label:"", radius:"14px" };
+          return { bg:"#111", label:"", radius:"3px" };
         };
+
+        // Shared wind-indicators editor used by DS / APT / EAPT. Keeps
+        // the markup in one place so every exterior marker gets the same
+        // "displaced / detached / loose" workflow next to its hail
+        // entries, without having to duplicate the JSX three times.
+        const renderWindIndicatorSection = (item) => (
+          <div style={{marginBottom:10}}>
+            <div className="row" style={{marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div className="lbl" style={{marginBottom:2}}>Wind Indicators ({(item.data.windEntries || []).length})</div>
+                <div className="tiny">Log displaced / detached / loose conditions. Add a photo per finding.</div>
+              </div>
+              <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={() => addWindEntry()}>
+                Add
+              </button>
+            </div>
+            {(item.data.windEntries || []).map((entry, idx) => (
+              <div key={entry.id} style={{marginBottom:8}}>
+                <div className="row">
+                  <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
+                  <select className="inp" value={entry.condition} onChange={(e)=>updateWindEntry(entry.id, { condition: e.target.value })}>
+                    {WIND_CONDITIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                  </select>
+                  <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateWindEntry(entry.id, { dir: e.target.value })}>
+                    {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                    Photo
+                    <input type="file" accept="image/*" style={{display:"none"}}
+                      onChange={(e)=> e.target.files?.[0] && setWindEntryPhoto(entry.id, e.target.files[0])}/>
+                  </label>
+                  <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteWindEntry(entry.id)}>Del</button>
+                </div>
+                {renderFileName(entry.photo, "indent")}
+              </div>
+            ))}
+            {!(item.data.windEntries || []).length && (
+              <div className="tiny" style={{marginTop:4}}>No wind indicators added.</div>
+            )}
+          </div>
+        );
 
         const toolDefs = [
           { key:"ts", label:"Test Square", shortLabel:"TS", icon:"ts", cls:"ts" },
           { key:"apt", label:"Appurtenance", shortLabel:"APT", icon:"apt", cls:"apt" },
           { key:"ds", label:"Downspout", shortLabel:"DS", icon:"ds", cls:"ds" },
+          { key:"eapt", label:"Exterior Item", shortLabel:"EXT", icon:"apt", cls:"eapt" },
+          { key:"garage", label:"Garage", shortLabel:"GAR", icon:"apt", cls:"garage" },
           { key:"wind", label:"Wind", shortLabel:"W", icon:"wind", cls:"wind" },
           { key:"obs", label:"Observation", shortLabel:"OBS", icon:"obs", cls:"obs" },
           { key:"free", label:"Free Draw (Pencil)", shortLabel:"DRAW", icon:"free", cls:"free" },
@@ -5030,22 +5307,46 @@ const loadPdfJs = () => {
           setObsPaletteOpen(true);
         };
 
+        // Scope helper — used to bucket items into the "Roof" or
+        // "Exterior" visibility filter and to route items into the
+        // matching report section. Items that already carry an explicit
+        // scope (wind, obs) defer to that field; everything else is
+        // inferred from its tool type.
+        const itemScope = (it) => {
+          if(!it) return null;
+          if(it.type === "ts") return "roof";
+          if(it.type === "apt") return "roof";
+          if(it.type === "ds") return "exterior";
+          if(it.type === "eapt") return "exterior";
+          if(it.type === "garage") return "exterior";
+          if(it.type === "wind") return it.data?.scope === "exterior" ? "exterior" : "roof";
+          if(it.type === "obs"){
+            if(it.data?.area === "roof") return "roof";
+            if(it.data?.area === "ext") return "exterior";
+            return null; // generic / interior — not scoped
+          }
+          return null;
+        };
+
         const isDamaged = (it) => {
-          if(it.type === "apt" || it.type === "ds"){
-            return (it.data.damageEntries || []).length > 0;
+          if(it.type === "apt" || it.type === "ds" || it.type === "eapt"){
+            return (it.data.damageEntries || []).length > 0
+              || (it.data.windEntries || []).length > 0;
           }
           return false;
         };
 
         const damageSummary = (it) => {
-          if(!(it.type === "apt" || it.type === "ds")) return "";
-          const parts = (it.data.damageEntries || []).map(entry => {
-            if(entry.mode === "both"){
-              return `spatter + dent ${entry.size}"`;
-            }
+          if(!(it.type === "apt" || it.type === "ds" || it.type === "eapt")) return "";
+          const hailParts = (it.data.damageEntries || []).map(entry => {
+            if(entry.mode === "both") return `spatter + dent ${entry.size}"`;
             return `${entry.mode} ${entry.size}"`;
           });
-          return parts.join(" • ");
+          const windParts = (it.data.windEntries || []).map(entry => {
+            const cond = WIND_CONDITIONS.find(c => c.key === entry.condition);
+            return cond ? cond.label.toLowerCase() : (entry.condition || "wind");
+          });
+          return [...hailParts, ...windParts].join(" • ");
         };
 
         const hailIndicatorSummary = useMemo(() => {
@@ -5142,7 +5443,17 @@ const loadPdfJs = () => {
         const componentLabel = (item) => {
           if(!item) return "component";
           const direction = dirLabel(item.data?.dir);
-          const base = item.type === "apt" ? appurtenanceLabel(item.data?.type) : "downspout";
+          let base;
+          if(item.type === "apt"){
+            base = appurtenanceLabel(item.data?.type);
+          } else if(item.type === "ds"){
+            base = "downspout";
+          } else if(item.type === "eapt"){
+            const label = EAPT_TYPES.find(entry => entry.code === item.data?.type)?.label || "Exterior Component";
+            base = label.toLowerCase();
+          } else {
+            base = "component";
+          }
           return direction ? `${direction} ${base}` : base;
         };
         const componentTitle = (item) => titleCase(componentLabel(item));
@@ -5400,6 +5711,24 @@ const loadPdfJs = () => {
             const elevation = reportData.description.garageElevation ? ` opening toward ${reportData.description.garageElevation.toLowerCase()}` : "";
             const garageSentence = `A ${bays}garage${doorCount ? ` with ${doorCount}${doorMaterial}` : ""}${elevation}.`;
             descriptionSentences.push(garageSentence);
+          }
+
+          // Garage markers dropped on the diagram supplement (or replace)
+          // the manually entered garage description above. Each marker
+          // records facing direction + bay count so the report can list
+          // multiple garages, e.g. detached + attached.
+          const diagramGarages = pageItems.filter(item => item.type === "garage");
+          if(diagramGarages.length){
+            const facingWord = (d) => ({ N: "north", S: "south", E: "east", W: "west" }[d] || (d || "").toLowerCase());
+            const garagePhrases = diagramGarages.map(g => {
+              const bays = Number(g.data?.bayCount || 0);
+              const bayPhrase = bays > 0 ? `${bays}-bay` : "";
+              const facing = g.data?.facing ? ` facing ${facingWord(g.data.facing)}` : "";
+              return `${[bayPhrase, "garage"].filter(Boolean).join(" ")}${facing}`.trim();
+            });
+            descriptionSentences.push(
+              `Diagram documented ${garagePhrases.length} garage${garagePhrases.length === 1 ? "" : "s"}: ${joinReadableList(garagePhrases)}.`
+            );
           }
 
           if(reportData.description.terrain){
@@ -5736,8 +6065,8 @@ const loadPdfJs = () => {
           const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
           const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
           const aptWithDamage = pageItems
-            .filter(item => item.type === "apt" || item.type === "ds")
-            .filter(item => ((item.data?.damageEntries || []).length > 0));
+            .filter(item => item.type === "apt" || item.type === "ds" || item.type === "eapt")
+            .filter(item => ((item.data?.damageEntries || []).length > 0 || (item.data?.windEntries || []).length > 0));
           if(creasedTotal > 0 || tornTotal > 0){
             const bits = [];
             if(creasedTotal) bits.push(`${creasedTotal} creased`);
@@ -6196,6 +6525,23 @@ const loadPdfJs = () => {
               ]
             },
             {
+              key: "eapt",
+              title: "Exterior Items",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "detail", title: "Details", entries: [] },
+                { key: "damage", title: "Damage", entries: [] }
+              ]
+            },
+            {
+              key: "garage",
+              title: "Garages",
+              groups: [
+                { key: "overview", title: "Overview", entries: [] },
+                { key: "detail", title: "Details", entries: [] }
+              ]
+            },
+            {
               key: "wind",
               title: "Wind Observations",
               groups: [
@@ -6262,7 +6608,7 @@ const loadPdfJs = () => {
                 });
               });
             }
-            if(it.type === "apt" || it.type === "ds"){
+            if(it.type === "apt" || it.type === "ds" || it.type === "eapt"){
               const componentText = componentLabel(it);
               if(it.data.overviewPhoto?.url){
                 pushEntry(it.type, "overview", {
@@ -6298,6 +6644,50 @@ const loadPdfJs = () => {
                   source: { type: it.type, itemId: it.id, field: "damage", index: idx }
                 });
               });
+              // Wind indicator photos (displaced / detached / loose) —
+              // reuse the "damage" group so they surface in the same
+              // report gallery as the hail entries.
+              (it.data.windEntries || []).forEach((entry, idx) => {
+                if(!entry.photo?.url) return;
+                const cond = WIND_CONDITIONS.find(c => c.key === entry.condition);
+                const condLabel = cond ? cond.label : (entry.condition || "Wind indicator");
+                pushEntry(it.type, "damage", {
+                  id: `${it.id}-wind-${idx}`,
+                  itemId: it.id,
+                  url: entry.photo.url,
+                  photo: entry.photo,
+                  caption: resolveCaption(`${condLabel} on the ${componentText}`, note, entry.photo),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "windEntry", index: idx }
+                });
+              });
+            }
+            if(it.type === "garage"){
+              const facingWord = ({ N: "north", S: "south", E: "east", W: "west" }[it.data?.facing] || (it.data?.facing || ""));
+              const bays = Number(it.data?.bayCount || 0);
+              const garageLabel = `${bays ? `${bays}-bay ` : ""}garage${facingWord ? ` facing ${facingWord}` : ""}`;
+              if(it.data.overviewPhoto?.url){
+                pushEntry("garage", "overview", {
+                  id: `${it.id}-overview`,
+                  itemId: it.id,
+                  url: it.data.overviewPhoto.url,
+                  photo: it.data.overviewPhoto,
+                  caption: resolveCaption(`Overview of the ${garageLabel}`, note, it.data.overviewPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "overviewPhoto" }
+                });
+              }
+              if(it.data.detailPhoto?.url){
+                pushEntry("garage", "detail", {
+                  id: `${it.id}-detail`,
+                  itemId: it.id,
+                  url: it.data.detailPhoto.url,
+                  photo: it.data.detailPhoto,
+                  caption: resolveCaption(`Detail view of the ${garageLabel}`, note, it.data.detailPhoto),
+                  note,
+                  source: { type: it.type, itemId: it.id, field: "detailPhoto" }
+                });
+              }
             }
             if(it.type === "wind"){
               if(it.data.overviewPhoto?.url){
@@ -7168,6 +7558,8 @@ const loadPdfJs = () => {
           `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
           `Wind Observations (${pageItems.filter(i => i.type === "wind").length})`,
           `Appurtenances + Downspouts (${pageItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
+          `Exterior Items (${pageItems.filter(i => i.type === "eapt").length})`,
+          `Garages (${pageItems.filter(i => i.type === "garage").length})`,
           `Observations (${pageItems.filter(i => i.type === "obs").length})`,
           "Report Notes (Description)"
         ];
@@ -8705,9 +9097,35 @@ const loadPdfJs = () => {
                 {/* ITEMS LIST */}
                 {panelView === "items" && (
                   <div className="card itemsPanel">
+                    {/* Scope visibility — hides roof-only or exterior-only
+                        markers from the diagram so the inspector can
+                        isolate categories while writing a report. */}
+                    <div className="scopeToggleRow" role="group" aria-label="Scope visibility">
+                      <span className="scopeLabel">Show</span>
+                      <button
+                        type="button"
+                        className={"scopeToggleBtn roof" + (scopeVisibility.roof ? " active" : "")}
+                        onClick={() => setScopeVisibility(prev => ({ ...prev, roof: !prev.roof }))}
+                        aria-pressed={scopeVisibility.roof}
+                        title={scopeVisibility.roof ? "Hide roof items" : "Show roof items"}
+                      >
+                        {scopeVisibility.roof ? <Icon name="eye" /> : <Icon name="eyeOff" />}
+                        <span>Roof</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={"scopeToggleBtn exterior" + (scopeVisibility.exterior ? " active" : "")}
+                        onClick={() => setScopeVisibility(prev => ({ ...prev, exterior: !prev.exterior }))}
+                        aria-pressed={scopeVisibility.exterior}
+                        title={scopeVisibility.exterior ? "Hide exterior items" : "Show exterior items"}
+                      >
+                        {scopeVisibility.exterior ? <Icon name="eye" /> : <Icon name="eyeOff" />}
+                        <span>Exterior</span>
+                      </button>
+                    </div>
                     {pageItems.length > 0 && (() => {
                       const allPageLocked = pageItems.every(item => !!item.data?.locked);
-                      const groupTypesWithItems = ["ts","apt","ds","obs","wind","free"].filter(t => grouped[t].length > 0);
+                      const groupTypesWithItems = ["ts","apt","ds","eapt","garage","obs","wind","free"].filter(t => grouped[t].length > 0);
                       const allGroupsOpen = groupTypesWithItems.length > 0 && groupTypesWithItems.every(t => !!groupOpen[t]);
                       return (
                         <div className="itemsPanelBulk">
@@ -8744,7 +9162,7 @@ const loadPdfJs = () => {
                         </div>
                       );
                     })()}
-                    {["ts","apt","ds","obs","wind","free"].map(type => {
+                    {["ts","apt","ds","eapt","garage","obs","wind","free"].map(type => {
                       const group = grouped[type];
                       if(!group.length) return null;
                       const isOpen = !!groupOpen[type];
@@ -8752,9 +9170,11 @@ const loadPdfJs = () => {
                       let title = "Items";
                       let color = "var(--border)";
                       let iconName = "panel";
-                      if(type==="ts"){ title="Test Squares"; color="var(--c-ts)"; iconName="ts"; }
-                      if(type==="apt"){ title="Appurtenances"; color="var(--c-apt)"; iconName="apt"; }
-                      if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; iconName="ds"; }
+                      if(type==="ts"){ title="Test Squares (roof)"; color="var(--c-ts)"; iconName="ts"; }
+                      if(type==="apt"){ title="Appurtenances (roof)"; color="var(--c-apt)"; iconName="apt"; }
+                      if(type==="ds"){ title="Downspouts (exterior)"; color="var(--c-ds)"; iconName="ds"; }
+                      if(type==="eapt"){ title="Exterior Items"; color="var(--c-eapt)"; iconName="apt"; }
+                      if(type==="garage"){ title="Garages"; color="var(--c-garage)"; iconName="apt"; }
                       if(type==="obs"){ title="Observations"; color="var(--c-obs)"; iconName="obs"; }
                       if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; iconName="wind"; }
                       if(type==="free"){ title="Free Draw"; color="#0EA5E9"; iconName="free"; }
@@ -8823,7 +9243,21 @@ const loadPdfJs = () => {
                                 {type==="ds" && (
                                   <span>
                                     {item.data.dir} • {item.data.material} • {item.data.style}
-                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no hail"}
+                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no damage"}
+                                  </span>
+                                )}
+
+                                {type==="eapt" && (
+                                  <span>
+                                    {(EAPT_TYPES.find(t=>t.code===item.data.type)?.label) || item.data.type} • {item.data.dir}
+                                    {isDamaged(item) ? ` • ${damageSummary(item)}` : " • no damage"}
+                                  </span>
+                                )}
+
+                                {type==="garage" && (
+                                  <span>
+                                    Faces {item.data.facing} • {item.data.bayCount || 0} bay{(item.data.bayCount || 0) === 1 ? "" : "s"}
+                                    {item.data.overviewPhoto ? " • photo" : ""}
                                   </span>
                                 )}
 
@@ -9044,6 +9478,8 @@ const loadPdfJs = () => {
                               )}
                             </div>
 
+                            {renderWindIndicatorSection(activeItem)}
+
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Appurtenance Detail Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
@@ -9140,6 +9576,8 @@ const loadPdfJs = () => {
                               )}
                             </div>
 
+                            {renderWindIndicatorSection(activeItem)}
+
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Downspout Detail Photo</div>
                               <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
@@ -9158,6 +9596,192 @@ const loadPdfJs = () => {
                             </div>
 
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Downspout</button>
+                          </>
+                        )}
+
+                        {/* === EXTERIOR APPURTENANCE (window / HVAC / meter / fixture) === */}
+                        {activeItem.type === "eapt" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Type</div>
+                              <select className="inp" value={activeItem.data.type} onChange={(e)=>updateItemData("type", e.target.value)}>
+                                {EAPT_TYPES.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                              </select>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Location Side</div>
+                              <div className="radioGrid">
+                                {CARDINAL_DIRS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Dimensions — primarily for Windows but any
+                                exterior item can record a rough footprint
+                                when the inspector toggles it on. Stored
+                                as inches (integer/decimal). */}
+                            <div style={{marginBottom:10}}>
+                              <div className="row">
+                                <label className="tiny" style={{display:"inline-flex", alignItems:"center", gap:6, flex:"0 0 auto"}}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!activeItem.data.dimsEnabled}
+                                    onChange={(e)=>updateItemData("dimsEnabled", e.target.checked)}
+                                  />
+                                  Record dimensions (optional)
+                                </label>
+                              </div>
+                              {activeItem.data.dimsEnabled && (
+                                <div className="rowTop" style={{marginTop:6}}>
+                                  <div style={{flex:1}}>
+                                    <div className="lbl">Width (in)</div>
+                                    <input
+                                      className="inp"
+                                      type="number"
+                                      min="0"
+                                      value={activeItem.data.widthIn}
+                                      onChange={(e)=>updateItemData("widthIn", e.target.value)}
+                                      placeholder="e.g., 36"
+                                    />
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <div className="lbl">Height (in)</div>
+                                    <input
+                                      className="inp"
+                                      type="number"
+                                      min="0"
+                                      value={activeItem.data.heightIn}
+                                      onChange={(e)=>updateItemData("heightIn", e.target.value)}
+                                      placeholder="e.g., 48"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="hr"></div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{marginBottom:8}}>
+                                <div style={{flex:1}}>
+                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
+                                  <div className="tiny">Document spatter or dents observed on the casing / housing.</div>
+                                </div>
+                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
+                                  Add
+                                </button>
+                              </div>
+
+                              {(activeItem.data.damageEntries || []).map((entry, idx) => (
+                                <div key={entry.id} style={{marginBottom:8}}>
+                                  <div className="row">
+                                    <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
+                                    <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
+                                      {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                                    </select>
+                                    <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateDamageEntry(entry.id, { dir: e.target.value })}>
+                                      {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                    <select className="inp" value={entry.size} onChange={(e)=>updateDamageEntry(entry.id, { size: e.target.value })}>
+                                      {SIZES.map(s => <option key={s} value={s}>{s}"</option>)}
+                                    </select>
+                                    <label className="btn" style={{flex:"0 0 auto", cursor:"pointer"}}>
+                                      Photo
+                                      <input type="file" accept="image/*" style={{display:"none"}}
+                                        onChange={(e)=> e.target.files?.[0] && setDamageEntryPhoto(entry.id, e.target.files[0])}/>
+                                    </label>
+                                    <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteDamageEntry(entry.id)}>Del</button>
+                                  </div>
+                                  {renderFileName(entry.photo, "indent")}
+                                </div>
+                              ))}
+                              {!(activeItem.data.damageEntries || []).length && (
+                                <div className="tiny" style={{marginTop:4}}>No hail indicators added.</div>
+                              )}
+                            </div>
+
+                            {renderWindIndicatorSection(activeItem)}
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Detail Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.detailPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Overview Photo (optional)</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Optional notes..."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Exterior Item</button>
+                          </>
+                        )}
+
+                        {/* === GARAGE === */}
+                        {activeItem.type === "garage" && (
+                          <>
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Facing Direction</div>
+                              <div className="radioGrid">
+                                {GARAGE_FACINGS.map(d => (
+                                  <div key={d} className={"radio " + (activeItem.data.facing===d ? "active":"")} onClick={()=>updateItemData("facing", d)}>{d}</div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Bay Count</div>
+                              <div className="row">
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("bayCount", Math.max(0, (activeItem.data.bayCount || 0) - 1))}
+                                >
+                                  −
+                                </button>
+                                <input
+                                  className="inp"
+                                  type="number"
+                                  min="0"
+                                  value={activeItem.data.bayCount || 0}
+                                  onChange={(e)=>updateItemData("bayCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                />
+                                <button
+                                  className="btn"
+                                  style={{flex:"0 0 auto"}}
+                                  onClick={()=>updateItemData("bayCount", (activeItem.data.bayCount || 0) + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Overview Photo</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.overviewPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Detail Photo (optional)</div>
+                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
+                              {renderFileName(activeItem.data.detailPhoto)}
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Notes</div>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Door condition, opener, etc."/>
+                            </div>
+
+                            <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Garage</button>
                           </>
                         )}
 
@@ -11389,7 +12013,7 @@ const loadPdfJs = () => {
                 </table>
 
                 <div className="printGrid">
-                  {pageItems.filter(i => i.type === "apt" || i.type === "ds").map(it => (
+                  {pageItems.filter(i => i.type === "apt" || i.type === "ds" || i.type === "eapt").map(it => (
                     <div className="printCard" key={`hail-${it.id}`}>
                       <div style={{fontWeight:800}}>{componentTitle(it)}</div>
                       <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>

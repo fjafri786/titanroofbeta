@@ -19,7 +19,7 @@ const APP_VERSION = "4.2.3";
  * selection — matching standard tap-to-pick behavior.
  */
 
-export type ToolKey = "ts" | "apt" | "ds" | "wind" | "obs" | "free";
+export type ToolKey = "ts" | "apt" | "ds" | "eapt" | "garage" | "wind" | "obs" | "free";
 export type ViewMode = "diagram" | "photos" | "report";
 
 export interface UnifiedBarProps {
@@ -110,6 +110,8 @@ const I = {
   ts: () => (<svg {...sv}><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M12 9v6"/><path d="M9 12h6"/></svg>),
   apt: () => (<svg {...sv}><rect x="3" y="11" width="18" height="9" rx="1.5"/><path d="M12 11V5"/><rect x="9" y="3" width="6" height="3" rx="1" fill="currentColor" stroke="none"/></svg>),
   ds: () => (<svg {...sv}><rect x="7" y="3" width="10" height="17" rx="1.5"/><path d="M12 7v7"/><path d="M9 12l3 3 3-3"/></svg>),
+  eapt: () => (<svg {...sv}><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 5v14"/><path d="M4 12h16"/></svg>),
+  garage: () => (<svg {...sv}><path d="M3 21V10l9-6 9 6v11"/><rect x="6" y="13" width="12" height="8" rx="0.75"/><path d="M6 17h12"/></svg>),
   wind: () => (<svg {...sv}><path d="M3 8h11a3 3 0 1 0-3-3"/><path d="M3 12h15"/><path d="M3 16h11a3 3 0 1 1-3 3"/></svg>),
   obs: () => (<svg {...sv}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>),
   free: () => (<svg {...sv}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>),
@@ -122,13 +124,15 @@ const I = {
   save: () => (<svg {...sv}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>),
 };
 
-const TOOL_DEFS: { key: ToolKey; label: string; short: string; icon: keyof typeof I }[] = [
-  { key: "ts", label: "Test Square", short: "TS", icon: "ts" },
-  { key: "apt", label: "Appurtenance", short: "APT", icon: "apt" },
-  { key: "ds", label: "Downspout", short: "DS", icon: "ds" },
-  { key: "wind", label: "Wind", short: "W", icon: "wind" },
-  { key: "obs", label: "Observation", short: "OBS", icon: "obs" },
-  { key: "free", label: "Draw", short: "DRAW", icon: "free" },
+const TOOL_DEFS: { key: ToolKey; label: string; short: string; icon: keyof typeof I; scope: "roof" | "exterior" | "both" }[] = [
+  { key: "ts", label: "Test Square", short: "TS", icon: "ts", scope: "roof" },
+  { key: "apt", label: "Appurtenance (roof)", short: "APT", icon: "apt", scope: "roof" },
+  { key: "ds", label: "Downspout", short: "DS", icon: "ds", scope: "exterior" },
+  { key: "eapt", label: "Exterior Item (window, HVAC, meter, fixture)", short: "EXT", icon: "eapt", scope: "exterior" },
+  { key: "garage", label: "Garage", short: "GAR", icon: "garage", scope: "exterior" },
+  { key: "wind", label: "Wind", short: "W", icon: "wind", scope: "both" },
+  { key: "obs", label: "Observation", short: "OBS", icon: "obs", scope: "both" },
+  { key: "free", label: "Draw", short: "DRAW", icon: "free", scope: "both" },
 ];
 
 const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
