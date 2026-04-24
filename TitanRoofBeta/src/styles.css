@@ -6499,9 +6499,9 @@
          inline so we don't burn a second row on one label. */
       :root{
         /* Two-row title cluster: project name on row 1 (~20px), view
-           tabs + tool strip on row 2 (~35px). Total sits inside the
-           90-120px design band. */
-        --unifiedbar-height: 100px;
+           tabs + tool strip on row 2 (~35px). Tightened to a shorter
+           band so the bar gives more room back to the canvas. */
+        --unifiedbar-height: 76px;
       }
       body.useUnifiedBar{
         --topbar-height: var(--safe-top);
@@ -7118,11 +7118,12 @@
         .ubIconBtn .ubIcon{ width: 16px; height: 16px; }
         .ubRightDivider{ margin: 0 3px; }
         .ubUserBtn{ width: 30px; height: 30px; margin-left: 4px; }
-        /* Reclaim the space the Titan Roof brand pill used to hold
-           on tablet widths — a clean icon row + project title is
-           all we need here. The desktop-sized hit target is already
-           provided by the Back button. */
-        .ubBrand{ display: none; }
+        /* Keep the Titan Roof brand pill visible across every iPad
+           orientation — the blue pill is the primary wayfinding
+           anchor, so hiding it in portrait made the bar feel
+           inconsistent between orientations. Tighten padding
+           instead so the icon row still fits. */
+        .ubBrand{ padding: 4px 8px; margin-right: 6px; }
         .ubPillLabel{ display: none; }
         .ubPillBtn{ padding: 4px 6px; }
         .ubPillIcon .ubIcon{ width: 16px; height: 16px; }
