@@ -7,7 +7,7 @@ import UnifiedBar from "./components/UnifiedBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
-import { AutosaveProvider } from "./autosave/AutosaveContext";
+import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
 import { legacyBlobGet, legacyBlobPut, legacyBlobDelete } from "./storage/legacyBlobStore";
 import { registerPreLeaveFlush } from "./storage";
@@ -1328,6 +1328,12 @@ const loadPdfJs = () => {
       }
 
       export function App(){
+        // Bridge the legacy workspace to the ProjectStore. The legacy
+        // save path writes to localStorage[STORAGE_KEY]; autosave's
+        // forceSave reads that key and promotes it into the current
+        // ProjectRecord so the dashboard sees manual saves and imports
+        // without waiting for the 10-second ticker.
+        const { forceSave: forceProjectStoreSync } = useAutosave();
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
@@ -2057,13 +2063,21 @@ const loadPdfJs = () => {
               }
             });
           }
+          // Manual saves promote the legacy snapshot into the ProjectRecord
+          // right away so the dashboard card reflects the save without
+          // waiting for the next 10-second autosave tick.
+          if(source === "manual"){
+            forceProjectStoreSync().catch(err => {
+              console.warn("Failed to sync manual save to project store", err);
+            });
+          }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
           setLastSavedAt({ source, time: timeString });
           if(source === "manual"){
             showSaveNotice(timeString);
           }
           return true;
-        }, [buildState, showSaveNotice, pushAutoSaveSnapshot]);
+        }, [buildState, showSaveNotice, pushAutoSaveSnapshot, forceProjectStoreSync]);
 
         const restoreAutoSave = useCallback(() => {
           const history = readAutoSaveHistory();
@@ -2137,9 +2151,23 @@ const loadPdfJs = () => {
               const text = typeof reader.result === "string" ? reader.result : "";
               if(!text) throw new Error("Empty file");
               const raw = JSON.parse(text);
-              // Accept both the wrapped format ({ app, data }) and a bare snapshot
-              const snapshot = raw?.data && typeof raw.data === "object" ? raw.data : raw;
-              if(!snapshot || typeof snapshot !== "object" || !snapshot.roof){
+              // Accept three shapes:
+              //   (A) Workspace export:  { app, data: <raw snapshot> }    — data has `.roof`
+              //   (B) Dashboard export:  { app, data: <ProjectRecord> }   — data has `.sections[0].pages[0].engine.state`
+              //   (C) Bare raw snapshot with no wrapper                   — top-level has `.roof`
+              const container = raw?.data && typeof raw.data === "object" ? raw.data : raw;
+              let snapshot: any = null;
+              if(container && typeof container === "object"){
+                if((container as any).roof){
+                  snapshot = container;
+                } else if(Array.isArray((container as any).sections)){
+                  const embedded = (container as any).sections[0]?.pages?.[0]?.engine?.state;
+                  if(embedded && typeof embedded === "object" && embedded.roof){
+                    snapshot = embedded;
+                  }
+                }
+              }
+              if(!snapshot){
                 throw new Error("Not a valid TitanRoof project file");
               }
               applySnapshot(snapshot, "import");
@@ -2151,13 +2179,19 @@ const loadPdfJs = () => {
               legacyBlobPut(STORAGE_KEY, snapshot).catch(persistErr => {
                 console.warn("Failed to persist imported state to IndexedDB", persistErr);
               });
+              // Promote the imported snapshot into the current ProjectRecord
+              // so the dashboard reflects the import immediately instead of
+              // waiting for the next autosave tick or a return-to-dashboard.
+              forceProjectStoreSync().catch(err => {
+                console.warn("Failed to promote imported state to project store", err);
+              });
             }catch(err){
               console.warn("Failed to import project file", err);
               window.alert("Could not open that project file. Please pick a valid TitanRoof .json export.");
             }
           };
           reader.readAsText(file);
-        }, [applySnapshot]);
+        }, [applySnapshot, forceProjectStoreSync]);
 
         useEffect(() => {
           let cancelled = false;
