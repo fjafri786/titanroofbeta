@@ -58,6 +58,7 @@ interface AutosaveContextValue {
 const AutosaveContext = createContext<AutosaveContextValue | null>(null);
 
 const AUTOSAVE_INTERVAL_MS = 10_000;
+const SAVED_DISPLAY_MS = 5_000;
 const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
 
 export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -189,6 +190,17 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setStatus("error");
     }
   }, [isOnline]);
+
+  // Let the "Saved" confirmation fade back to idle after a short
+  // display window so the indicator doesn't look stuck forever when
+  // nothing else has changed.
+  useEffect(() => {
+    if (status !== "saved") return;
+    const timer = window.setTimeout(() => {
+      setStatus((prev) => (prev === "saved" ? "idle" : prev));
+    }, SAVED_DISPLAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [status, lastSavedAt]);
 
   // 10-second ticker while a project is open in the workspace.
   useEffect(() => {

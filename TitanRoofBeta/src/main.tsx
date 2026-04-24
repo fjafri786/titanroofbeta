@@ -5266,13 +5266,16 @@ const loadPdfJs = () => {
         // entries, without having to duplicate the JSX three times.
         const renderWindIndicatorSection = (item) => (
           <div style={{marginBottom:10}}>
-            <div className="row" style={{marginBottom:8}}>
-              <div style={{flex:1}}>
-                <div className="lbl" style={{marginBottom:2}}>Wind Indicators ({(item.data.windEntries || []).length})</div>
-                <div className="tiny">Log displaced / detached / loose conditions. Add a photo per finding.</div>
-              </div>
-              <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={() => addWindEntry()}>
-                Add
+            <div className="row indicatorHeader" style={{marginBottom:8}}>
+              <div className="lbl indicatorHeaderLabel">Wind ({(item.data.windEntries || []).length})</div>
+              <button
+                type="button"
+                className="iconBtn indicatorAddBtn"
+                onClick={() => addWindEntry()}
+                title="Add wind indicator"
+                aria-label="Add wind indicator"
+              >
+                <Icon name="plus" />
               </button>
             </div>
             {(item.data.windEntries || []).map((entry, idx) => (
@@ -5292,7 +5295,7 @@ const loadPdfJs = () => {
                   </label>
                   <button className="btn btnDanger" style={{flex:"0 0 auto"}} onClick={()=>deleteWindEntry(entry.id)}>Del</button>
                 </div>
-                {renderFileName(entry.photo, "indent")}
+                {renderPhotoThumb(entry.photo, "indent")}
               </div>
             ))}
             {!(item.data.windEntries || []).length && (
@@ -9220,13 +9223,13 @@ const loadPdfJs = () => {
                       let title = "Items";
                       let color = "var(--border)";
                       let iconName = "panel";
-                      if(type==="ts"){ title="Test Squares (roof)"; color="var(--c-ts)"; iconName="ts"; }
-                      if(type==="apt"){ title="Appurtenances (roof)"; color="var(--c-apt)"; iconName="apt"; }
-                      if(type==="ds"){ title="Downspouts (exterior)"; color="var(--c-ds)"; iconName="ds"; }
+                      if(type==="ts"){ title="Test Squares"; color="var(--c-ts)"; iconName="ts"; }
+                      if(type==="apt"){ title="Appurtenances"; color="var(--c-apt)"; iconName="apt"; }
+                      if(type==="ds"){ title="Downspouts"; color="var(--c-ds)"; iconName="ds"; }
                       if(type==="eapt"){ title="Exterior Items"; color="var(--c-eapt)"; iconName="apt"; }
                       if(type==="garage"){ title="Garages"; color="var(--c-garage)"; iconName="apt"; }
                       if(type==="obs"){ title="Observations"; color="var(--c-obs)"; iconName="obs"; }
-                      if(type==="wind"){ title="Wind Items"; color="var(--c-wind)"; iconName="wind"; }
+                      if(type==="wind"){ title="Wind"; color="var(--c-wind)"; iconName="wind"; }
                       if(type==="free"){ title="Free Draw"; color="#0EA5E9"; iconName="free"; }
 
                       const allLocked = group.every(item => !!item.data?.locked);
@@ -9405,11 +9408,17 @@ const loadPdfJs = () => {
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="row" style={{marginBottom:8}}>
-                                <div style={{flex:1}}>
-                                  <div className="lbl" style={{marginBottom:2}}>Hail Bruises ({(activeItem.data.bruises||[]).length})</div>
-                                </div>
-                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={addBruise}>Add</button>
+                              <div className="row indicatorHeader" style={{marginBottom:8}}>
+                                <div className="lbl indicatorHeaderLabel">Hail ({(activeItem.data.bruises||[]).length})</div>
+                                <button
+                                  type="button"
+                                  className="iconBtn indicatorAddBtn"
+                                  onClick={addBruise}
+                                  title="Add hail bruise"
+                                  aria-label="Add hail bruise"
+                                >
+                                  <Icon name="plus" />
+                                </button>
                               </div>
 
                               {(activeItem.data.bruises||[]).map((b, idx) => (
@@ -9490,13 +9499,16 @@ const loadPdfJs = () => {
                             <div className="hr"></div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="row" style={{marginBottom:8}}>
-                                <div style={{flex:1}}>
-                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
-                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
-                                </div>
-                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
-                                  Add
+                              <div className="row indicatorHeader" style={{marginBottom:8}}>
+                                <div className="lbl indicatorHeaderLabel">Hail ({(activeItem.data.damageEntries || []).length})</div>
+                                <button
+                                  type="button"
+                                  className="iconBtn indicatorAddBtn"
+                                  onClick={()=>addDamageEntry()}
+                                  title="Add hail indicator"
+                                  aria-label="Add hail indicator"
+                                >
+                                  <Icon name="plus" />
                                 </button>
                               </div>
 
@@ -9588,13 +9600,16 @@ const loadPdfJs = () => {
                             <div className="hr"></div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="row" style={{marginBottom:8}}>
-                                <div style={{flex:1}}>
-                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
-                                  <div className="tiny">Add one entry per dent or spatter. Use “Spatter + Dent” when both happen at the same spot.</div>
-                                </div>
-                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
-                                  Add
+                              <div className="row indicatorHeader" style={{marginBottom:8}}>
+                                <div className="lbl indicatorHeaderLabel">Hail ({(activeItem.data.damageEntries || []).length})</div>
+                                <button
+                                  type="button"
+                                  className="iconBtn indicatorAddBtn"
+                                  onClick={()=>addDamageEntry()}
+                                  title="Add hail indicator"
+                                  aria-label="Add hail indicator"
+                                >
+                                  <Icon name="plus" />
                                 </button>
                               </div>
 
@@ -9743,13 +9758,16 @@ const loadPdfJs = () => {
                             <div className="hr"></div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="row" style={{marginBottom:8}}>
-                                <div style={{flex:1}}>
-                                  <div className="lbl" style={{marginBottom:2}}>Hail Indicators ({(activeItem.data.damageEntries || []).length})</div>
-                                  <div className="tiny">Document spatter or dents observed on the casing / housing.</div>
-                                </div>
-                                <button className="btn btnPrimary" style={{flex:"0 0 auto"}} onClick={()=>addDamageEntry()}>
-                                  Add
+                              <div className="row indicatorHeader" style={{marginBottom:8}}>
+                                <div className="lbl indicatorHeaderLabel">Hail ({(activeItem.data.damageEntries || []).length})</div>
+                                <button
+                                  type="button"
+                                  className="iconBtn indicatorAddBtn"
+                                  onClick={()=>addDamageEntry()}
+                                  title="Add hail indicator"
+                                  aria-label="Add hail indicator"
+                                >
+                                  <Icon name="plus" />
                                 </button>
                               </div>
 

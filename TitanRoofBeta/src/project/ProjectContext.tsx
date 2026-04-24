@@ -116,7 +116,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const legacyBlob = page?.engine?.state;
       try {
         if (legacyBlob && typeof legacyBlob === "object") {
-          localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(legacyBlob));
+          // Keep residenceName in sync with the dashboard project
+          // name so a rename on the card does not get clobbered on
+          // return by the workspace's own residenceName.
+          const seeded = { ...(legacyBlob as Record<string, unknown>), residenceName: record.name };
+          localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seeded));
         } else {
           localStorage.removeItem(LEGACY_STATE_KEY);
         }
