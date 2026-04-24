@@ -60,7 +60,7 @@ export interface MenuBarProps {
   onToggleToolbar: () => void;
 
   // Tools
-  onPickTool: (key: "ts" | "apt" | "ds" | "wind" | "obs" | "free") => void;
+  onPickTool: (key: "ts" | "apt" | "ds" | "eapt" | "garage" | "wind" | "obs" | "free") => void;
   currentTool: string | null;
   onBeginScaleReference: () => void;
   onClearScaleReference: () => void;
@@ -175,9 +175,11 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
       sections: [
         {
           items: [
-            { label: "Test Square", onClick: () => fire(() => props.onPickTool("ts")), checked: props.currentTool === "ts" },
-            { label: "Appurtenance", onClick: () => fire(() => props.onPickTool("apt")), checked: props.currentTool === "apt" },
+            { label: "Test Square (roof)", onClick: () => fire(() => props.onPickTool("ts")), checked: props.currentTool === "ts" },
+            { label: "Appurtenance (roof)", onClick: () => fire(() => props.onPickTool("apt")), checked: props.currentTool === "apt" },
             { label: "Downspout", onClick: () => fire(() => props.onPickTool("ds")), checked: props.currentTool === "ds" },
+            { label: "Exterior Item (window / HVAC / meter / fixture)", onClick: () => fire(() => props.onPickTool("eapt")), checked: props.currentTool === "eapt" },
+            { label: "Garage", onClick: () => fire(() => props.onPickTool("garage")), checked: props.currentTool === "garage" },
             { label: "Wind", onClick: () => fire(() => props.onPickTool("wind")), checked: props.currentTool === "wind" },
             { label: "Observation", onClick: () => fire(() => props.onPickTool("obs")), checked: props.currentTool === "obs" },
             { label: "Draw / Shapes", onClick: () => fire(() => props.onPickTool("free")), checked: props.currentTool === "free" },
