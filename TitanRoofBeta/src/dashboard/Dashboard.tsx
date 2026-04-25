@@ -147,7 +147,35 @@ const Dashboard: React.FC = () => {
       if (!clean) return;
       const record = await projectStore.get(user.userId, summary.projectId);
       if (!record) return;
-      await projectStore.put({ ...record, name: clean, updatedAt: new Date().toISOString() });
+      // Push the renamed name into the stored legacy snapshot too
+      // (residenceName + reportData.project.projectName) so opening
+      // the project on another device — or exporting it right away —
+      // reflects the new name without waiting for the workspace to
+      // re-save. Keeps file name ≡ project title ≡ report name.
+      const updated: typeof record = {
+        ...record,
+        name: clean,
+        updatedAt: new Date().toISOString(),
+        sections: record.sections.map((section, si) =>
+          si === 0
+            ? {
+                ...section,
+                pages: section.pages.map((page, pi) =>
+                  pi === 0
+                    ? {
+                        ...page,
+                        engine: {
+                          ...page.engine,
+                          state: alignLegacyName(page.engine?.state, clean),
+                        },
+                      }
+                    : page,
+                ),
+              }
+            : section,
+        ),
+      };
+      await projectStore.put(updated);
       await refreshSummaries();
     },
     [user, refreshSummaries],
@@ -523,6 +551,39 @@ const LoadMore: React.FC<{
 export default Dashboard;
 
 // --- helpers --------------------------------------------------------
+
+/**
+ * Rewrite residenceName + reportData.project.projectName inside a
+ * stored legacy state blob so they match the dashboard record's
+ * canonical name. Used by Rename so a project that was last saved
+ * as "Johnson residence" and gets renamed to "Smith residence" on
+ * the dashboard still opens (and exports) as "Smith residence".
+ */
+function alignLegacyName(state: unknown, name: string): unknown {
+  if (!state || typeof state !== "object") return state;
+  const base = state as Record<string, unknown>;
+  const existingReport = base.reportData;
+  const reportObj =
+    existingReport && typeof existingReport === "object"
+      ? (existingReport as Record<string, unknown>)
+      : {};
+  const existingProject = reportObj.project;
+  const projectObj =
+    existingProject && typeof existingProject === "object"
+      ? (existingProject as Record<string, unknown>)
+      : {};
+  return {
+    ...base,
+    residenceName: name,
+    reportData: {
+      ...reportObj,
+      project: {
+        ...projectObj,
+        projectName: name,
+      },
+    },
+  };
+}
 
 function formatDate(iso?: string): string {
   if (!iso) return "—";

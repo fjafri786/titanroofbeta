@@ -7109,6 +7109,49 @@
       .ubToolChip.active.tool-obs{ background: rgba(147,51,234,0.12); color: var(--c-obs); }
       .ubToolChip.active.tool-free{ background: rgba(14,165,233,0.12); color: #0EA5E9; }
 
+      /* iPad — the 12.9" iPad Pro landscape viewport is 1366px, past
+         every width breakpoint below, so width alone doesn't tell us
+         we're on a tablet. `body.isTabletLike` is set by main.tsx
+         using UA + touch detection (see there) and forces the
+         icon-only compact top bar on every iPad orientation, matching
+         the rules under `@media (max-width: 1180px)`. Keeping both
+         selectors means non-iPad touch laptops still get the compact
+         layout when their viewport is narrow, while iPads always get
+         it regardless of width. */
+      body.isTabletLike .ubToolChip{ padding: 2px 4px; min-height: 28px; gap: 0; }
+      body.isTabletLike .ubToolChip .ubToolLabel{ display: none; }
+      body.isTabletLike .ubToolChip.active{ gap: 4px; padding: 2px 8px 2px 4px; }
+      body.isTabletLike .ubToolChip.active .ubToolLabel{ display: inline; font-size: 11px; font-weight: 700; }
+      body.isTabletLike .ubToolChip .ubToolIcon{ width: 18px; height: 18px; }
+      body.isTabletLike .ubToolChip .ubToolIcon .ubIcon{ width: 16px; height: 16px; }
+      body.isTabletLike .ubToolStrip{ gap: 2px; margin-left: 4px; padding: 2px 0 2px 6px; }
+      body.isTabletLike .unifiedBar{ padding: 0 10px; }
+      body.isTabletLike .ubRowMain{ gap: 6px; }
+      body.isTabletLike .ubBack{ width: 30px; height: 30px; }
+      body.isTabletLike .ubIconBtn{ width: 32px; height: 32px; }
+      body.isTabletLike .ubIconBtn .ubIcon{ width: 16px; height: 16px; }
+      body.isTabletLike .ubRightDivider{ margin: 0 3px; }
+      body.isTabletLike .ubUserBtn{ width: 30px; height: 30px; margin-left: 4px; }
+      body.isTabletLike .ubBrand{ padding: 4px 8px; margin-right: 6px; }
+      body.isTabletLike .ubBrandText{ display: none; }
+      body.isTabletLike .ubPillLabel{ display: none; }
+      body.isTabletLike .ubPillBtn{ padding: 4px 6px; }
+      body.isTabletLike .ubPillIcon .ubIcon{ width: 16px; height: 16px; }
+      body.isTabletLike .ubTitle{ font-size: 15px; }
+      body.isTabletLike .ubSubtitle{ font-size: 11px; }
+      body.isTabletLike .ubTitleCluster{ gap: 2px; }
+      body.isTabletLike .ubTitleSubRow{ gap: 4px; }
+      body.isTabletLike .ubTitleBlock{ max-width: min(28vw, 260px); }
+      body.isTabletLike .ubSaveStatus .saveIndicatorTime{ display: none; }
+      /* Panels inside the sidebar also tighten on iPad so the
+         right-column controls match the smaller top bar. */
+      body.isTabletLike .panel .lbl{ font-size:10px; letter-spacing:0.35px; margin-bottom:5px; }
+      body.isTabletLike .panel .tiny{ display:none; }
+      body.isTabletLike .panel .inp,
+      body.isTabletLike .panel select,
+      body.isTabletLike .panel textarea{ padding:7px 9px; font-size:12px; border-radius:10px; }
+      body.isTabletLike .panel .btn{ padding:6px 10px; font-size:12px; }
+
       /* iPad landscape (≤1180px): compress the bar so it stops
          looking like the desktop layout. Tool chips drop labels,
          shrink, and the strip is horizontally scrollable (see
