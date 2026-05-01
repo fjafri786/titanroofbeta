@@ -9,11 +9,7 @@ import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
 import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
-import { legacyBlobGet, legacyBlobPut, legacyBlobDelete } from "./storage/legacyBlobStore";
-import { registerPreLeaveFlush } from "./storage";
-// Phase 6 foundation: Tailwind + design tokens. Imported before
-// styles.css so the legacy hand-written rules win any specificity
-// ties while we migrate surfaces over incrementally.
+import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
 import "./ui/tailwind.css";
 import "./styles.css";
 
@@ -1297,10 +1293,6 @@ const loadPdfJs = () => {
       };
 
       const STORAGE_KEY = "titanroof.v4.2.3.state";
-      const AUTOSAVE_HISTORY_KEY = `${STORAGE_KEY}.autosaveHistory`;
-      const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
-      const AUTO_SAVE_RETENTION_MS = 30 * 60 * 1000;
-      const AUTO_SAVE_HISTORY_LIMIT = Math.floor(AUTO_SAVE_RETENTION_MS / AUTO_SAVE_INTERVAL_MS);
 
       /**
        * Small helper: useState backed by localStorage so
@@ -1328,12 +1320,11 @@ const loadPdfJs = () => {
       }
 
       export function App(){
-        // Bridge the legacy workspace to the ProjectStore. The legacy
-        // save path writes to localStorage[STORAGE_KEY]; autosave's
-        // forceSave reads that key and promotes it into the current
-        // ProjectRecord so the dashboard sees manual saves and imports
-        // without waiting for the 10-second ticker.
-        const { forceSave: forceProjectStoreSync } = useAutosave();
+        // Bridge the workspace to the ProjectStore. The autosave loop
+        // reads engine state through the registered snapshot callback
+        // (no localStorage round-trip) and writes the project record
+        // straight to IndexedDB.
+        const { forceSave: forceProjectStoreSync, registerEngineSnapshot } = useAutosave();
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
@@ -1890,6 +1881,18 @@ const loadPdfJs = () => {
           exteriorPhotos: serializeExteriorPhotos(exteriorPhotos)
         }), [residenceName, frontFaces, roof, pages, activePageId, items, reportData, exteriorPhotos]);
 
+        // Always-current handle on the latest buildState. The autosave
+        // loop and returnToDashboard call this through the registered
+        // snapshot callbacks to read canvas state straight from React
+        // memory, side-stepping localStorage entirely.
+        const buildStateRef = useRef(buildState);
+        useEffect(() => { buildStateRef.current = buildState; }, [buildState]);
+
+        useEffect(() => {
+          const unregister = registerEngineSnapshot(() => buildStateRef.current());
+          return unregister;
+        }, [registerEngineSnapshot]);
+
         const applySnapshot = useCallback((parsed, source = "import") => {
           if(!parsed?.roof) return;
           const restoredProjectName = parsed.residenceName || parsed.reportData?.project?.projectName || "";
@@ -1952,63 +1955,6 @@ const loadPdfJs = () => {
         const saveNoticeTimeoutRef = useRef(null);
         const [saveNotice, setSaveNotice] = useState(null);
 
-        // Autosave history lives in IndexedDB (not localStorage) because it
-        // holds up to six full snapshots — the single biggest consumer of the
-        // ~5 MB Safari/iPad localStorage quota. An in-memory ref keeps the
-        // save path synchronous; IDB is hydrated on mount and written on
-        // every update.
-        const autoSaveHistoryRef = useRef([]);
-
-        useEffect(() => {
-          let cancelled = false;
-          (async () => {
-            try{
-              const fromIdb = await legacyBlobGet(AUTOSAVE_HISTORY_KEY);
-              if(cancelled) return;
-              if(Array.isArray(fromIdb)){
-                autoSaveHistoryRef.current = fromIdb.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
-                // One-shot migration: if localStorage still has the legacy
-                // key, drop it so its bytes are returned to the quota.
-                try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
-                return;
-              }
-              // Migrate any history that was previously kept in localStorage.
-              const raw = localStorage.getItem(AUTOSAVE_HISTORY_KEY);
-              if(!raw) return;
-              const parsed = JSON.parse(raw);
-              if(!Array.isArray(parsed)) return;
-              const cleaned = parsed.filter(entry => entry?.snapshot && Number.isFinite(entry?.savedAt));
-              autoSaveHistoryRef.current = cleaned;
-              try{ await legacyBlobPut(AUTOSAVE_HISTORY_KEY, cleaned); }catch{}
-              try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
-            }catch(err){
-              console.warn("Failed to load autosave history", err);
-            }
-          })();
-          return () => { cancelled = true; };
-        }, []);
-
-        const readAutoSaveHistory = useCallback(() => autoSaveHistoryRef.current.slice(), []);
-
-        const saveAutoSaveHistory = useCallback((history) => {
-          autoSaveHistoryRef.current = history;
-          legacyBlobPut(AUTOSAVE_HISTORY_KEY, history).catch(err => {
-            console.warn("Failed to save autosave history", err);
-          });
-        }, []);
-
-        const pushAutoSaveSnapshot = useCallback((snapshot) => {
-          const now = Date.now();
-          const earliest = now - AUTO_SAVE_RETENTION_MS;
-          const nextHistory = [
-            ...readAutoSaveHistory(),
-            { savedAt: now, snapshot }
-          ]
-            .filter(entry => entry.savedAt >= earliest)
-            .slice(-AUTO_SAVE_HISTORY_LIMIT);
-          saveAutoSaveHistory(nextHistory);
-        }, [readAutoSaveHistory, saveAutoSaveHistory]);
-
         const showSaveNotice = useCallback((timeString) => {
           if(saveNoticeTimeoutRef.current){
             clearTimeout(saveNoticeTimeoutRef.current);
@@ -2028,47 +1974,19 @@ const loadPdfJs = () => {
         const saveState = useCallback((source = "manual") => {
           const snapshot = buildState();
           const serialized = JSON.stringify(snapshot);
-          let localOk = false;
           try{
             localStorage.setItem(STORAGE_KEY, serialized);
-            localOk = true;
           }catch(err){
-            // Safari/iPad localStorage is capped near 5 MB. If any legacy
-            // autosave history is still occupying bytes here, drop it and
-            // retry — that alone is usually enough to land the save.
-            try{ localStorage.removeItem(AUTOSAVE_HISTORY_KEY); }catch{}
-            try{
-              localStorage.setItem(STORAGE_KEY, serialized);
-              localOk = true;
-            }catch(retryErr){
-              console.warn("localStorage save failed, falling back to IndexedDB", retryErr);
-            }
+            console.warn("localStorage save skipped", err);
           }
-          // Always mirror to IndexedDB so a quota-blocked localStorage no
-          // longer strands the user's work. Fire-and-forget; we only care
-          // about the failure case to suppress the alert.
-          const idbPromise = legacyBlobPut(STORAGE_KEY, snapshot).catch(err => {
-            console.warn("IndexedDB fallback save failed", err);
-            return err;
-          });
-          if(source === "auto"){
-            pushAutoSaveSnapshot(snapshot);
-          }
-          if(!localOk){
-            // Don't block the save path — but if the IDB write also rejects,
-            // surface the alert asynchronously so the user still knows.
-            idbPromise.then(result => {
-              if(result instanceof Error && source === "manual"){
-                window.alert("Save failed on this device. Please use Save As to export a backup file immediately.");
-              }
-            });
-          }
-          // Manual saves promote the legacy snapshot into the ProjectRecord
-          // right away so the dashboard card reflects the save without
-          // waiting for the next 10-second autosave tick.
-          if(source === "manual"){
+          // Manual saves push the snapshot into the ProjectRecord
+          // straight away (the autosave loop reads through the
+          // registered engine snapshot and writes IndexedDB) so the
+          // dashboard reflects the save without waiting for the next
+          // tick.
+          if(source === "manual" || source === "auto"){
             forceProjectStoreSync().catch(err => {
-              console.warn("Failed to sync manual save to project store", err);
+              console.warn("Failed to sync save to project store", err);
             });
           }
           const timeString = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -2077,39 +1995,7 @@ const loadPdfJs = () => {
             showSaveNotice(timeString);
           }
           return true;
-        }, [buildState, showSaveNotice, pushAutoSaveSnapshot, forceProjectStoreSync]);
-
-        const restoreAutoSave = useCallback(() => {
-          const history = readAutoSaveHistory();
-          if(!history.length){
-            window.alert("No autosave history found yet. Autosaves are created every 5 minutes and kept for 30 minutes.");
-            return;
-          }
-          const options = history.map((entry, idx) => {
-            const label = new Date(entry.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-            return `${idx + 1}. ${label}`;
-          });
-          const selection = window.prompt(
-            `Recover a checkpoint from the last 30 minutes:\n${options.join("\n")}\n\nEnter a number (latest is ${history.length}).`,
-            String(history.length)
-          );
-          if(selection == null) return;
-          const selectedIndex = parseInt(selection, 10) - 1;
-          const chosen = history[selectedIndex];
-          if(!chosen){
-            window.alert("Invalid checkpoint selection.");
-            return;
-          }
-          applySnapshot(chosen.snapshot, "recovery");
-          try{
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(chosen.snapshot));
-          }catch(err){
-            console.warn("Failed to persist recovered state to localStorage", err);
-          }
-          legacyBlobPut(STORAGE_KEY, chosen.snapshot).catch(err => {
-            console.warn("Failed to persist recovered state to IndexedDB", err);
-          });
-        }, [applySnapshot, readAutoSaveHistory]);
+        }, [buildState, showSaveNotice, forceProjectStoreSync]);
 
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
@@ -2176,12 +2062,10 @@ const loadPdfJs = () => {
               }catch(persistErr){
                 console.warn("Failed to persist imported state to localStorage", persistErr);
               }
-              legacyBlobPut(STORAGE_KEY, snapshot).catch(persistErr => {
-                console.warn("Failed to persist imported state to IndexedDB", persistErr);
-              });
-              // Promote the imported snapshot into the current ProjectRecord
-              // so the dashboard reflects the import immediately instead of
-              // waiting for the next autosave tick or a return-to-dashboard.
+              // Promote the imported snapshot into the current
+              // ProjectRecord so the dashboard reflects the import
+              // immediately instead of waiting for the next autosave
+              // tick or a return-to-dashboard.
               forceProjectStoreSync().catch(err => {
                 console.warn("Failed to promote imported state to project store", err);
               });
@@ -2194,54 +2078,21 @@ const loadPdfJs = () => {
         }, [applySnapshot, forceProjectStoreSync]);
 
         useEffect(() => {
-          let cancelled = false;
-          (async () => {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if(raw){
-              try{
-                const parsed = JSON.parse(raw);
-                if(!cancelled) applySnapshot(parsed, "restore");
-                return;
-              }catch(err){
-                console.warn("Failed to restore saved state from localStorage", err);
-              }
-            }
-            // localStorage missing or corrupt — fall through to the
-            // IndexedDB mirror that saveState keeps in sync.
-            try{
-              const fromIdb = await legacyBlobGet(STORAGE_KEY);
-              if(cancelled) return;
-              if(fromIdb && typeof fromIdb === "object"){
-                applySnapshot(fromIdb, "restore");
-                return;
-              }
-            }catch(err){
-              console.warn("Failed to restore saved state from IndexedDB", err);
-            }
-            if(cancelled) return;
-            const history = readAutoSaveHistory();
-            const fallback = history[history.length - 1];
-            if(fallback?.snapshot){
-              applySnapshot(fallback.snapshot, "recovery");
-            }
-          })();
-          return () => { cancelled = true; };
-        }, [applySnapshot, readAutoSaveHistory]);
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if(!raw) return;
+          try{
+            const parsed = JSON.parse(raw);
+            applySnapshot(parsed, "restore");
+          }catch(err){
+            console.warn("Failed to restore saved state from localStorage", err);
+          }
+        }, [applySnapshot]);
 
-        useEffect(() => {
-          const id = setInterval(() => saveState("auto"), AUTO_SAVE_INTERVAL_MS);
-          return () => clearInterval(id);
-        }, [saveState]);
-
-        // Debounced "silent" autosave on any change: persists the latest snapshot to
-        // localStorage 2 seconds after edits stop, so the app can always restore work on
-        // accidental reload. The 5-minute interval above still creates the retained
-        // checkpoints used by Recover.
+        // Debounced "silent" autosave: persists a localStorage backup
+        // 2 s after edits stop. This is a secondary copy; the autosave
+        // loop in AutosaveContext is the source of truth and writes the
+        // ProjectRecord through to IndexedDB.
         const silentAutoSaveRef = useRef(null);
-        // Synchronous flush used by "back to dashboard" and beforeunload.
-        // Mirrors the silent autosave payload but skips the 2-second
-        // debounce, so edits made in the last moments before leaving are
-        // still written to the legacy key that the project store reads.
         const flushStateSync = useCallback(() => {
           if(silentAutoSaveRef.current){
             clearTimeout(silentAutoSaveRef.current);
@@ -2253,9 +2104,6 @@ const loadPdfJs = () => {
           }catch(err){
             console.warn("Pre-leave flush localStorage skipped", err);
           }
-          legacyBlobPut(STORAGE_KEY, snapshot).catch(err => {
-            console.warn("Pre-leave flush IndexedDB skipped", err);
-          });
           setLastSavedAt(prev => prev?.source === "manual"
             ? prev
             : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
@@ -2266,26 +2114,14 @@ const loadPdfJs = () => {
           }
           silentAutoSaveRef.current = setTimeout(() => {
             const snapshot = buildState();
-            let wrote = false;
             try{
               localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-              wrote = true;
+              setLastSavedAt(prev => prev?.source === "manual"
+                ? prev
+                : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
             }catch(err){
-              // localStorage may be full on iPad — the IndexedDB mirror
-              // below still lands the snapshot.
               console.warn("Silent autosave localStorage skipped", err);
             }
-            legacyBlobPut(STORAGE_KEY, snapshot).then(() => {
-              wrote = true;
-            }).catch(err => {
-              console.warn("Silent autosave IndexedDB skipped", err);
-            }).finally(() => {
-              if(wrote){
-                setLastSavedAt(prev => prev?.source === "manual"
-                  ? prev
-                  : { source: "silent", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
-              }
-            });
           }, 2000);
           return () => {
             if(silentAutoSaveRef.current){
@@ -2294,18 +2130,18 @@ const loadPdfJs = () => {
           };
         }, [buildState]);
 
-        // Expose the synchronous flush so returnToDashboard (in
-        // ProjectContext) can land the latest in-memory state before it
-        // snapshots localStorage. Also run it on tab close so field work
-        // is not lost if the user hits the home button, swipes the tab
-        // away, or the browser backgrounds and kills the page.
+        // Register the snapshot getter and pre-leave flush so
+        // returnToDashboard and the pagehide handler can land the
+        // latest in-memory state durably before the canvas unmounts.
         useEffect(() => {
-          const unregister = registerPreLeaveFlush(flushStateSync);
+          const unregisterFlush = registerPreLeaveFlush(flushStateSync);
+          const unregisterSnapshot = registerEngineSnapshotGetter(() => buildStateRef.current());
           const onPageLeave = () => { flushStateSync(); };
           window.addEventListener("beforeunload", onPageLeave);
           window.addEventListener("pagehide", onPageLeave);
           return () => {
-            unregister();
+            unregisterFlush();
+            unregisterSnapshot();
             window.removeEventListener("beforeunload", onPageLeave);
             window.removeEventListener("pagehide", onPageLeave);
           };
@@ -3977,10 +3813,6 @@ const loadPdfJs = () => {
           setPanelView("items");
           counts.current = { ts:1, apt:1, wind:1, obs:1, ds:1, free:1, eapt:1, garage:1 };
           localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(AUTOSAVE_HISTORY_KEY);
-          autoSaveHistoryRef.current = [];
-          legacyBlobDelete(STORAGE_KEY).catch(() => {});
-          legacyBlobDelete(AUTOSAVE_HISTORY_KEY).catch(() => {});
           setLastSavedAt(null);
           setGroupOpen({ ts:false, apt:false, ds:false, eapt:false, garage:false, obs:false, wind:false, free:false });
         };
@@ -7021,7 +6853,6 @@ const loadPdfJs = () => {
             onSave={() => saveState("manual")}
             onSaveAs={exportTrp}
             onOpen={() => trpInputRef.current?.click()}
-            onRecover={restoreAutoSave}
             onExport={() => { saveState("manual"); setExportMode(true); }}
             lastSavedAt={lastSavedAt}
             exportDisabled={exportDisabled}
@@ -7992,7 +7823,6 @@ const loadPdfJs = () => {
               onSave={() => saveState("manual")}
               onSaveAs={exportTrp}
               onOpen={() => trpInputRef.current?.click()}
-              onRecover={restoreAutoSave}
               onExport={() => { saveState("manual"); setExportMode(true); }}
               exportDisabled={exportDisabled}
               onEditProjectProperties={() => setHdrEditOpen(true)}
@@ -8009,7 +7839,6 @@ const loadPdfJs = () => {
                 onSave={() => saveState("manual")}
                 onSaveAs={exportTrp}
                 onOpen={() => trpInputRef.current?.click()}
-                onRecover={restoreAutoSave}
                 onExport={() => { saveState("manual"); setExportMode(true); }}
                 exportDisabled={exportDisabled}
                 onEditProjectProperties={() => setHdrEditOpen(true)}
@@ -11665,9 +11494,6 @@ const loadPdfJs = () => {
                       </button>
                       <button className="btn" type="button" onClick={() => handleMobileAction(() => trpInputRef.current?.click())}>
                         Open
-                      </button>
-                      <button className="btn" type="button" onClick={() => handleMobileAction(restoreAutoSave)}>
-                        Recover
                       </button>
                       <button className="btn" type="button" disabled={exportDisabled} onClick={() => handleMobileAction(() => { saveState("manual"); setExportMode(true); })}>
                         Export

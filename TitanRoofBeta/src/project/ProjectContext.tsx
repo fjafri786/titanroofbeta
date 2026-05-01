@@ -5,45 +5,30 @@ import {
   cryptoRandomId,
   approximateSize,
   invokePreLeaveFlush,
+  getEngineSnapshotDirect,
   type EngineName,
   type ProjectRecord,
   type ProjectSummary,
 } from "../storage";
-import { migrateLegacyV4IfNeeded, LEGACY_STATE_KEY } from "../storage/legacyV4Migration";
-import { legacyBlobDelete } from "../storage/legacyBlobStore";
 import { buildLegacyThumbnail } from "../storage/thumbnailBuilder";
 import { useAuth } from "../auth/AuthContext";
 
 /**
- * The legacy workspace keeps three copies of its state blob:
- * localStorage[LEGACY_STATE_KEY], the same key mirrored in the
- * legacyBlobs IndexedDB, and an autosave-history list stored under
- * LEGACY_STATE_KEY + ".autosaveHistory" (also mirrored). Opening a
- * new project only cleared the localStorage copy, so main.tsx's
- * fallback chain (localStorage → IDB → autosave history) would
- * "inherit" the previous project's PDF / markup when those mirrors
- * still held stale data. `resetLegacyWorkspaceMirrors` nukes all
- * three so every project switch starts clean.
- */
-const AUTOSAVE_HISTORY_KEY = `${LEGACY_STATE_KEY}.autosaveHistory`;
-
-/**
- * Project context — owns the "current project" state that the
- * AppShell uses to decide between Dashboard and Workspace, plus
- * the helpers for opening, creating, and returning from a project.
+ * Project context. Owns the "current project" state that the AppShell
+ * uses to decide between Dashboard and Workspace, plus the helpers for
+ * opening, creating, importing, and returning from a project.
  *
- * Phase 3 keeps the workspace's legacy save path (it still reads
- * and writes `titanroof.v4.2.3.state`). On open we hydrate that
- * legacy key from the project record; on return we snapshot it
- * back into the record and persist via the ProjectStore.
+ * The workspace canvas keeps its own React state. On open we seed
+ * localStorage[LEGACY_STATE_KEY] from the project record so the canvas
+ * can hydrate on mount; on return we read the canvas state directly
+ * from the registered engine-snapshot callback (with localStorage as a
+ * fallback) and persist the updated record.
  */
+
+const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
 
 type Route = "dashboard" | "workspace";
 
-/** Outcome of a successful import — used by the dashboard to render
- *  a confirmation toast that actually names the project the user
- *  just dropped in (so a file called "Smith Residence.json" doesn't
- *  silently land as "Imported Project" with no acknowledgement). */
 export interface ImportedProjectInfo {
   projectId: string;
   name: string;
@@ -52,9 +37,10 @@ export interface ImportedProjectInfo {
 export interface ImportProjectOptions {
   /** If true (default), navigate to the workspace immediately after
    *  the import. When false, the imported project is saved to the
-   *  dashboard store but the user stays on the dashboard — closer
-   *  to a file-explorer "drop file in folder" gesture. */
+   *  dashboard store but the user stays on the dashboard. */
   openAfter?: boolean;
+  /** Optional folder to land the imported project under. */
+  folder?: string;
 }
 
 interface ProjectContextValue {
@@ -63,13 +49,7 @@ interface ProjectContextValue {
   summaries: ProjectSummary[];
   isLoadingSummaries: boolean;
   openProject: (projectId: string) => Promise<void>;
-  createProject: (opts?: { name?: string; engine?: EngineName }) => Promise<void>;
-  /** Import a project JSON file exported from the dashboard
-   *  "Download" action and store it under the current user. By
-   *  default opens the project in the workspace; pass
-   *  `{ openAfter: false }` to save to the dashboard list without
-   *  navigating away. Resolves to the new project's id and name so
-   *  the dashboard can surface feedback. */
+  createProject: (opts?: { name?: string; engine?: EngineName; folder?: string }) => Promise<void>;
   importProjectFromFile: (
     file: File,
     opts?: ImportProjectOptions,
@@ -88,9 +68,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [currentProject, setCurrentProject] = useState<ProjectRecord | null>(null);
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
   const [isLoadingSummaries, setIsLoadingSummaries] = useState(true);
-  const migrationRanForUser = useRef<string | null>(null);
 
-  // Migrate legacy state + start listening for summary changes.
+  const cleanupRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     if (!userId) {
       setSummaries([]);
@@ -101,27 +81,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let cancelled = false;
     setIsLoadingSummaries(true);
 
-    (async () => {
-      if (migrationRanForUser.current !== userId) {
-        try {
-          await migrateLegacyV4IfNeeded(projectStore, userId);
-        } catch (err) {
-          console.warn("Legacy v4 migration skipped", err);
-        }
-        migrationRanForUser.current = userId;
-      }
-
+    const unsubscribe = projectStore.subscribe(userId, (next) => {
       if (cancelled) return;
-
-      const unsubscribe = projectStore.subscribe(userId, (next) => {
-        if (cancelled) return;
-        setSummaries(next);
-        setIsLoadingSummaries(false);
-      });
-
-      // Cleanup lives in the outer effect return.
-      cleanupRef.current = unsubscribe;
-    })();
+      setSummaries(next);
+      setIsLoadingSummaries(false);
+    });
+    cleanupRef.current = unsubscribe;
 
     return () => {
       cancelled = true;
@@ -131,8 +96,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     };
   }, [userId]);
-
-  const cleanupRef = useRef<(() => void) | null>(null);
 
   const refreshSummaries = useCallback(async () => {
     if (!userId) return;
@@ -149,7 +112,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return;
       }
 
-      await hydrateLegacyWorkspaceStorage(record);
+      hydrateLegacyWorkspaceStorage(record);
 
       setCurrentProject(record);
       setRoute("workspace");
@@ -158,7 +121,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const createProject = useCallback(
-    async (opts?: { name?: string; engine?: EngineName }) => {
+    async (opts?: { name?: string; engine?: EngineName; folder?: string }) => {
       if (!userId) return;
       const now = new Date().toISOString();
       const record = createBlankProjectRecord({
@@ -168,13 +131,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         now,
         engine: opts?.engine,
       });
-      await projectStore.put(record);
-      // Wipe every legacy workspace mirror so the new project starts
-      // with a truly blank canvas, then seed residenceName into
-      // localStorage so the title bar shows the project name on
-      // mount instead of waiting for the user to re-type it.
-      await hydrateLegacyWorkspaceStorage(record);
-      setCurrentProject(record);
+      const folder = opts?.folder?.trim();
+      const stored: ProjectRecord = folder ? { ...record, folder } : record;
+      await projectStore.put(stored);
+      hydrateLegacyWorkspaceStorage(stored);
+      setCurrentProject(stored);
       setRoute("workspace");
     },
     [userId],
@@ -203,8 +164,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return null;
       }
 
+      const folder = opts?.folder?.trim();
+      const stored: ProjectRecord = folder ? { ...record, folder } : record;
+
       try {
-        await projectStore.put(record);
+        await projectStore.put(stored);
       } catch (err) {
         console.warn("Failed to store imported project", err);
         window.alert("Could not save the imported project. See console for details.");
@@ -213,11 +177,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const openAfter = opts?.openAfter ?? true;
       if (openAfter) {
-        await hydrateLegacyWorkspaceStorage(record);
-        setCurrentProject(record);
+        hydrateLegacyWorkspaceStorage(stored);
+        setCurrentProject(stored);
         setRoute("workspace");
       }
-      return { projectId: record.projectId, name: record.name };
+      return { projectId: stored.projectId, name: stored.name };
     },
     [userId],
   );
@@ -229,55 +193,40 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return;
     }
 
-    // The legacy workspace writes localStorage via a 2-second
-    // debounced autosave, so edits made in the last couple of seconds
-    // are still only in React state. Flush them synchronously before
-    // we snapshot, otherwise "back to dashboard" silently drops the
-    // most recent annotation / photo / note.
     invokePreLeaveFlush();
 
-    // Snapshot the current workspace state back into the record.
-    let legacyState: unknown = null;
-    try {
-      const raw = localStorage.getItem(LEGACY_STATE_KEY);
-      legacyState = raw ? JSON.parse(raw) : null;
-    } catch (err) {
-      console.warn("Could not read workspace state on return", err);
+    let workspaceState: unknown = getEngineSnapshotDirect();
+    if (!workspaceState) {
+      try {
+        const raw = localStorage.getItem(LEGACY_STATE_KEY);
+        workspaceState = raw ? JSON.parse(raw) : null;
+      } catch (err) {
+        console.warn("Could not read workspace state on return", err);
+      }
     }
 
-    // Build a dashboard thumbnail collage (diagram + first photo)
-    // before persisting, so the card picks it up immediately.
     let thumbnailDataUrl: string | undefined = currentProject.thumbnailDataUrl;
     try {
-      const generated = await buildLegacyThumbnail(legacyState);
+      const generated = await buildLegacyThumbnail(workspaceState);
       if (generated) thumbnailDataUrl = generated;
     } catch (err) {
       console.warn("Could not generate dashboard thumbnail", err);
     }
 
-    // Promote the latest project name from the workspace back to
-    // the dashboard record. We check residenceName first (the header
-    // input the user types in) and fall back to the report form's
-    // projectName — the two should stay in sync via updateProjectName
-    // in main.tsx, but we tolerate either one winning so a rename
-    // made in the report never gets silently dropped.
     const nextName =
-      extractResidenceName(legacyState) ||
-      extractReportProjectName(legacyState) ||
+      extractResidenceName(workspaceState) ||
+      extractReportProjectName(workspaceState) ||
       currentProject.name;
 
     const base: ProjectRecord = {
       ...currentProject,
       updatedAt: new Date().toISOString(),
       thumbnailDataUrl,
-      // Also promote a few common fields to the record so the
-      // dashboard card has something to show even if the user
-      // never renamed the project.
       name: nextName,
-      claimNumber: extractClaimNumber(legacyState) ?? currentProject.claimNumber,
-      address: extractAddress(legacyState) ?? currentProject.address,
+      claimNumber: extractClaimNumber(workspaceState) ?? currentProject.claimNumber,
+      address: extractAddress(workspaceState) ?? currentProject.address,
       inspectionDate:
-        extractInspectionDate(legacyState) ?? currentProject.inspectionDate,
+        extractInspectionDate(workspaceState) ?? currentProject.inspectionDate,
       sections: currentProject.sections.map((section, si) =>
         si === 0
           ? {
@@ -288,7 +237,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                       ...page,
                       engine: {
                         ...page.engine,
-                        state: alignLegacyStateName(legacyState, nextName),
+                        state: alignLegacyStateName(workspaceState, nextName),
                       },
                     }
                   : page,
@@ -297,8 +246,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           : section,
       ),
     };
-    // Cache the JSON size once per save so the dashboard does not
-    // need to re-serialize the full record on every render.
     const updated: ProjectRecord = {
       ...base,
       approxSizeBytes: approximateSize(base),
@@ -341,33 +288,20 @@ export function useProject(): ProjectContextValue {
 // --- helpers --------------------------------------------------------
 
 /**
- * Wipe every legacy workspace mirror (localStorage + IndexedDB +
- * autosave history, in both stores) and then seed localStorage with
- * exactly the state the target project expects. Without the wipe,
- * main.tsx's hydration at mount would fall through localStorage →
- * IndexedDB → autosave history and "inherit" the previous project's
- * PDF / markup into the new one.
- *
- * For projects with saved state (engine.state is an object) we seed
- * that state verbatim, with residenceName and reportData.project
- * .projectName forced to the record's canonical name so the top bar
- * and the report form always match the dashboard card. For brand new
- * projects (engine.state === null) we seed a minimal blank snapshot
- * containing just the name — enough for applySnapshot to attach it
- * to the React state without pulling in any old drawing data.
+ * Seed localStorage[LEGACY_STATE_KEY] from a project record so the
+ * canvas can hydrate from it on mount. Replaces any previous tenant of
+ * that key so opening a different project does not inherit the prior
+ * canvas content. residenceName and reportData.project.projectName are
+ * forced to the record's canonical name so the title bar and the
+ * report form always agree with the dashboard card.
  */
-async function hydrateLegacyWorkspaceStorage(record: ProjectRecord): Promise<void> {
+function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
   try { localStorage.removeItem(LEGACY_STATE_KEY); } catch {}
-  try { localStorage.removeItem(AUTOSAVE_HISTORY_KEY); } catch {}
-  await Promise.all([
-    legacyBlobDelete(LEGACY_STATE_KEY).catch(() => {}),
-    legacyBlobDelete(AUTOSAVE_HISTORY_KEY).catch(() => {}),
-  ]);
 
   const page = record.sections[0]?.pages[0];
-  const legacyBlob = page?.engine?.state;
-  const seed = legacyBlob && typeof legacyBlob === "object"
-    ? alignLegacyStateName(legacyBlob, record.name)
+  const stored = page?.engine?.state;
+  const seed = stored && typeof stored === "object"
+    ? alignLegacyStateName(stored, record.name)
     : buildBlankLegacySeed(record.name);
 
   try {
@@ -377,12 +311,6 @@ async function hydrateLegacyWorkspaceStorage(record: ProjectRecord): Promise<voi
   }
 }
 
-/**
- * Force both residenceName and reportData.project.projectName inside
- * a legacy state blob to match the given canonical name. Used on
- * open (so workspace always reflects the dashboard name) and on
- * return-to-dashboard (so the next open doesn't drift back).
- */
 function alignLegacyStateName(state: unknown, name: string): unknown {
   if (!state || typeof state !== "object") return state;
   const base = state as Record<string, unknown>;
@@ -409,13 +337,6 @@ function alignLegacyStateName(state: unknown, name: string): unknown {
   };
 }
 
-/**
- * Minimum snapshot main.tsx's applySnapshot will accept. `roof` must
- * be present (applySnapshot early-returns without it), and
- * residenceName / reportData.project.projectName carry the name so
- * the title bar renders it immediately on mount. Everything else is
- * left to the App component's in-memory defaults.
- */
 function buildBlankLegacySeed(projectName: string): Record<string, unknown> {
   return {
     residenceName: projectName,
@@ -439,11 +360,6 @@ function buildBlankLegacySeed(projectName: string): Record<string, unknown> {
   };
 }
 
-/**
- * Strip extension and tidy whitespace so a file called
- * "Smith Residence (final).json" lands on the dashboard as
- * "Smith Residence (final)" rather than "Imported Project".
- */
 function filenameToProjectName(filename: string): string {
   if (!filename) return "Imported Project";
   const withoutExt = filename.replace(/\.[a-zA-Z0-9]+$/, "");
@@ -458,15 +374,6 @@ function coerceImportedRecord(
 ): ProjectRecord | null {
   if (!parsed || typeof parsed !== "object") return null;
 
-  // Dashboard "Download" exports wrap the record in an envelope:
-  //   { format: "titanroof-project", data: ProjectRecord }
-  // Workspace "Export JSON" (the legacy menu item) exports either
-  //   { app, data: <raw snapshot with .roof> }
-  // or
-  //   { app, data: <ProjectRecord> }
-  // Both are valid ways to move a project between devices, so we
-  // accept all three shapes plus bare bodies for power users who
-  // hand-edit exports.
   const maybeEnvelope = parsed as { format?: unknown; data?: unknown };
   const body =
     maybeEnvelope.data && typeof maybeEnvelope.data === "object"
@@ -478,49 +385,6 @@ function coerceImportedRecord(
   const now = new Date().toISOString();
   const newId = cryptoRandomId();
 
-  // Shape A: raw legacy snapshot (has `.roof`). Wrap it in a fresh
-  // ProjectRecord with the snapshot as engine.state so the workspace
-  // opens it the same way a native project would.
-  if (!Array.isArray(candidate.sections) && candidate.roof) {
-    const snapshot = candidate as Record<string, unknown>;
-    const rawName =
-      (typeof snapshot.residenceName === "string" && snapshot.residenceName.trim()) ||
-      extractReportProjectName(snapshot) ||
-      fallbackName;
-    return {
-      projectId: newId,
-      userId,
-      name: rawName,
-      tags: [],
-      createdAt: now,
-      updatedAt: now,
-      status: "active",
-      sections: [
-        {
-          sectionId: cryptoRandomId(),
-          name: "Pages",
-          order: 0,
-          pages: [
-            {
-              pageId: cryptoRandomId(),
-              name: "Page 1",
-              order: 0,
-              engine: {
-                name: "legacy-v4",
-                version: "4.2.3",
-                state: alignLegacyStateName(snapshot, rawName),
-              },
-              notes: "",
-            },
-          ],
-        },
-      ],
-      attachments: [],
-      schemaVersion: 1,
-    };
-  }
-
-  // Shape B: full ProjectRecord (already has `.sections`).
   if (!Array.isArray(candidate.sections)) return null;
   const recordName =
     typeof candidate.name === "string" && candidate.name.trim()

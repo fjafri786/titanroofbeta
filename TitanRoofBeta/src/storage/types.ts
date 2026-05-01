@@ -76,6 +76,9 @@ export interface ProjectRecord {
   claimNumber?: string;
   address?: string;
   tags: string[];
+  /** Optional slash-separated folder path the project lives under
+   *  (e.g. "Residential/2026"). Empty / undefined means root. */
+  folder?: string;
 
   createdAt: string;
   updatedAt: string;
@@ -131,6 +134,8 @@ export interface ProjectSummary {
   reportStatus?: ReportStatus;
   /** Inspection date promoted from legacy workspace state. */
   inspectionDate?: string;
+  /** Slash-separated folder path the project lives under. */
+  folder?: string;
 }
 
 export type ProjectSort = "recent" | "name" | "created" | "status";
@@ -260,6 +265,7 @@ export function summarize(record: ProjectRecord): ProjectSummary {
     damageSummary: computeDamageSummary(legacy),
     reportStatus: record.reportStatus,
     inspectionDate: record.inspectionDate ?? extractInspectionDate(legacy),
+    folder: record.folder,
   };
 }
 

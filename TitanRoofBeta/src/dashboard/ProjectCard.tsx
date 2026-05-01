@@ -11,10 +11,12 @@ interface ProjectCardProps {
   onArchive: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onMoveToFolder?: () => void;
 }
 
 const HEAVY_WARN_BYTES = 20 * 1024 * 1024;
 const HEAVY_LIMIT_BYTES = 25 * 1024 * 1024;
+const RECENT_SAVE_MS = 10 * 60 * 1000;
 
 const ProjectCard: React.FC<ProjectCardProps> = (props) => {
   return (
@@ -24,7 +26,7 @@ const ProjectCard: React.FC<ProjectCardProps> = (props) => {
         <div className="projectCard projectCardBroken" role="alert">
           <div className="projectCardBrokenTitle">Could not display this project</div>
           <div className="projectCardBrokenMeta">
-            {props.summary.name || "Unnamed project"} — {error.message}
+            {props.summary.name || "Unnamed project"} · {error.message}
           </div>
           <div className="projectCardBrokenActions">
             <button type="button" onClick={retry}>
@@ -51,11 +53,11 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
   onArchive,
   onDelete,
   onDownload,
+  onMoveToFolder,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Close the menu on outside click.
   useEffect(() => {
     if (!menuOpen) return;
     const onDoc = (e: MouseEvent) => {
@@ -89,6 +91,13 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
     return parts.join(" · ");
   }, [summary.itemCountsByType]);
 
+  const recentlySaved = useMemo(() => {
+    if (!summary.updatedAt) return false;
+    const t = Date.parse(summary.updatedAt);
+    if (Number.isNaN(t)) return false;
+    return Date.now() - t < RECENT_SAVE_MS;
+  }, [summary.updatedAt]);
+
   return (
     <div
       ref={rootRef}
@@ -117,10 +126,30 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
         </div>
         <div className="projectCardBody">
           <div className="projectCardTitle">{summary.name}</div>
+          {summary.folder && (
+            <div className="projectCardFolder">
+              <FolderGlyph />
+              <span>{summary.folder}</span>
+            </div>
+          )}
           <div className="projectCardMeta">
             <span>{summary.claimNumber || "No claim #"}</span>
             <span className="projectCardDot">•</span>
             <span>Updated {formatDate(summary.updatedAt)}</span>
+          </div>
+          <div className="projectCardChips">
+            <span
+              className={`projectCardSavedChip ${recentlySaved ? "fresh" : ""}`}
+              title={summary.updatedAt ? `Last saved ${formatDate(summary.updatedAt)}` : "No save yet"}
+            >
+              <span className="projectCardSavedDot" aria-hidden="true" />
+              Last saved {formatRelative(summary.updatedAt)}
+            </span>
+            {summary.reportStatus && (
+              <span className={`projectCardChip status-${summary.reportStatus}`}>
+                {reportStatusLabel(summary.reportStatus)}
+              </span>
+            )}
           </div>
           {summary.inspectionDate && (
             <div className="projectCardInspected">
@@ -188,6 +217,11 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDuplicate(); }}>
             Duplicate
           </button>
+          {onMoveToFolder && (
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onMoveToFolder(); }}>
+              Move to folder…
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onDownload(); }}>
             Download (.json)
           </button>
@@ -209,8 +243,6 @@ const ProjectCardInner: React.FC<ProjectCardProps> = ({
 };
 
 export default ProjectCard;
-
-// --- Lazy thumbnail ------------------------------------------------
 
 const LazyThumbnail: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -243,7 +275,6 @@ const LazyThumbnail: React.FC<{ src?: string; alt: string }> = ({ src, alt }) =>
     return () => observer.disconnect();
   }, [visible]);
 
-  // Reset load failure when src changes.
   useEffect(() => {
     setFailed(false);
   }, [src]);
@@ -302,11 +333,12 @@ const ChipIcon: React.FC<{ kind: "photo" | "item" }> = ({ kind }) => {
   );
 };
 
-// The dashboard deliberately avoids rendering a "no damage" verdict before
-// the inspector finishes the report — the diagram-derived summary can be
-// misleading mid-inspection and we don't want to imply a conclusion to a
-// client who happens to glance at the dashboard. Only affirmative damage
-// indicators get a badge; "none" and "unknown" are hidden.
+const FolderGlyph: React.FC = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+  </svg>
+);
+
 function showDamageBadge(d?: DamageSummary): boolean {
   return d === "wind+hail" || d === "hail" || d === "wind";
 }
@@ -348,6 +380,27 @@ function formatDate(iso?: string): string {
   try {
     const d = new Date(iso);
     return d.toLocaleDateString([], { dateStyle: "medium" });
+  } catch {
+    return iso;
+  }
+}
+
+function formatRelative(iso?: string): string {
+  if (!iso) return "never";
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "never";
+  const diff = Date.now() - t;
+  if (diff < 0) return "just now";
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  try {
+    return new Date(iso).toLocaleDateString([], { dateStyle: "medium" });
   } catch {
     return iso;
   }

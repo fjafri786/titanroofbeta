@@ -61,7 +61,6 @@ export interface UnifiedBarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onOpen: () => void;
-  onRecover: () => void;
   onExport: () => void;
   exportDisabled?: boolean;
 
@@ -366,9 +365,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
           </button>
           <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onOpen)}>
             Open Project…
-          </button>
-          <button type="button" role="menuitem" className="ubMenuItem" onClick={() => fire(props.onRecover)}>
-            Recover Autosave…
           </button>
           <button
             type="button"
