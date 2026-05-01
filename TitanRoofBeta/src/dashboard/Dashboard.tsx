@@ -24,6 +24,14 @@ const STATUS_FILTERS: { key: "active" | "archived" | "all"; label: string }[] = 
   { key: "all", label: "All" },
 ];
 
+type ImportMode = "save" | "open";
+
+interface ImportToast {
+  projectId: string;
+  name: string;
+  mode: ImportMode;
+}
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const {
@@ -34,14 +42,21 @@ const Dashboard: React.FC = () => {
     refreshSummaries,
     isLoadingSummaries,
   } = useProject();
-  const openFileInputRef = useRef<HTMLInputElement | null>(null);
+  // Two separate <input>s so "Import to dashboard" and "Import &
+  // open" can each carry their own pending-mode state without a
+  // shared ref racing the file picker.
+  const importSaveInputRef = useRef<HTMLInputElement | null>(null);
+  const importOpenInputRef = useRef<HTMLInputElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<ProjectSort>("recent");
   const [view, setView] = useState<ViewMode>("grid");
   const [statusFilter, setStatusFilter] = useState<"active" | "archived" | "all">("active");
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+  const [addMenuOpen, setAddMenuOpen] = useState<boolean>(false);
+  const [importToast, setImportToast] = useState<ImportToast | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const addMenuRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo<ProjectSummary[]>(() => {
     const needle = query.trim().toLowerCase();
@@ -108,28 +123,74 @@ const Dashboard: React.FC = () => {
     return () => observer.disconnect();
   }, [hasMore, filtered.length]);
 
+  // Close the Add menu when the user clicks outside or hits Escape —
+  // the open state is purely local so we don't need a global manager,
+  // just enough behavior for the menu to feel like a real popover.
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const node = addMenuRef.current;
+      if (!node) return;
+      if (e.target instanceof Node && node.contains(e.target)) return;
+      setAddMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAddMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [addMenuOpen]);
+
+  // Auto-dismiss the import toast after a short window so it doesn't
+  // linger over the project list. Manual dismiss is also wired up
+  // below.
+  useEffect(() => {
+    if (!importToast) return;
+    const t = window.setTimeout(() => setImportToast(null), 8_000);
+    return () => window.clearTimeout(t);
+  }, [importToast]);
+
   const handleCreate = useCallback(() => {
+    setAddMenuOpen(false);
     const name = window.prompt("New project name", "Untitled Project");
     if (name === null) return;
     void createProject({ name: name || "Untitled Project", engine: "legacy-v4" });
   }, [createProject]);
 
-  const handleOpenFileClick = useCallback(() => {
-    openFileInputRef.current?.click();
+  const handleImportToDashboardClick = useCallback(() => {
+    setAddMenuOpen(false);
+    importSaveInputRef.current?.click();
   }, []);
 
-  const handleOpenFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportAndOpenClick = useCallback(() => {
+    setAddMenuOpen(false);
+    importOpenInputRef.current?.click();
+  }, []);
+
+  const handleImportFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>, mode: ImportMode) => {
       const file = e.target.files?.[0];
       // Reset so selecting the same file again still fires onChange.
       e.target.value = "";
       if (!file) return;
-      await importProjectFromFile(file);
+      const result = await importProjectFromFile(file, {
+        openAfter: mode === "open",
+      });
+      if (result && mode === "save") {
+        // Stay on the dashboard; surface a toast so the user knows
+        // the file landed in the list and where to find it.
+        setImportToast({ projectId: result.projectId, name: result.name, mode });
+      }
     },
     [importProjectFromFile],
   );
 
   const handleCreatePreview = useCallback(() => {
+    setAddMenuOpen(false);
     const name = window.prompt(
       "New tldraw-preview project name",
       "Preview Project",
@@ -285,34 +346,115 @@ const Dashboard: React.FC = () => {
           >
             Sign out
           </button>
-          <button
-            type="button"
-            className="dashSecondaryBtn"
-            onClick={handleCreatePreview}
-            title="Create a tldraw-powered preview project"
-          >
-            + Preview (tldraw)
-          </button>
-          <button
-            type="button"
-            className="dashSecondaryBtn"
-            onClick={handleOpenFileClick}
-            title="Open a TitanRoof project .json file"
-          >
-            Open File…
-          </button>
+          <div className="dashAddMenuWrap" ref={addMenuRef}>
+            <button
+              type="button"
+              className="dashPrimaryBtn"
+              aria-haspopup="menu"
+              aria-expanded={addMenuOpen}
+              onClick={() => setAddMenuOpen((v) => !v)}
+            >
+              + Add
+              <span className="dashAddMenuCaret" aria-hidden="true">▾</span>
+            </button>
+            {addMenuOpen && (
+              <div className="dashAddMenu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dashAddMenuItem"
+                  onClick={handleCreate}
+                >
+                  <span className="dashAddMenuIcon" aria-hidden="true">＋</span>
+                  <span className="dashAddMenuBody">
+                    <span className="dashAddMenuTitle">New blank project</span>
+                    <span className="dashAddMenuSub">Start a fresh field-capture project.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dashAddMenuItem"
+                  onClick={handleImportToDashboardClick}
+                >
+                  <span className="dashAddMenuIcon" aria-hidden="true">⇪</span>
+                  <span className="dashAddMenuBody">
+                    <span className="dashAddMenuTitle">Import .json to dashboard</span>
+                    <span className="dashAddMenuSub">Save a TitanRoof export to your project list — stays on the dashboard.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dashAddMenuItem"
+                  onClick={handleImportAndOpenClick}
+                >
+                  <span className="dashAddMenuIcon" aria-hidden="true">↗</span>
+                  <span className="dashAddMenuBody">
+                    <span className="dashAddMenuTitle">Import .json and open</span>
+                    <span className="dashAddMenuSub">Save the file as a project and jump straight into the canvas.</span>
+                  </span>
+                </button>
+                <div className="dashAddMenuDivider" role="separator" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dashAddMenuItem"
+                  onClick={handleCreatePreview}
+                >
+                  <span className="dashAddMenuIcon" aria-hidden="true">✦</span>
+                  <span className="dashAddMenuBody">
+                    <span className="dashAddMenuTitle">New tldraw preview</span>
+                    <span className="dashAddMenuSub">Experimental preview canvas (tldraw engine).</span>
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
           <input
-            ref={openFileInputRef}
+            ref={importSaveInputRef}
             type="file"
             accept=".json,application/json"
             style={{ display: "none" }}
-            onChange={(e) => { void handleOpenFileChange(e); }}
+            onChange={(e) => { void handleImportFileChange(e, "save"); }}
           />
-          <button type="button" className="dashPrimaryBtn" onClick={handleCreate}>
-            + New Project
-          </button>
+          <input
+            ref={importOpenInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: "none" }}
+            onChange={(e) => { void handleImportFileChange(e, "open"); }}
+          />
         </div>
       </header>
+
+      {importToast && (
+        <div className="dashToast" role="status" aria-live="polite">
+          <span className="dashToastIcon" aria-hidden="true">✓</span>
+          <span className="dashToastBody">
+            <b>"{importToast.name}"</b> was added to your dashboard.
+          </span>
+          <button
+            type="button"
+            className="dashSecondaryBtn small"
+            onClick={() => {
+              const id = importToast.projectId;
+              setImportToast(null);
+              void openProject(id);
+            }}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            className="dashToastClose"
+            aria-label="Dismiss notification"
+            onClick={() => setImportToast(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="dashToolbar">
         <div className="dashSearchWrap">

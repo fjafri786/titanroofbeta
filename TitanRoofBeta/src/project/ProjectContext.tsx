@@ -40,6 +40,23 @@ const AUTOSAVE_HISTORY_KEY = `${LEGACY_STATE_KEY}.autosaveHistory`;
 
 type Route = "dashboard" | "workspace";
 
+/** Outcome of a successful import — used by the dashboard to render
+ *  a confirmation toast that actually names the project the user
+ *  just dropped in (so a file called "Smith Residence.json" doesn't
+ *  silently land as "Imported Project" with no acknowledgement). */
+export interface ImportedProjectInfo {
+  projectId: string;
+  name: string;
+}
+
+export interface ImportProjectOptions {
+  /** If true (default), navigate to the workspace immediately after
+   *  the import. When false, the imported project is saved to the
+   *  dashboard store but the user stays on the dashboard — closer
+   *  to a file-explorer "drop file in folder" gesture. */
+  openAfter?: boolean;
+}
+
 interface ProjectContextValue {
   route: Route;
   currentProject: ProjectRecord | null;
@@ -48,10 +65,15 @@ interface ProjectContextValue {
   openProject: (projectId: string) => Promise<void>;
   createProject: (opts?: { name?: string; engine?: EngineName }) => Promise<void>;
   /** Import a project JSON file exported from the dashboard
-   *  "Download" action, store it under the current user and open it
-   *  in the workspace. Resolves to the new projectId so the dashboard
-   *  can surface feedback. */
-  importProjectFromFile: (file: File) => Promise<string | null>;
+   *  "Download" action and store it under the current user. By
+   *  default opens the project in the workspace; pass
+   *  `{ openAfter: false }` to save to the dashboard list without
+   *  navigating away. Resolves to the new project's id and name so
+   *  the dashboard can surface feedback. */
+  importProjectFromFile: (
+    file: File,
+    opts?: ImportProjectOptions,
+  ) => Promise<ImportedProjectInfo | null>;
   returnToDashboard: () => Promise<void>;
   refreshSummaries: () => Promise<void>;
 }
@@ -159,7 +181,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const importProjectFromFile = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (
+      file: File,
+      opts?: ImportProjectOptions,
+    ): Promise<ImportedProjectInfo | null> => {
       if (!userId) return null;
       let parsed: unknown;
       try {
@@ -171,7 +196,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return null;
       }
 
-      const record = coerceImportedRecord(parsed, userId);
+      const fallbackName = filenameToProjectName(file.name);
+      const record = coerceImportedRecord(parsed, userId, fallbackName);
       if (!record) {
         window.alert("That JSON doesn't look like a TitanRoof project export.");
         return null;
@@ -185,11 +211,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return null;
       }
 
-      await hydrateLegacyWorkspaceStorage(record);
-
-      setCurrentProject(record);
-      setRoute("workspace");
-      return record.projectId;
+      const openAfter = opts?.openAfter ?? true;
+      if (openAfter) {
+        await hydrateLegacyWorkspaceStorage(record);
+        setCurrentProject(record);
+        setRoute("workspace");
+      }
+      return { projectId: record.projectId, name: record.name };
     },
     [userId],
   );
@@ -411,7 +439,23 @@ function buildBlankLegacySeed(projectName: string): Record<string, unknown> {
   };
 }
 
-function coerceImportedRecord(parsed: unknown, userId: string): ProjectRecord | null {
+/**
+ * Strip extension and tidy whitespace so a file called
+ * "Smith Residence (final).json" lands on the dashboard as
+ * "Smith Residence (final)" rather than "Imported Project".
+ */
+function filenameToProjectName(filename: string): string {
+  if (!filename) return "Imported Project";
+  const withoutExt = filename.replace(/\.[a-zA-Z0-9]+$/, "");
+  const cleaned = withoutExt.replace(/[_-]+/g, " ").trim();
+  return cleaned || "Imported Project";
+}
+
+function coerceImportedRecord(
+  parsed: unknown,
+  userId: string,
+  fallbackName: string = "Imported Project",
+): ProjectRecord | null {
   if (!parsed || typeof parsed !== "object") return null;
 
   // Dashboard "Download" exports wrap the record in an envelope:
@@ -442,7 +486,7 @@ function coerceImportedRecord(parsed: unknown, userId: string): ProjectRecord | 
     const rawName =
       (typeof snapshot.residenceName === "string" && snapshot.residenceName.trim()) ||
       extractReportProjectName(snapshot) ||
-      "Imported Project";
+      fallbackName;
     return {
       projectId: newId,
       userId,
@@ -481,7 +525,7 @@ function coerceImportedRecord(parsed: unknown, userId: string): ProjectRecord | 
   const recordName =
     typeof candidate.name === "string" && candidate.name.trim()
       ? candidate.name.trim()
-      : "Imported Project";
+      : fallbackName;
   return {
     ...candidate,
     projectId: newId,
