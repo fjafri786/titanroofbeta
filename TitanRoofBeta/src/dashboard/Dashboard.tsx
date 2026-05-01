@@ -13,7 +13,7 @@ const SKELETON_COUNT = 6;
 
 const SORT_OPTIONS: { key: ProjectSort; label: string }[] = [
   { key: "recent", label: "Recently updated" },
-  { key: "name", label: "Name (A–Z)" },
+  { key: "name", label: "Name (A-Z)" },
   { key: "created", label: "Date created" },
   { key: "status", label: "Status" },
 ];
@@ -32,6 +32,12 @@ interface ImportToast {
   mode: ImportMode;
 }
 
+interface FolderEntry {
+  name: string;
+  path: string;
+  count: number;
+}
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const {
@@ -42,9 +48,6 @@ const Dashboard: React.FC = () => {
     refreshSummaries,
     isLoadingSummaries,
   } = useProject();
-  // Two separate <input>s so "Import to dashboard" and "Import &
-  // open" can each carry their own pending-mode state without a
-  // shared ref racing the file picker.
   const importSaveInputRef = useRef<HTMLInputElement | null>(null);
   const importOpenInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -55,22 +58,57 @@ const Dashboard: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
   const [addMenuOpen, setAddMenuOpen] = useState<boolean>(false);
   const [importToast, setImportToast] = useState<ImportToast | null>(null);
+  const [currentFolder, setCurrentFolder] = useState<string>("");
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const filtered = useMemo<ProjectSummary[]>(() => {
-    const needle = query.trim().toLowerCase();
+  const needle = query.trim().toLowerCase();
+  const isSearching = needle.length > 0;
+
+  const statusFiltered = useMemo<ProjectSummary[]>(() => {
     const statusMatch = (s: ProjectStatus) => {
       if (statusFilter === "all") return s !== "deleted";
       return s === statusFilter;
     };
-    const pool = summaries.filter((p) => statusMatch(p.status));
+    return summaries.filter((p) => statusMatch(p.status));
+  }, [summaries, statusFilter]);
+
+  const folderEntries = useMemo<FolderEntry[]>(() => {
+    if (isSearching) return [];
+    const prefix = currentFolder ? currentFolder + "/" : "";
+    const counts = new Map<string, number>();
+    for (const p of statusFiltered) {
+      const folder = (p.folder || "").trim();
+      if (!folder) continue;
+      if (currentFolder) {
+        if (folder !== currentFolder && !folder.startsWith(prefix)) continue;
+      }
+      const remainder = currentFolder ? folder.slice(prefix.length) : folder;
+      if (!remainder) continue;
+      const segment = remainder.split("/")[0];
+      if (!segment) continue;
+      const fullPath = currentFolder ? `${currentFolder}/${segment}` : segment;
+      counts.set(fullPath, (counts.get(fullPath) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([path, count]) => ({ name: path.split("/").pop() || path, path, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [statusFiltered, currentFolder, isSearching]);
+
+  const filtered = useMemo<ProjectSummary[]>(() => {
+    const folderMatch = (p: ProjectSummary): boolean => {
+      if (isSearching) return true;
+      const folder = (p.folder || "").trim();
+      return folder === currentFolder;
+    };
+    const pool = statusFiltered.filter(folderMatch);
     const searched = needle
       ? pool.filter((p) => {
           if (p.name.toLowerCase().includes(needle)) return true;
           if (p.claimNumber?.toLowerCase().includes(needle)) return true;
           if (p.address?.toLowerCase().includes(needle)) return true;
           if (p.tags.some((t) => t.toLowerCase().includes(needle))) return true;
+          if (p.folder?.toLowerCase().includes(needle)) return true;
           return false;
         })
       : pool;
@@ -89,12 +127,11 @@ const Dashboard: React.FC = () => {
       }
     });
     return sorted;
-  }, [summaries, query, sort, statusFilter]);
+  }, [statusFiltered, needle, sort, currentFolder, isSearching]);
 
-  // Reset pagination when the filter / sort / search changes.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, sort, statusFilter, view]);
+  }, [query, sort, statusFilter, view, currentFolder]);
 
   const visible = useMemo(
     () => filtered.slice(0, visibleCount),
@@ -102,7 +139,6 @@ const Dashboard: React.FC = () => {
   );
   const hasMore = visible.length < filtered.length;
 
-  // Auto-load more when the sentinel scrolls into view.
   useEffect(() => {
     if (!hasMore) return;
     const el = loadMoreRef.current;
@@ -123,9 +159,6 @@ const Dashboard: React.FC = () => {
     return () => observer.disconnect();
   }, [hasMore, filtered.length]);
 
-  // Close the Add menu when the user clicks outside or hits Escape —
-  // the open state is purely local so we don't need a global manager,
-  // just enough behavior for the menu to feel like a real popover.
   useEffect(() => {
     if (!addMenuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -145,9 +178,6 @@ const Dashboard: React.FC = () => {
     };
   }, [addMenuOpen]);
 
-  // Auto-dismiss the import toast after a short window so it doesn't
-  // linger over the project list. Manual dismiss is also wired up
-  // below.
   useEffect(() => {
     if (!importToast) return;
     const t = window.setTimeout(() => setImportToast(null), 8_000);
@@ -158,8 +188,22 @@ const Dashboard: React.FC = () => {
     setAddMenuOpen(false);
     const name = window.prompt("New project name", "Untitled Project");
     if (name === null) return;
-    void createProject({ name: name || "Untitled Project", engine: "legacy-v4" });
-  }, [createProject]);
+    void createProject({
+      name: name || "Untitled Project",
+      engine: "legacy-v4",
+      folder: currentFolder || undefined,
+    });
+  }, [createProject, currentFolder]);
+
+  const handleNewFolder = useCallback(() => {
+    setAddMenuOpen(false);
+    const name = window.prompt("New folder name", "");
+    if (name === null) return;
+    const clean = name.trim().replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
+    if (!clean) return;
+    const path = currentFolder ? `${currentFolder}/${clean}` : clean;
+    setCurrentFolder(path);
+  }, [currentFolder]);
 
   const handleImportToDashboardClick = useCallback(() => {
     setAddMenuOpen(false);
@@ -174,19 +218,17 @@ const Dashboard: React.FC = () => {
   const handleImportFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>, mode: ImportMode) => {
       const file = e.target.files?.[0];
-      // Reset so selecting the same file again still fires onChange.
       e.target.value = "";
       if (!file) return;
       const result = await importProjectFromFile(file, {
         openAfter: mode === "open",
+        folder: currentFolder || undefined,
       });
       if (result && mode === "save") {
-        // Stay on the dashboard; surface a toast so the user knows
-        // the file landed in the list and where to find it.
         setImportToast({ projectId: result.projectId, name: result.name, mode });
       }
     },
-    [importProjectFromFile],
+    [importProjectFromFile, currentFolder],
   );
 
   const handleCreatePreview = useCallback(() => {
@@ -196,8 +238,12 @@ const Dashboard: React.FC = () => {
       "Preview Project",
     );
     if (name === null) return;
-    void createProject({ name: name || "Preview Project", engine: "tldraw" });
-  }, [createProject]);
+    void createProject({
+      name: name || "Preview Project",
+      engine: "tldraw",
+      folder: currentFolder || undefined,
+    });
+  }, [createProject, currentFolder]);
 
   const handleRename = useCallback(
     async (summary: ProjectSummary) => {
@@ -208,11 +254,6 @@ const Dashboard: React.FC = () => {
       if (!clean) return;
       const record = await projectStore.get(user.userId, summary.projectId);
       if (!record) return;
-      // Push the renamed name into the stored legacy snapshot too
-      // (residenceName + reportData.project.projectName) so opening
-      // the project on another device — or exporting it right away —
-      // reflects the new name without waiting for the workspace to
-      // re-save. Keeps file name ≡ project title ≡ report name.
       const updated: typeof record = {
         ...record,
         name: clean,
@@ -321,6 +362,51 @@ const Dashboard: React.FC = () => {
     [user],
   );
 
+  const allFolders = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    for (const p of summaries) {
+      const f = (p.folder || "").trim();
+      if (f) set.add(f);
+    }
+    return Array.from(set).sort();
+  }, [summaries]);
+
+  const handleMoveToFolder = useCallback(
+    async (summary: ProjectSummary) => {
+      if (!user) return;
+      const promptLines = allFolders.length
+        ? `Existing folders:\n${allFolders.map((f) => "  " + f).join("\n")}\n\nEnter a folder path (blank = root):`
+        : "Enter a folder path (blank = root):";
+      const next = window.prompt(promptLines, summary.folder || "");
+      if (next === null) return;
+      const clean = next.trim().replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
+      const record = await projectStore.get(user.userId, summary.projectId);
+      if (!record) return;
+      const updated = {
+        ...record,
+        folder: clean || undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      await projectStore.put(updated);
+      await refreshSummaries();
+    },
+    [user, allFolders, refreshSummaries],
+  );
+
+  const breadcrumbs = useMemo(() => {
+    const parts = currentFolder ? currentFolder.split("/") : [];
+    const segs: { label: string; path: string }[] = [{ label: "All projects", path: "" }];
+    let acc = "";
+    for (const seg of parts) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      segs.push({ label: seg, path: acc });
+    }
+    return segs;
+  }, [currentFolder]);
+
+  const isEmpty = !isLoadingSummaries && filtered.length === 0 && folderEntries.length === 0;
+  const totalSummaries = summaries.length;
+
   return (
     <div className="dashRoot">
       <header className="dashHeader">
@@ -375,12 +461,24 @@ const Dashboard: React.FC = () => {
                   type="button"
                   role="menuitem"
                   className="dashAddMenuItem"
+                  onClick={handleNewFolder}
+                >
+                  <span className="dashAddMenuIcon" aria-hidden="true">▤</span>
+                  <span className="dashAddMenuBody">
+                    <span className="dashAddMenuTitle">New folder</span>
+                    <span className="dashAddMenuSub">Group projects under a shared path.</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="dashAddMenuItem"
                   onClick={handleImportToDashboardClick}
                 >
                   <span className="dashAddMenuIcon" aria-hidden="true">⇪</span>
                   <span className="dashAddMenuBody">
                     <span className="dashAddMenuTitle">Import .json to dashboard</span>
-                    <span className="dashAddMenuSub">Save a TitanRoof export to your project list — stays on the dashboard.</span>
+                    <span className="dashAddMenuSub">Save a TitanRoof export to your project list.</span>
                   </span>
                 </button>
                 <button
@@ -392,7 +490,7 @@ const Dashboard: React.FC = () => {
                   <span className="dashAddMenuIcon" aria-hidden="true">↗</span>
                   <span className="dashAddMenuBody">
                     <span className="dashAddMenuTitle">Import .json and open</span>
-                    <span className="dashAddMenuSub">Save the file as a project and jump straight into the canvas.</span>
+                    <span className="dashAddMenuSub">Save the file as a project and jump into the canvas.</span>
                   </span>
                 </button>
                 <div className="dashAddMenuDivider" role="separator" />
@@ -461,7 +559,7 @@ const Dashboard: React.FC = () => {
           <input
             type="search"
             className="dashSearchInput"
-            placeholder="Search projects, claims, addresses, tags…"
+            placeholder="Search across all folders..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -528,6 +626,33 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {!isSearching && (
+        <nav className="dashBreadcrumbs" aria-label="Folder breadcrumbs">
+          {breadcrumbs.map((crumb, i) => {
+            const isLast = i === breadcrumbs.length - 1;
+            if (isLast) {
+              return (
+                <span key={crumb.path || "root"} className="dashBreadcrumbCurrent">
+                  {crumb.label}
+                </span>
+              );
+            }
+            return (
+              <React.Fragment key={crumb.path || "root"}>
+                <button
+                  type="button"
+                  className="dashBreadcrumbLink"
+                  onClick={() => setCurrentFolder(crumb.path)}
+                >
+                  {crumb.label}
+                </button>
+                <span className="dashBreadcrumbSep" aria-hidden="true">/</span>
+              </React.Fragment>
+            );
+          })}
+        </nav>
+      )}
+
       <main className="dashBody">
         {isLoadingSummaries ? (
           <div className="dashGrid" aria-busy="true" aria-label="Loading projects">
@@ -542,25 +667,56 @@ const Dashboard: React.FC = () => {
               </div>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : isEmpty ? (
           <div className="dashEmpty">
+            <div className="dashEmptyIllo" aria-hidden="true">
+              <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 20a4 4 0 0 1 4-4h12l4 4h24a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V20z" strokeLinejoin="round" />
+              </svg>
+            </div>
             <div className="dashEmptyTitle">
-              {summaries.length === 0 ? "No projects yet" : "Nothing matches that search"}
+              {totalSummaries === 0
+                ? "Welcome to TitanRoof"
+                : isSearching
+                ? "Nothing matches that search"
+                : currentFolder
+                ? "This folder is empty"
+                : "No projects yet"}
             </div>
             <div className="dashEmptyHint">
-              {summaries.length === 0
-                ? "Start a new field capture to build your first Haag-aligned report."
-                : "Try a different search or switch the status filter."}
+              {totalSummaries === 0
+                ? "Create your first project to get started."
+                : isSearching
+                ? "Try a different search or switch the status filter."
+                : currentFolder
+                ? "Drop a project in here, or import one from a .json export."
+                : "Start a new field capture to build your first Haag-aligned report."}
             </div>
-            {summaries.length === 0 && (
-              <button type="button" className="dashPrimaryBtn" onClick={handleCreate}>
-                + New Project
-              </button>
+            {!isSearching && (
+              <div className="dashEmptyActions">
+                <button type="button" className="dashPrimaryBtn" onClick={handleCreate}>
+                  + New Project
+                </button>
+                <button
+                  type="button"
+                  className="dashSecondaryBtn"
+                  onClick={handleImportToDashboardClick}
+                >
+                  Import .json
+                </button>
+              </div>
             )}
           </div>
         ) : view === "grid" ? (
           <>
             <div className="dashGrid">
+              {folderEntries.map((f) => (
+                <FolderCard
+                  key={f.path}
+                  entry={f}
+                  onOpen={() => setCurrentFolder(f.path)}
+                />
+              ))}
               {visible.map((p) => (
                 <ProjectCard
                   key={p.projectId}
@@ -571,6 +727,7 @@ const Dashboard: React.FC = () => {
                   onArchive={() => handleArchive(p)}
                   onDelete={() => handleDelete(p)}
                   onDownload={() => handleDownload(p)}
+                  onMoveToFolder={() => handleMoveToFolder(p)}
                 />
               ))}
             </div>
@@ -588,6 +745,13 @@ const Dashboard: React.FC = () => {
         ) : view === "list" ? (
           <>
             <div className="dashList">
+              {folderEntries.map((f) => (
+                <FolderRow
+                  key={f.path}
+                  entry={f}
+                  onOpen={() => setCurrentFolder(f.path)}
+                />
+              ))}
               {visible.map((p) => (
                 <ProjectCard
                   key={p.projectId}
@@ -599,6 +763,7 @@ const Dashboard: React.FC = () => {
                   onArchive={() => handleArchive(p)}
                   onDelete={() => handleDelete(p)}
                   onDownload={() => handleDownload(p)}
+                  onMoveToFolder={() => handleMoveToFolder(p)}
                 />
               ))}
             </div>
@@ -619,6 +784,7 @@ const Dashboard: React.FC = () => {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Folder</th>
                   <th>Claim #</th>
                   <th>Address</th>
                   <th>Status</th>
@@ -628,6 +794,22 @@ const Dashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
+                {folderEntries.map((f) => (
+                  <tr
+                    key={f.path}
+                    className="dashTableRow dashTableFolderRow"
+                    onClick={() => setCurrentFolder(f.path)}
+                  >
+                    <td><FolderGlyph /> <b>{f.name}</b></td>
+                    <td>{f.path}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>{f.count} project{f.count === 1 ? "" : "s"}</td>
+                    <td />
+                  </tr>
+                ))}
                 {visible.map((p) => (
                   <tr
                     key={p.projectId}
@@ -635,6 +817,7 @@ const Dashboard: React.FC = () => {
                     onClick={() => { void openProject(p.projectId); }}
                   >
                     <td><b>{p.name}</b></td>
+                    <td>{p.folder || "—"}</td>
                     <td>{p.claimNumber || "—"}</td>
                     <td className="dashTableAddr">{p.address || "—"}</td>
                     <td>{p.status}</td>
@@ -653,7 +836,7 @@ const Dashboard: React.FC = () => {
                 ))}
                 {hasMore && (
                   <tr ref={(el) => { loadMoreRef.current = el as unknown as HTMLDivElement; }}>
-                    <td colSpan={7} className="dashTableLoadMore">
+                    <td colSpan={8} className="dashTableLoadMore">
                       <button
                         type="button"
                         className="dashSecondaryBtn"
@@ -690,17 +873,42 @@ const LoadMore: React.FC<{
   </div>
 );
 
+const FolderCard: React.FC<{ entry: FolderEntry; onOpen: () => void }> = ({ entry, onOpen }) => (
+  <button type="button" className="dashFolderCard" onClick={onOpen}>
+    <div className="dashFolderCardIcon" aria-hidden="true">
+      <FolderGlyph />
+    </div>
+    <div className="dashFolderCardBody">
+      <div className="dashFolderCardName">{entry.name}</div>
+      <div className="dashFolderCardCount">
+        {entry.count} project{entry.count === 1 ? "" : "s"}
+      </div>
+    </div>
+  </button>
+);
+
+const FolderRow: React.FC<{ entry: FolderEntry; onOpen: () => void }> = ({ entry, onOpen }) => (
+  <button type="button" className="dashFolderRow" onClick={onOpen}>
+    <span className="dashFolderRowIcon" aria-hidden="true">
+      <FolderGlyph />
+    </span>
+    <span className="dashFolderRowName">{entry.name}</span>
+    <span className="dashFolderRowCount">
+      {entry.count} project{entry.count === 1 ? "" : "s"}
+    </span>
+  </button>
+);
+
+const FolderGlyph: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+  </svg>
+);
+
 export default Dashboard;
 
 // --- helpers --------------------------------------------------------
 
-/**
- * Rewrite residenceName + reportData.project.projectName inside a
- * stored legacy state blob so they match the dashboard record's
- * canonical name. Used by Rename so a project that was last saved
- * as "Johnson residence" and gets renamed to "Smith residence" on
- * the dashboard still opens (and exports) as "Smith residence".
- */
 function alignLegacyName(state: unknown, name: string): unknown {
   if (!state || typeof state !== "object") return state;
   const base = state as Record<string, unknown>;

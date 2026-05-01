@@ -3,34 +3,26 @@ import { type ProjectRecord, putWithRedundancy } from "../storage";
 import { useProject } from "../project/ProjectContext";
 
 /**
- * Autosave context — Phase 7 implementation of the contract recorded
- * in docs/architecture.md §9.
+ * Autosave context.
  *
  * Responsibilities:
  *
- * - Drive a 10-second autosave ticker while a project is open in
- *   the workspace. The tick always writes to the local
- *   IndexedDbProjectStore; no network is awaited. This matches the
- *   offline-first contract: local save success is what the user
- *   sees in the indicator.
+ * - Drive a dual-interval autosave ticker while a project is open in
+ *   the workspace:
+ *     * Initial save: 1 s after open so the indicator settles to
+ *       "Saved" without waiting for the first long tick.
+ *     * Incremental save: every 5 min, deduped against the previous
+ *       serialized snapshot so unchanged state does not round-trip.
+ *     * Full save: every 1 h, force a write even when nothing
+ *       changed so long sessions keep an updatedAt heartbeat.
  * - Expose `status` ("idle" | "saving" | "saved" | "offline" |
- *   "error"), `lastSavedAt`, `isOnline`, and `pendingCount` to the
- *   SaveIndicator component.
- * - Let each workspace engine (legacy-v4, tldraw) register a
- *   `snapshotEngineState` callback that returns the current
- *   drawing blob. Autosave uses that callback to update the project
- *   record's engine.state before persisting. Legacy workspaces
- *   don't register because their state is still mirrored in the
- *   `titanroof.v4.2.3.state` localStorage key, which autosave
- *   reads directly.
- * - Skip writes when the serialized engine state has not changed
- *   since the last successful save (cheap stringify compare).
- *
- * The remote sync pipeline (NetlifyBlobsProjectStore + queued
- * drain + "Offline & Queued" state) is explicitly a follow-up.
- * For now, when we detect `!navigator.onLine` we flip the
- * indicator to "offline" to make clear the workspace is still
- * saving locally.
+ *   "backup" | "error"), `lastSavedAt`, `isOnline`, and
+ *   `pendingCount` to the SaveIndicator.
+ * - Read the active engine state through a registered in-memory
+ *   snapshot callback. Falling back to localStorage only when no
+ *   callback is registered keeps the canvas as the single source of
+ *   truth, which matters on iPad where localStorage can silently hit
+ *   its ~5 MB quota.
  */
 
 export type SaveStatus = "idle" | "saving" | "saved" | "offline" | "backup" | "error";
@@ -46,18 +38,20 @@ interface AutosaveContextValue {
   /** Register a function that returns the latest engine snapshot.
    *  Returns an unregister function. */
   registerEngineSnapshot: (fn: () => unknown) => () => void;
-  /** Mark the current project as dirty. No-op if no project is open.
-   *  Callers don't strictly need to call this — the ticker saves on
-   *  an interval anyway — but it lets workspaces hint at more
-   *  aggressive saves after specific user actions. */
+  /** Read the latest engine snapshot directly from memory. Returns
+   *  `null` if no engine has registered a callback. */
+  getEngineSnapshot: () => unknown;
+  /** Mark the current project as dirty. No-op if no project is open. */
   markDirty: () => void;
-  /** Force an immediate save (used by manual "Save" buttons). */
+  /** Force an immediate save, bypassing the dedupe check. */
   forceSave: () => Promise<void>;
 }
 
 const AutosaveContext = createContext<AutosaveContextValue | null>(null);
 
-const AUTOSAVE_INTERVAL_MS = 10_000;
+const INITIAL_SAVE_DELAY_MS = 1_000;
+const INCREMENTAL_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const FULL_SAVE_INTERVAL_MS = 60 * 60 * 1000;
 const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
 
 export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -78,14 +72,7 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     currentProjectRef.current = currentProject;
-    // Reset the dedupe fingerprint when switching projects so a
-    // fresh open immediately snapshots even if the serialized form
-    // happens to match.
     lastSerializedRef.current = null;
-    // Opening an existing project is, from the user's perspective,
-    // already "Saved": the record came straight out of the local
-    // store. Reflect that in the indicator right away instead of
-    // showing "Autosave ready" until the first kickoff tick runs.
     if (currentProject) {
       setLastSavedAt((prev) => prev ?? currentProject.updatedAt ?? new Date().toISOString());
       setStatus((prev) =>
@@ -94,7 +81,6 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [currentProject]);
 
-  // Online / offline tracking.
   useEffect(() => {
     const onOnline = () => {
       setIsOnline(true);
@@ -112,22 +98,20 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, []);
 
-  // Core save worker.
-  const doSave = useCallback(async (): Promise<void> => {
+  const doSave = useCallback(async (force: boolean = false): Promise<void> => {
     const project = currentProjectRef.current;
     if (!project) return;
 
     const page = project.sections[0]?.pages[0];
     if (!page) return;
 
-    // Pick the engine state from the right source.
     let newState: unknown = page.engine.state;
     try {
-      if (page.engine.name === "legacy-v4") {
-        const raw = localStorage.getItem(LEGACY_STATE_KEY);
-        newState = raw ? JSON.parse(raw) : null;
-      } else if (page.engine.name === "tldraw" && engineSnapshotRef.current) {
+      if (engineSnapshotRef.current) {
         newState = engineSnapshotRef.current();
+      } else {
+        const raw = localStorage.getItem(LEGACY_STATE_KEY);
+        newState = raw ? JSON.parse(raw) : page.engine.state;
       }
     } catch (err) {
       console.warn("Autosave could not read engine state", err);
@@ -135,15 +119,13 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
-    // Dedupe: skip the store round trip if nothing changed since the
-    // last successful save.
     let serialized: string;
     try {
       serialized = JSON.stringify(newState ?? null);
     } catch {
       serialized = "";
     }
-    if (serialized === lastSerializedRef.current) {
+    if (!force && serialized === lastSerializedRef.current) {
       dirtyRef.current = false;
       return;
     }
@@ -184,9 +166,6 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setLastErrorMessage(null);
         setStatus(isOnline ? "saved" : "offline");
       } else {
-        // Backup-only save — the project is safe on this device but
-        // the primary store is unhappy; surface that without
-        // pretending everything is normal.
         const reason = writeResult.error?.message || "Primary store unavailable";
         setLastErrorMessage(`Saved to backup only (${reason}).`);
         setStatus("backup");
@@ -200,27 +179,23 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [isOnline]);
 
-  // The "Saved" confirmation is the resting state while a project is
-  // open — it used to fade back to "Autosave ready" after a short
-  // window, but that made freshly-opened files look unsaved. Keep it
-  // pinned until another status (saving / offline / error) takes over.
-
-  // 10-second ticker while a project is open in the workspace.
   useEffect(() => {
     if (route !== "workspace" || !currentProject) {
       return;
     }
-    // Save once on mount / project open so the "Saved ·" timestamp
-    // appears quickly instead of after the first 10 s window.
     const kickoff = window.setTimeout(() => {
-      void doSave();
-    }, 1_000);
-    const interval = window.setInterval(() => {
-      void doSave();
-    }, AUTOSAVE_INTERVAL_MS);
+      void doSave(false);
+    }, INITIAL_SAVE_DELAY_MS);
+    const incremental = window.setInterval(() => {
+      void doSave(false);
+    }, INCREMENTAL_SAVE_INTERVAL_MS);
+    const full = window.setInterval(() => {
+      void doSave(true);
+    }, FULL_SAVE_INTERVAL_MS);
     return () => {
       window.clearTimeout(kickoff);
-      window.clearInterval(interval);
+      window.clearInterval(incremental);
+      window.clearInterval(full);
     };
   }, [route, currentProject, doSave]);
 
@@ -233,12 +208,23 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, []);
 
+  const getEngineSnapshot = useCallback(() => {
+    const fn = engineSnapshotRef.current;
+    if (!fn) return null;
+    try {
+      return fn();
+    } catch (err) {
+      console.warn("Engine snapshot read failed", err);
+      return null;
+    }
+  }, []);
+
   const markDirty = useCallback(() => {
     dirtyRef.current = true;
   }, []);
 
   const forceSave = useCallback(async () => {
-    await doSave();
+    await doSave(true);
   }, [doSave]);
 
   const value = useMemo<AutosaveContextValue>(
@@ -249,10 +235,21 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       pendingCount,
       lastErrorMessage,
       registerEngineSnapshot,
+      getEngineSnapshot,
       markDirty,
       forceSave,
     }),
-    [status, lastSavedAt, isOnline, pendingCount, lastErrorMessage, registerEngineSnapshot, markDirty, forceSave],
+    [
+      status,
+      lastSavedAt,
+      isOnline,
+      pendingCount,
+      lastErrorMessage,
+      registerEngineSnapshot,
+      getEngineSnapshot,
+      markDirty,
+      forceSave,
+    ],
   );
 
   return <AutosaveContext.Provider value={value}>{children}</AutosaveContext.Provider>;

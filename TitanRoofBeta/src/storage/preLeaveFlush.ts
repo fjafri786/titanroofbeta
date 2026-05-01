@@ -1,40 +1,61 @@
 /**
- * preLeaveFlush — shared registry for a synchronous "flush workspace
- * state to localStorage" callback.
+ * preLeaveFlush + engine snapshot registry.
  *
- * Context: the legacy v4 workspace (src/main.tsx App) persists its
- * state via a 2-second debounced silent autosave. When the user taps
- * "back to dashboard" (or the tab is closed) within that debounce
- * window, the in-memory React state has not yet reached
- * `localStorage[titanroof.v4.2.3.state]`, so `returnToDashboard` in
- * ProjectContext reads stale state and the most recent edits are
- * silently lost.
+ * Two related but independent registries:
  *
- * The App registers a synchronous `saveState` wrapper here on mount.
- * `returnToDashboard` invokes it before snapshotting localStorage, and
- * a `beforeunload` handler invokes it on tab close. This sits outside
- * the React context tree so either side of the ProjectContext /
- * AutosaveContext boundary can participate without introducing a
- * circular dependency.
+ *   1. Pre-leave flush: a synchronous "write workspace state to local
+ *      backup storage" callback. Run on tab close / pagehide so the
+ *      latest in-memory edits make it to durable storage even if the
+ *      page is killed before the next debounced save tick.
+ *
+ *   2. Engine snapshot getter: a function that returns the current
+ *      engine state directly from React memory. The autosave loop and
+ *      returnToDashboard call this to read the canvas state without
+ *      bouncing through localStorage, which can silently fail on iPad
+ *      when the per-origin quota is exceeded.
+ *
+ * Both registries live outside the React tree so either side of the
+ * ProjectContext / AutosaveContext boundary can participate without
+ * introducing a circular dependency.
  */
 
 type FlushFn = () => void;
+type EngineSnapshotFn = () => unknown;
 
-let registered: FlushFn | null = null;
+let registeredFlush: FlushFn | null = null;
+let registeredSnapshot: EngineSnapshotFn | null = null;
 
 export function registerPreLeaveFlush(fn: FlushFn): () => void {
-  registered = fn;
+  registeredFlush = fn;
   return () => {
-    if (registered === fn) registered = null;
+    if (registeredFlush === fn) registeredFlush = null;
   };
 }
 
 export function invokePreLeaveFlush(): void {
-  const fn = registered;
+  const fn = registeredFlush;
   if (!fn) return;
   try {
     fn();
   } catch (err) {
     console.warn("preLeaveFlush failed", err);
+  }
+}
+
+export function registerEngineSnapshotGetter(fn: EngineSnapshotFn): () => void {
+  registeredSnapshot = fn;
+  return () => {
+    if (registeredSnapshot === fn) registeredSnapshot = null;
+  };
+}
+
+export function getEngineSnapshotDirect(): unknown {
+  const fn = registeredSnapshot;
+  if (!fn) return null;
+  try {
+    return fn();
+  } catch (err) {
+    console.warn("engine snapshot read failed", err);
+    return null;
   }
 }

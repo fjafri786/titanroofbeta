@@ -7,34 +7,20 @@ import type {
 import { summarize } from "./types";
 
 /**
- * Phase 4 — primary local store backed by IndexedDB.
+ * Primary local store backed by IndexedDB.
  *
- * Matches the ProjectStore interface verbatim. Callers (dashboard,
- * project context, workspace) do not know whether the adapter is
- * localStorage (Phase 3 stub) or this one. To swap, change the
- * single export in src/storage/index.ts.
+ * Single object store `projects`, keyed on projectId. Secondary index
+ * `byUserUpdated` on [userId, updatedAt] supports paging by user in
+ * recent-updated order.
  *
- * Design notes:
- * - Single object store `projects`, keyed on projectId. A
- *   secondary index `byUserUpdated` on [userId, updatedAt] lets us
- *   page by user in recent-updated order.
- * - All writes bump `updatedAt` upstream in ProjectContext; this
- *   adapter is deliberately dumb — it just persists what it is
- *   given.
- * - A one-shot import from the Phase 3 localStorage stub runs the
- *   first time this adapter is opened, so users who created
- *   projects under the stub don't lose them on upgrade.
- * - A cross-tab change channel (BroadcastChannel when available,
- *   `storage` event otherwise) fires `subscribe` listeners.
+ * A cross-tab change channel (BroadcastChannel where available)
+ * notifies subscribers that the project list changed.
  */
 
 const DB_NAME = "titanroof";
 const DB_VERSION = 1;
 const STORE = "projects";
 const INDEX_USER_UPDATED = "byUserUpdated";
-
-const LEGACY_STUB_KEY = "titanroof.store.v1";
-const STUB_IMPORTED_MARK = "titanroof.store.v1.importedToIdb";
 const BROADCAST_CHANNEL_NAME = "titanroof:projects";
 
 type Listener = (summaries: ProjectSummary[]) => void;
@@ -139,49 +125,6 @@ function matchesQuery(record: ProjectRecord, q: string): boolean {
   return false;
 }
 
-// --- One-shot import from the Phase 3 localStorage stub -------------
-
-async function importStubIfNeeded(): Promise<void> {
-  try {
-    if (localStorage.getItem(STUB_IMPORTED_MARK) === "1") return;
-    const raw = localStorage.getItem(LEGACY_STUB_KEY);
-    if (!raw) {
-      localStorage.setItem(STUB_IMPORTED_MARK, "1");
-      return;
-    }
-    const parsed = JSON.parse(raw) as { projects?: ProjectRecord[] };
-    const projects = Array.isArray(parsed?.projects) ? parsed!.projects! : [];
-    if (projects.length === 0) {
-      localStorage.setItem(STUB_IMPORTED_MARK, "1");
-      return;
-    }
-    const db = await openDb();
-    await new Promise<void>((resolve, reject) => {
-      const t = db.transaction(STORE, "readwrite");
-      const store = t.objectStore(STORE);
-      for (const project of projects) {
-        if (project && typeof project === "object" && project.projectId) {
-          store.put(project);
-        }
-      }
-      t.oncomplete = () => resolve();
-      t.onerror = () => reject(t.error);
-      t.onabort = () => reject(t.error || new Error("IndexedDB import aborted"));
-    });
-    localStorage.setItem(STUB_IMPORTED_MARK, "1");
-  } catch (err) {
-    // Don't block app startup on an import failure — users can
-    // retry by clearing the mark from devtools.
-    console.warn("Phase 3 stub import to IndexedDB failed", err);
-  }
-}
-
-// Kick off the import as soon as the module loads. Callers that
-// await any store method will queue behind this.
-const readyPromise = importStubIfNeeded();
-
-// --- Cross-tab change notification ---------------------------------
-
 let channel: BroadcastChannel | null = null;
 try {
   if (typeof BroadcastChannel !== "undefined") {
@@ -215,11 +158,8 @@ if (channel) {
   });
 }
 
-// --- ProjectStore adapter ------------------------------------------
-
 export const indexedDbProjectStore: ProjectStore = {
   async list(userId, filter) {
-    await readyPromise;
     const records = await getAllForUser(userId);
     const filtered = records
       .filter((p) => (filter?.status ? p.status === filter.status : p.status !== "deleted"))
@@ -229,24 +169,20 @@ export const indexedDbProjectStore: ProjectStore = {
   },
 
   async get(userId, projectId) {
-    await readyPromise;
     return getOne(userId, projectId);
   },
 
   async put(record) {
-    await readyPromise;
     await putOne(record);
     announce(record.userId);
   },
 
   async delete(userId, projectId) {
-    await readyPromise;
     const ok = await softDelete(userId, projectId);
     if (ok) announce(userId);
   },
 
   async search(userId, query) {
-    await readyPromise;
     const records = await getAllForUser(userId);
     const summaries = records
       .filter((p) => p.status !== "deleted")
@@ -260,8 +196,6 @@ export const indexedDbProjectStore: ProjectStore = {
     const set = listenersByUser.get(userId)!;
     set.add(listener);
 
-    // Fire an initial snapshot so callers don't need to list()
-    // separately, matching the Phase 3 stub behavior.
     (async () => {
       const records = await getAllForUser(userId);
       const summaries = sortSummaries(records.filter((r) => r.status !== "deleted").map(summarize));

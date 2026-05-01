@@ -39,7 +39,6 @@ export interface MenuBarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onOpen: () => void;
-  onRecover: () => void;
   onExport: () => void;
   exportDisabled?: boolean;
 
@@ -110,7 +109,6 @@ export const MenuBar: React.FC<MenuBarProps> = (props) => {
             { label: "Save", onClick: () => fire(props.onSave), kbd: "⌘S" },
             { label: "Save As (Download JSON)…", onClick: () => fire(props.onSaveAs), kbd: "⌘⇧S" },
             { label: "Open Project…", onClick: () => fire(props.onOpen), kbd: "⌘O" },
-            { label: "Recover Autosave…", onClick: () => fire(props.onRecover) },
           ],
         },
         {
