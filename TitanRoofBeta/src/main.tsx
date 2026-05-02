@@ -6,7 +6,7 @@ import TopBar from "./components/TopBar";
 import UnifiedBar from "./components/UnifiedBar";
 import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
-import { ProjectProvider } from "./project/ProjectContext";
+import { ProjectProvider, useProject } from "./project/ProjectContext";
 import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import AppShell from "./app/AppShell";
 import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
@@ -1325,6 +1325,12 @@ const loadPdfJs = () => {
         // (no localStorage round-trip) and writes the project record
         // straight to IndexedDB.
         const { forceSave: forceProjectStoreSync, registerEngineSnapshot } = useAutosave();
+        // Pull the record the dashboard handed us so we can hydrate
+        // straight from memory. The localStorage hand-off silently drops
+        // on iPad once the snapshot crosses the ~5 MB quota (any project
+        // with photos), which is what was leaving reopened projects
+        // stuck on the empty "Add a diagram background" state.
+        const { currentProject: openedProjectRecord } = useProject();
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
@@ -2078,6 +2084,21 @@ const loadPdfJs = () => {
         }, [applySnapshot, forceProjectStoreSync]);
 
         useEffect(() => {
+          // Prefer the ProjectRecord the dashboard already loaded out
+          // of IndexedDB. The legacy hand-off in ProjectContext also
+          // mirrors this state into localStorage, but that copy
+          // silently fails on iPad once the snapshot crosses the
+          // ~5 MB quota — which is every project that has photos or a
+          // PDF page background. Reading the record directly avoids
+          // the quota entirely so reopened projects come back with
+          // their pages, items, and photos intact.
+          const stateFromRecord = openedProjectRecord?.sections?.[0]?.pages?.[0]?.engine?.state;
+          if(stateFromRecord && typeof stateFromRecord === "object" && (stateFromRecord as any).roof){
+            applySnapshot(stateFromRecord, "restore");
+            return;
+          }
+          // Fall back to localStorage for direct-entry sessions where
+          // no project context has been established yet.
           const raw = localStorage.getItem(STORAGE_KEY);
           if(!raw) return;
           try{
@@ -2086,7 +2107,7 @@ const loadPdfJs = () => {
           }catch(err){
             console.warn("Failed to restore saved state from localStorage", err);
           }
-        }, [applySnapshot]);
+        }, [applySnapshot, openedProjectRecord]);
 
         // Debounced "silent" autosave: persists a localStorage backup
         // 2 s after edits stop. This is a secondary copy; the autosave
