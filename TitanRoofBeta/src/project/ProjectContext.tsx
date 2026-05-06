@@ -196,6 +196,15 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     invokePreLeaveFlush();
 
     let workspaceState: unknown = getEngineSnapshotDirect();
+    console.warn(
+      "[returnToDashboard] engine snapshot",
+      {
+        projectId: currentProject.projectId,
+        isNull: workspaceState == null,
+        pages: countPages(workspaceState),
+        items: countItems(workspaceState),
+      },
+    );
     if (!workspaceState) {
       try {
         const raw = localStorage.getItem(LEGACY_STATE_KEY);
@@ -289,26 +298,93 @@ export function useProject(): ProjectContextValue {
 
 /**
  * Seed localStorage[LEGACY_STATE_KEY] from a project record so the
- * canvas can hydrate from it on mount. Replaces any previous tenant of
- * that key so opening a different project does not inherit the prior
- * canvas content. residenceName and reportData.project.projectName are
- * forced to the record's canonical name so the title bar and the
- * report form always agree with the dashboard card.
+ * canvas can hydrate from it on mount. residenceName and
+ * reportData.project.projectName are forced to the record's canonical
+ * name so the title bar and the report form always agree with the
+ * dashboard card.
+ *
+ * When the record has a valid engine.state we overwrite localStorage
+ * unconditionally so opening a different project never inherits the
+ * prior canvas content. When engine.state is null (e.g. autosave has
+ * not yet persisted to IndexedDB), we keep any existing localStorage
+ * snapshot that still carries real pages/items rather than wiping it
+ * with a blank seed — that prevents the next 1 s autosave tick from
+ * overwriting the user's only surviving copy.
  */
 function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
-  try { localStorage.removeItem(LEGACY_STATE_KEY); } catch {}
-
   const page = record.sections[0]?.pages[0];
   const stored = page?.engine?.state;
-  const seed = stored && typeof stored === "object"
-    ? alignLegacyStateName(stored, record.name)
-    : buildBlankLegacySeed(record.name);
 
+  if (stored && typeof stored === "object") {
+    console.warn(
+      "[hydrate] using engine.state from project record",
+      { projectId: record.projectId },
+    );
+    const seed = alignLegacyStateName(stored, record.name);
+    try {
+      localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seed));
+    } catch (err) {
+      console.warn("Could not seed workspace state", err);
+    }
+    return;
+  }
+
+  const existing = readExistingLegacySnapshot();
+  if (existing && legacySnapshotHasContent(existing)) {
+    console.warn(
+      "[hydrate] engine.state was null; preserving non-empty localStorage snapshot",
+      {
+        projectId: record.projectId,
+        pages: countPages(existing),
+        items: countItems(existing),
+      },
+    );
+    const realigned = alignLegacyStateName(existing, record.name);
+    try {
+      localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(realigned));
+    } catch (err) {
+      console.warn("Could not seed workspace state", err);
+    }
+    return;
+  }
+
+  console.warn(
+    "[hydrate] engine.state null and no usable localStorage snapshot; falling back to blank seed",
+    { projectId: record.projectId },
+  );
   try {
-    localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seed));
+    localStorage.setItem(
+      LEGACY_STATE_KEY,
+      JSON.stringify(buildBlankLegacySeed(record.name)),
+    );
   } catch (err) {
     console.warn("Could not seed workspace state", err);
   }
+}
+
+function readExistingLegacySnapshot(): unknown {
+  try {
+    const raw = localStorage.getItem(LEGACY_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function legacySnapshotHasContent(snapshot: unknown): boolean {
+  return countPages(snapshot) > 0 || countItems(snapshot) > 0;
+}
+
+function countPages(snapshot: unknown): number {
+  if (!snapshot || typeof snapshot !== "object") return 0;
+  const pages = (snapshot as Record<string, unknown>).pages;
+  return Array.isArray(pages) ? pages.length : 0;
+}
+
+function countItems(snapshot: unknown): number {
+  if (!snapshot || typeof snapshot !== "object") return 0;
+  const items = (snapshot as Record<string, unknown>).items;
+  return Array.isArray(items) ? items.length : 0;
 }
 
 function alignLegacyStateName(state: unknown, name: string): unknown {
