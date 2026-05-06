@@ -11,9 +11,11 @@ import { useProject } from "../project/ProjectContext";
  *   the workspace:
  *     * Initial save: 1 s after open so the indicator settles to
  *       "Saved" without waiting for the first long tick.
- *     * Incremental save: every 5 min, deduped against the previous
+ *     * Incremental save: every 30 s, deduped against the previous
  *       serialized snapshot so unchanged state does not round-trip.
- *     * Full save: every 1 h, force a write even when nothing
+ *       Tight enough that closing the tab shortly after editing still
+ *       leaves a real copy in IndexedDB rather than only localStorage.
+ *     * Full save: every 5 min, force a write even when nothing
  *       changed so long sessions keep an updatedAt heartbeat.
  * - Expose `status` ("idle" | "saving" | "saved" | "offline" |
  *   "backup" | "error"), `lastSavedAt`, `isOnline`, and
@@ -50,8 +52,8 @@ interface AutosaveContextValue {
 const AutosaveContext = createContext<AutosaveContextValue | null>(null);
 
 const INITIAL_SAVE_DELAY_MS = 1_000;
-const INCREMENTAL_SAVE_INTERVAL_MS = 5 * 60 * 1000;
-const FULL_SAVE_INTERVAL_MS = 60 * 60 * 1000;
+const INCREMENTAL_SAVE_INTERVAL_MS = 30 * 1000;
+const FULL_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
 
 export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
