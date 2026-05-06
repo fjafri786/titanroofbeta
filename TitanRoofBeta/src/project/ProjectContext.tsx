@@ -114,6 +114,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       hydrateLegacyWorkspaceStorage(record);
 
+      // Verify the hydration actually landed in localStorage
+      const verify = localStorage.getItem("titanroof.v4.2.3.state");
+      console.warn("[openProject] localStorage verification", {
+        projectId,
+        localStorageExists: !!verify,
+        localStorageLength: verify?.length ?? 0,
+      });
+
       setCurrentProject(record);
       setRoute("workspace");
     },
@@ -211,6 +219,19 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         workspaceState = raw ? JSON.parse(raw) : null;
       } catch (err) {
         console.warn("Could not read workspace state on return", err);
+      }
+    }
+
+    // Guard: if we still have no workspace state, preserve whatever is
+    // already saved in the project record rather than overwriting with null.
+    if (!workspaceState) {
+      const existingEngineState = currentProject.sections[0]?.pages[0]?.engine?.state;
+      if (existingEngineState && typeof existingEngineState === "object") {
+        console.warn(
+          "[returnToDashboard] snapshot and localStorage both null; preserving existing engine.state",
+          { projectId: currentProject.projectId },
+        );
+        workspaceState = existingEngineState;
       }
     }
 
@@ -312,6 +333,11 @@ export function useProject(): ProjectContextValue {
  * overwriting the user's only surviving copy.
  */
 function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
+  console.warn("[hydrate] entering", {
+    projectId: record.projectId,
+    hasEngineState: !!(record.sections[0]?.pages[0]?.engine?.state),
+    engineStateType: typeof record.sections[0]?.pages[0]?.engine?.state,
+  });
   const page = record.sections[0]?.pages[0];
   const stored = page?.engine?.state;
 
@@ -324,7 +350,8 @@ function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
     try {
       localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seed));
     } catch (err) {
-      console.warn("Could not seed workspace state", err);
+      console.warn("Could not seed workspace state, using window fallback", err);
+      (window as any).__titanroof_hydrate_fallback = seed;
     }
     return;
   }
@@ -343,7 +370,8 @@ function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
     try {
       localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(realigned));
     } catch (err) {
-      console.warn("Could not seed workspace state", err);
+      console.warn("Could not seed workspace state, using window fallback", err);
+      (window as any).__titanroof_hydrate_fallback = realigned;
     }
     return;
   }
@@ -352,13 +380,12 @@ function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
     "[hydrate] engine.state null and no usable localStorage snapshot; falling back to blank seed",
     { projectId: record.projectId },
   );
+  const blankSeed = buildBlankLegacySeed(record.name);
   try {
-    localStorage.setItem(
-      LEGACY_STATE_KEY,
-      JSON.stringify(buildBlankLegacySeed(record.name)),
-    );
+    localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(blankSeed));
   } catch (err) {
-    console.warn("Could not seed workspace state", err);
+    console.warn("Could not seed workspace state, using window fallback", err);
+    (window as any).__titanroof_hydrate_fallback = blankSeed;
   }
 }
 

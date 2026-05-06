@@ -51,7 +51,7 @@ interface AutosaveContextValue {
 
 const AutosaveContext = createContext<AutosaveContextValue | null>(null);
 
-const INITIAL_SAVE_DELAY_MS = 1_000;
+const INITIAL_SAVE_DELAY_MS = 3_000;
 const INCREMENTAL_SAVE_INTERVAL_MS = 30 * 1000;
 const FULL_SAVE_INTERVAL_MS = 5 * 60 * 1000;
 const LEGACY_STATE_KEY = "titanroof.v4.2.3.state";
@@ -119,6 +119,28 @@ export const AutosaveProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.warn("Autosave could not read engine state", err);
       setStatus("error");
       return;
+    }
+
+    // Guard: never overwrite a non-empty saved state with blank/empty state.
+    // This prevents the destructive race where autosave fires before
+    // applySnapshot has restored the workspace from localStorage.
+    const existingState = page.engine.state;
+    if (existingState && typeof existingState === "object") {
+      const snap = newState as Record<string, unknown> | null | undefined;
+      const hasItems = Array.isArray(snap?.items) && (snap!.items as unknown[]).length > 0;
+      const hasPages = Array.isArray(snap?.pages) && (snap!.pages as unknown[]).length > 0;
+      const hasBackground =
+        hasPages &&
+        (snap!.pages as Array<Record<string, unknown>>).some((p) => p.background != null);
+      if (!hasItems && !hasBackground) {
+        // The snapshot looks blank but the saved record has real data.
+        // Skip this save to avoid destroying the user's work.
+        console.warn(
+          "[autosave] skipping save: snapshot appears blank but existing engine.state has content",
+          { projectId: project.projectId },
+        );
+        return;
+      }
     }
 
     let serialized: string;
