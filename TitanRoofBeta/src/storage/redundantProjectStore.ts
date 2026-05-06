@@ -78,13 +78,30 @@ async function safeList(userId: string, filter?: Parameters<ProjectStore["list"]
 }
 
 async function safeGet(userId: string, projectId: string): Promise<ProjectRecord | null> {
+  let primary: ProjectRecord | null = null;
+  let backup: ProjectRecord | null = null;
+
   try {
-    const primary = await indexedDbProjectStore.get(userId, projectId);
-    if (primary) return primary;
+    primary = await indexedDbProjectStore.get(userId, projectId);
   } catch {
     // fall through
   }
-  return localStorageProjectStore.get(userId, projectId);
+
+  try {
+    backup = await localStorageProjectStore.get(userId, projectId);
+  } catch {
+    // fall through
+  }
+
+  if (!primary) return backup;
+  if (!backup) return primary;
+
+  // Both exist: return the one with the most recent updatedAt.
+  // This handles the case where one store's write succeeded but the
+  // other failed, leaving a stale record in the "primary" store.
+  const pTime = primary.updatedAt || "";
+  const bTime = backup.updatedAt || "";
+  return bTime > pTime ? backup : primary;
 }
 
 export const redundantProjectStore: ProjectStore = {

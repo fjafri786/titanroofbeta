@@ -2078,13 +2078,23 @@ const loadPdfJs = () => {
         }, [applySnapshot, forceProjectStoreSync]);
 
         useEffect(() => {
+          let parsed: any = null;
           const raw = localStorage.getItem(STORAGE_KEY);
-          if(!raw) return;
-          try{
-            const parsed = JSON.parse(raw);
+          if(raw){
+            try{
+              parsed = JSON.parse(raw);
+            }catch(err){
+              console.warn("Failed to parse saved state from localStorage", err);
+            }
+          }
+          // Check window fallback if localStorage failed during hydration
+          if(!parsed && (window as any).__titanroof_hydrate_fallback){
+            parsed = (window as any).__titanroof_hydrate_fallback;
+            delete (window as any).__titanroof_hydrate_fallback;
+            console.warn("Using window fallback for hydration (localStorage quota exceeded)");
+          }
+          if(parsed){
             applySnapshot(parsed, "restore");
-          }catch(err){
-            console.warn("Failed to restore saved state from localStorage", err);
           }
         }, [applySnapshot]);
 
