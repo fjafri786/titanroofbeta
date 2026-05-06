@@ -113,15 +113,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
 
       hydrateLegacyWorkspaceStorage(record);
-
-      // Verify the hydration actually landed in localStorage
-      const verify = localStorage.getItem("titanroof.v4.2.3.state");
-      console.warn("[openProject] localStorage verification", {
-        projectId,
-        localStorageExists: !!verify,
-        localStorageLength: verify?.length ?? 0,
-      });
-
       setCurrentProject(record);
       setRoute("workspace");
     },
@@ -318,74 +309,70 @@ export function useProject(): ProjectContextValue {
 // --- helpers --------------------------------------------------------
 
 /**
- * Seed localStorage[LEGACY_STATE_KEY] from a project record so the
- * canvas can hydrate from it on mount. residenceName and
- * reportData.project.projectName are forced to the record's canonical
- * name so the title bar and the report form always agree with the
- * dashboard card.
+ * Hand the canvas the engine state for the project being opened.
  *
- * When the record has a valid engine.state we overwrite localStorage
- * unconditionally so opening a different project never inherits the
- * prior canvas content. When engine.state is null (e.g. autosave has
- * not yet persisted to IndexedDB), we keep any existing localStorage
- * snapshot that still carries real pages/items rather than wiping it
- * with a blank seed — that prevents the next 1 s autosave tick from
- * overwriting the user's only surviving copy.
+ * We publish the seed on `window.__titanroof_pending_project_hydration`
+ * tagged with the projectId. The legacy App reads this token on mount
+ * and prefers it over localStorage, so the open path stays deterministic
+ * even when localStorage has stale content from a prior session or a
+ * setItem call fails because the new project's engine state is too big
+ * for the per-origin quota.
+ *
+ * We *also* mirror the seed into localStorage as a best-effort backup
+ * so a hard reload immediately after open still finds the right state
+ * (the silent autosave hasn't had a chance to write its copy yet).
+ *
+ * Selection order for the seed:
+ *   1. record.engine.state when present — the authoritative copy.
+ *   2. The existing localStorage snapshot when it still carries
+ *      real pages/items, used only if engine.state is null. This
+ *      survives the case where autosave wrote a localStorage copy
+ *      but the IDB sync didn't land before the user navigated.
+ *   3. A blank seed so the canvas mounts cleanly with default roof
+ *      properties.
  */
 function hydrateLegacyWorkspaceStorage(record: ProjectRecord): void {
-  console.warn("[hydrate] entering", {
-    projectId: record.projectId,
-    hasEngineState: !!(record.sections[0]?.pages[0]?.engine?.state),
-    engineStateType: typeof record.sections[0]?.pages[0]?.engine?.state,
-  });
   const page = record.sections[0]?.pages[0];
   const stored = page?.engine?.state;
+  let seed: unknown;
+  let source: "record" | "localStorage" | "blank";
 
   if (stored && typeof stored === "object") {
-    console.warn(
-      "[hydrate] using engine.state from project record",
-      { projectId: record.projectId },
-    );
-    const seed = alignLegacyStateName(stored, record.name);
-    try {
-      localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seed));
-    } catch (err) {
-      console.warn("Could not seed workspace state, using window fallback", err);
-      (window as any).__titanroof_hydrate_fallback = seed;
+    seed = alignLegacyStateName(stored, record.name);
+    source = "record";
+  } else {
+    const existing = readExistingLegacySnapshot();
+    if (existing && legacySnapshotHasContent(existing)) {
+      seed = alignLegacyStateName(existing, record.name);
+      source = "localStorage";
+    } else {
+      seed = buildBlankLegacySeed(record.name);
+      source = "blank";
     }
-    return;
   }
 
-  const existing = readExistingLegacySnapshot();
-  if (existing && legacySnapshotHasContent(existing)) {
-    console.warn(
-      "[hydrate] engine.state was null; preserving non-empty localStorage snapshot",
-      {
-        projectId: record.projectId,
-        pages: countPages(existing),
-        items: countItems(existing),
-      },
-    );
-    const realigned = alignLegacyStateName(existing, record.name);
-    try {
-      localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(realigned));
-    } catch (err) {
-      console.warn("Could not seed workspace state, using window fallback", err);
-      (window as any).__titanroof_hydrate_fallback = realigned;
-    }
-    return;
-  }
+  console.warn("[hydrate] seeding workspace state", {
+    projectId: record.projectId,
+    source,
+    pages: countPages(seed),
+    items: countItems(seed),
+  });
 
-  console.warn(
-    "[hydrate] engine.state null and no usable localStorage snapshot; falling back to blank seed",
-    { projectId: record.projectId },
-  );
-  const blankSeed = buildBlankLegacySeed(record.name);
+  // Authoritative hand-off: the legacy App reads this on mount and uses
+  // it in preference to localStorage. Tagged with projectId so a stale
+  // token left over from a prior open is safely ignored.
+  (window as any).__titanroof_pending_project_hydration = {
+    projectId: record.projectId,
+    state: seed,
+  };
+
+  // Best-effort localStorage backup for hard-reload recovery. Failures
+  // here are harmless because the in-memory token is the source of
+  // truth for the open path.
   try {
-    localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(blankSeed));
+    localStorage.setItem(LEGACY_STATE_KEY, JSON.stringify(seed));
   } catch (err) {
-    console.warn("Could not seed workspace state, using window fallback", err);
-    (window as any).__titanroof_hydrate_fallback = blankSeed;
+    console.warn("[hydrate] localStorage backup write failed; in-memory token is authoritative", err);
   }
 }
 
