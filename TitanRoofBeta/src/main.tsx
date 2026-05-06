@@ -8,6 +8,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import AuthGate from "./auth/AuthGate";
 import { ProjectProvider } from "./project/ProjectContext";
 import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
+import { useProject } from "./project/ProjectContext";
 import AppShell from "./app/AppShell";
 import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
 import "./ui/tailwind.css";
@@ -1325,6 +1326,7 @@ const loadPdfJs = () => {
         // (no localStorage round-trip) and writes the project record
         // straight to IndexedDB.
         const { forceSave: forceProjectStoreSync, registerEngineSnapshot } = useAutosave();
+        const { currentProject: openProjectRecord } = useProject();
         const viewportRef = useRef(null);
         const stageRef = useRef(null);
         const canvasRef = useRef(null);
@@ -2077,26 +2079,51 @@ const loadPdfJs = () => {
           reader.readAsText(file);
         }, [applySnapshot, forceProjectStoreSync]);
 
+        // Hydrate the canvas. The authoritative path is the in-memory
+        // token published by ProjectContext.hydrateLegacyWorkspaceStorage
+        // — it is tagged with projectId so we never apply a stale snapshot
+        // left over from a previous open. localStorage is a fallback for
+        // hard-reload recovery when no token is present. The ref guard
+        // ensures StrictMode's effect double-invocation does not re-apply
+        // a stale localStorage snapshot after the token has been consumed.
+        const hydratedRef = useRef(false);
         useEffect(() => {
+          if(hydratedRef.current) return;
+          hydratedRef.current = true;
+
+          const expectedId = openProjectRecord?.projectId;
           let parsed: any = null;
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if(raw){
-            try{
-              parsed = JSON.parse(raw);
-            }catch(err){
-              console.warn("Failed to parse saved state from localStorage", err);
+          let source: "token" | "localStorage" | null = null;
+
+          const pending = (window as any).__titanroof_pending_project_hydration;
+          if(pending && pending.state && (!expectedId || pending.projectId === expectedId)){
+            parsed = pending.state;
+            source = "token";
+            delete (window as any).__titanroof_pending_project_hydration;
+          } else {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if(raw){
+              try{
+                parsed = JSON.parse(raw);
+                source = "localStorage";
+              }catch(err){
+                console.warn("Failed to parse saved state from localStorage", err);
+              }
             }
           }
-          // Check window fallback if localStorage failed during hydration
-          if(!parsed && (window as any).__titanroof_hydrate_fallback){
-            parsed = (window as any).__titanroof_hydrate_fallback;
-            delete (window as any).__titanroof_hydrate_fallback;
-            console.warn("Using window fallback for hydration (localStorage quota exceeded)");
-          }
+
+          console.warn("[App] hydrating workspace", {
+            projectId: expectedId,
+            source,
+            hasRoof: !!parsed?.roof,
+            pages: Array.isArray(parsed?.pages) ? parsed.pages.length : 0,
+            items: Array.isArray(parsed?.items) ? parsed.items.length : 0,
+          });
+
           if(parsed){
             applySnapshot(parsed, "restore");
           }
-        }, [applySnapshot]);
+        }, [applySnapshot, openProjectRecord]);
 
         // Debounced "silent" autosave: persists a localStorage backup
         // 2 s after edits stop. This is a secondary copy; the autosave
