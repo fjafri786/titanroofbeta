@@ -3872,6 +3872,14 @@ const loadPdfJs = () => {
           }));
         };
 
+        const clearItemPhoto = (key) => {
+          setItems(prev => prev.map(i => {
+            if(i.id !== selectedId) return i;
+            revokeFileObj(i.data[key]);
+            return { ...i, data: { ...i.data, [key]: null } };
+          }));
+        };
+
         const setWindPhoto = async (field, file) => {
           const photoObj = await fileToObj(file);
           setItems(prev => prev.map(i => {
@@ -6303,6 +6311,52 @@ const loadPdfJs = () => {
             <div className={classes}>
               <img src={photo.url} alt={photo.name || "Attached photo"} />
               <div className="propsPhotoName">{photo.name || "image"}</div>
+            </div>
+          );
+        };
+
+        // Photo upload field for properties-panel items: renders a
+        // single "Choose photo" button when nothing is attached, and a
+        // thumbnail + Replace + Remove cluster once a photo exists. The
+        // file input always resets after a pick so the inspector can
+        // pick the same file again or swap files repeatedly without
+        // reloading the panel.
+        const renderPhotoField = (photo, fieldKey, opts: { setter?: (key: string, file: File) => Promise<void>; noun?: string } = {}) => {
+          const { setter = setAptOrDsOverview, noun = "photo" } = opts;
+          const hasPhoto = !!photo?.url;
+          return (
+            <div className="photoField">
+              {hasPhoto && (
+                <div className="propsPhotoThumb">
+                  <img src={photo.url} alt={photo.name || "Attached photo"} />
+                  <div className="propsPhotoName">{photo.name || "image"}</div>
+                </div>
+              )}
+              <div className="photoFieldActions">
+                <label className={"btn photoFieldPickBtn" + (hasPhoto ? "" : " btnPrimary btnFull")}>
+                  <span>{hasPhoto ? `Replace ${noun}` : `Choose ${noun}`}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{display:"none"}}
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if(f) await setter(fieldKey, f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {hasPhoto && (
+                  <button
+                    type="button"
+                    className="btn btnDanger photoFieldRemoveBtn"
+                    onClick={() => clearItemPhoto(fieldKey)}
+                    title={`Remove attached ${noun}`}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           );
         };
@@ -9721,14 +9775,12 @@ const loadPdfJs = () => {
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Detail Photo</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.detailPhoto)}
+                              {renderPhotoField(activeItem.data.detailPhoto, "detailPhoto", { noun: "detail photo" })}
                             </div>
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo (optional)</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoField(activeItem.data.overviewPhoto, "overviewPhoto", { noun: "overview photo" })}
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -9781,14 +9833,12 @@ const loadPdfJs = () => {
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Overview Photo</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("overviewPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.overviewPhoto)}
+                              {renderPhotoField(activeItem.data.overviewPhoto, "overviewPhoto", { noun: "overview photo" })}
                             </div>
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Detail Photo (optional)</div>
-                              <input className="inp" type="file" accept="image/*" onChange={(e)=> e.target.files?.[0] && setAptOrDsOverview("detailPhoto", e.target.files[0])}/>
-                              {renderFileName(activeItem.data.detailPhoto)}
+                              {renderPhotoField(activeItem.data.detailPhoto, "detailPhoto", { noun: "detail photo" })}
                             </div>
 
                             <div style={{marginBottom:10}}>

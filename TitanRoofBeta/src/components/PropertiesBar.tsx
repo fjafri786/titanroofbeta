@@ -91,8 +91,8 @@ const IconDiagram = () => (
 const IconPhotos = () => (
   <svg {...svgProps}>
     <rect x="3" y="5" width="18" height="14" rx="2" />
-    <circle cx="9" cy="11" r="2" />
-    <path d="M21 17l-5-5-8 8" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M20 15l-4-4-7 7" />
   </svg>
 );
 
