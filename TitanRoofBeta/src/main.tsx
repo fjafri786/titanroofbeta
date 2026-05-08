@@ -11,6 +11,7 @@ import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import { useProject } from "./project/ProjectContext";
 import AppShell from "./app/AppShell";
 import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
+import { generateDescriptionParagraphs } from "./report/descriptionGenerator";
 import "./ui/tailwind.css";
 import "./styles.css";
 
@@ -454,7 +455,19 @@ const loadPdfJs = () => {
           },
           fenceType: "",
           hvacPresent: "",
-          hvacLocation: ""
+          hvacLocation: "",
+          // v4.2: minimal extra fields needed by the two-paragraph
+          // description generator. openerStyle toggles between
+          // "The inspected residence" and "The {projectName} residence".
+          // notableFeature is a free-text full-sentence callout
+          // (e.g. solar panels, chimney location). gutterScope qualifies
+          // the gutters-installed phrasing in the roof opener sentence.
+          // roofAreaIncludes is a free-text qualifier appended after
+          // the EagleView roof area.
+          openerStyle: "inspected",
+          notableFeature: "",
+          gutterScope: "",
+          roofAreaIncludes: ""
         },
         background: {
           dateOfLoss: "",
@@ -5630,188 +5643,17 @@ const loadPdfJs = () => {
           return `${trimmed} square feet (SF)`;
         };
         const descriptionParagraph = () => {
-          const projectName = (reportData.project.projectName || residenceName).trim();
-          const storyCount = reportData.description.stories?.trim();
-          const storyPhrase = storyCount ? `${storyCount}-story` : "";
-          const occupancy = reportData.description.occupancy?.trim().toLowerCase();
-          const structureParts = [storyPhrase, occupancy].filter(Boolean);
-          const structureDescriptor = structureParts.length ? structureParts.join(", ") : "structure";
-          const facing = normalizeFacing(reportData.project.orientation);
-          const locationParts = [reportData.project.address, reportData.project.city, reportData.project.state].filter(Boolean);
-          const location = locationParts.length ? locationParts.join(", ") : "";
-          const facingClause = facing && location
-            ? ` that faced ${facing} towards ${location}`
-            : facing
-              ? ` that faced ${facing}`
-              : location
-                ? ` that faced towards ${location}`
-                : "";
-          const descriptionSentences = [];
-          descriptionSentences.push(`The ${projectName || "residence"} residence comprised a ${structureDescriptor}${facingClause}.`);
-
-          if(reportData.description.framing && reportData.description.foundation){
-            descriptionSentences.push(`The ${reportData.description.framing.toLowerCase()}-framed structure was supported on a ${reportData.description.foundation.toLowerCase()} foundation.`);
-          }
-
-          const directionalExteriorFinishes = formatDirectionalExteriorFinishes(reportData.description.exteriorFinishByElevation);
-          if(directionalExteriorFinishes){
-            descriptionSentences.push(`Exterior walls were finished with ${directionalExteriorFinishes}.`);
-          } else if(reportData.description.exteriorFinishes.length){
-            descriptionSentences.push(`Exterior walls were finished with ${joinReadableList(reportData.description.exteriorFinishes.map(item => item.toLowerCase()))} on all elevations.`);
-          }
-
-          if(reportData.description.trimComponents.length){
-            descriptionSentences.push(`Painted trim components were present around all elevations including ${joinReadableList(reportData.description.trimComponents.map(item => item.toLowerCase()))}.`);
-          }
-
-          if(reportData.description.windowType || reportData.description.windowScreens || reportData.description.windowMaterial){
-            const windowType = reportData.description.windowType ? reportData.description.windowType.toLowerCase() : "windows";
-            const materialPrefix = reportData.description.windowMaterial
-              ? `${reportData.description.windowMaterial.toLowerCase()} `
-              : "";
-            const screens = reportData.description.windowScreens === "Yes"
-              ? "with screens"
-              : reportData.description.windowScreens === "No"
-                ? "without screens"
-                : reportData.description.windowScreens === "Mixed"
-                  ? "with some screens"
-                  : "";
-            const windowSentence = reportData.description.windowType
-              ? `${sentenceCase(materialPrefix + windowType)} windows were installed${screens ? ` ${screens}` : ""}.`
-              : `${sentenceCase((materialPrefix + "windows").trim())} were installed${screens ? ` ${screens}` : ""}.`;
-            descriptionSentences.push(windowSentence);
-          }
-
-          if(reportData.description.garagePresent === "Yes"){
-            const bays = reportData.description.garageBays ? `${reportData.description.garageBays}-car ` : "";
-            const doorCount = reportData.description.garageDoors ? `${reportData.description.garageDoors} overhead garage door${reportData.description.garageDoors === "1" ? "" : "s"}` : "";
-            const doorMaterial = reportData.description.garageDoorMaterial ? ` with ${reportData.description.garageDoorMaterial.toLowerCase()} panels` : "";
-            const elevation = reportData.description.garageElevation ? ` opening toward ${reportData.description.garageElevation.toLowerCase()}` : "";
-            const garageSentence = `A ${bays}garage${doorCount ? ` with ${doorCount}${doorMaterial}` : ""}${elevation}.`;
-            descriptionSentences.push(garageSentence);
-          }
-
-          // Garage markers dropped on the diagram supplement (or replace)
-          // the manually entered garage description above. Each marker
-          // records facing direction + bay count so the report can list
-          // multiple garages, e.g. detached + attached.
-          const diagramGarages = pageItems.filter(item => item.type === "garage");
-          if(diagramGarages.length){
-            const facingWord = (d) => ({ N: "north", S: "south", E: "east", W: "west" }[d] || (d || "").toLowerCase());
-            const garagePhrases = diagramGarages.map(g => {
-              const bays = Number(g.data?.bayCount || 0);
-              const bayPhrase = bays > 0 ? `${bays}-bay` : "";
-              const facing = g.data?.facing ? ` facing ${facingWord(g.data.facing)}` : "";
-              return `${[bayPhrase, "garage"].filter(Boolean).join(" ")}${facing}`.trim();
-            });
-            descriptionSentences.push(
-              `Diagram documented ${garagePhrases.length} garage${garagePhrases.length === 1 ? "" : "s"}: ${joinReadableList(garagePhrases)}.`
-            );
-          }
-
-          if(reportData.description.terrain){
-            const terrain = reportData.description.terrain.toLowerCase();
-            const terrainPhrase = terrain === "flat" ? "relatively flat" : terrain;
-            descriptionSentences.push(`Land surrounding the property was ${terrainPhrase}.`);
-          }
-
-          if(reportData.description.vegetation){
-            descriptionSentences.push(`Vegetation was present around the ${reportData.description.vegetation.toLowerCase()}.`);
-          }
-
-          const roofSentences = [];
-          if(reportData.description.roofGeometry || reportData.description.roofCovering){
-            const geometry = reportData.description.roofGeometry ? reportData.description.roofGeometry.toLowerCase() : "roof";
-            const covering = reportData.description.roofCovering ? reportData.description.roofCovering.toLowerCase() : "";
-            roofSentences.push(covering
-              ? `The ${geometry} framed roof was surfaced with ${covering}.`
-              : `The ${geometry} framed roof was present.`
-            );
-          }
-
-          if(reportData.description.shingleLength || reportData.description.shingleExposure){
-            const length = reportData.description.shingleLength ? reportData.description.shingleLength.replace("width", "length") : "standard length";
-            const exposure = reportData.description.shingleExposure ? reportData.description.shingleExposure.replace("exposure", "exposure") : "";
-            const shingleTypeWord = (reportData.description as any).shingleClass
-              ? (reportData.description as any).shingleClass.toLowerCase() + " asphalt"
-              : "laminated asphalt";
-            roofSentences.push(`The roof was surfaced with ${shingleTypeWord} shingles measuring ${length}${exposure ? ` with ${exposure}` : ""}.`);
-          }
-
-          const shingleManufacturer = (reportData.description as any).shingleManufacturer?.trim();
-          const shingleProduct = (reportData.description as any).shingleProduct?.trim();
-          if(shingleManufacturer || shingleProduct){
-            const parts = [shingleManufacturer, shingleProduct].filter(Boolean).join(" ");
-            roofSentences.push(`The shingles were manufactured by ${parts}.`);
-          }
-          const granuleColor = (reportData.description as any).granuleColor?.trim();
-          if(granuleColor){
-            roofSentences.push(`The shingle surfaces were finished with ${granuleColor.toLowerCase()} granules.`);
-          }
-          const shingleMat = (reportData.description as any).shingleMat?.trim();
-          if(shingleMat && shingleMat !== "Unknown"){
-            roofSentences.push(`The shingles were reinforced with a ${shingleMat.toLowerCase()} mat.`);
-          }
-          const roofAge = (reportData.description as any).roofAge?.trim();
-          if(roofAge){
-            roofSentences.push(`The roof covering was ${roofAge}.`);
-          }
-          const roofLayers = (reportData.description as any).roofLayers?.trim();
-          if(roofLayers && roofLayers !== "Unknown"){
-            const layerPhrase = roofLayers === "1" ? "a single layer" : roofLayers === "2" ? "two layers (overlay)" : `${roofLayers} layers`;
-            roofSentences.push(`We observed ${layerPhrase} of roofing.`);
-          }
-          const underlayment = (reportData.description as any).underlayment?.trim();
-          if(underlayment){
-            roofSentences.push(`The visible underlayment was ${underlayment.toLowerCase()}.`);
-          }
-
-          if(reportData.description.ridgeWidth || reportData.description.ridgeExposure){
-            const ridgeWidth = reportData.description.ridgeWidth ? reportData.description.ridgeWidth : "standard width";
-            const ridgeExposure = reportData.description.ridgeExposure ? reportData.description.ridgeExposure : "";
-            roofSentences.push(`Ridge shingles were ${ridgeWidth} wide${ridgeExposure ? ` and were installed with ${ridgeExposure} of exposure` : ""}.`);
-          }
-
-          const selectedSlopes = [
-            reportData.description.primarySlope,
-            ...(reportData.description.additionalSlopes || [])
-          ].filter(Boolean);
-          if(selectedSlopes.length){
-            roofSentences.push(`Roof sections were sloped ${joinReadableList(selectedSlopes)} (rise to run).`);
-          }
-
-          if(reportData.description.guttersPresent || reportData.description.downspoutsPresent){
-            const guttersValue = reportData.description.guttersPresent?.toLowerCase();
-            const downspoutsValue = reportData.description.downspoutsPresent?.toLowerCase();
-            const gutters = guttersValue
-              ? `Gutters were ${guttersValue === "yes" ? "installed" : guttersValue === "no" ? "not present" : guttersValue}.`
-              : "";
-            const downspouts = downspoutsValue
-              ? `Downspouts were ${downspoutsValue === "yes" ? "installed" : downspoutsValue === "no" ? "not present" : downspoutsValue}.`
-              : "";
-            roofSentences.push([gutters, downspouts].filter(Boolean).join(" "));
-          }
-
-          if(reportData.description.roofAppurtenances.length){
-            roofSentences.push(`Roof appurtenances included ${joinReadableList(reportData.description.roofAppurtenances.map(item => item.toLowerCase()))}.`);
-          }
-
-          const eagleViewSentences = [];
-          if(reportData.description.eagleView === "Yes"){
-            eagleViewSentences.push("We obtained a report for the roof geometry, based on aerial photogrammetry, from EagleView that contains estimates of the roof dimensions.");
-            if(reportData.description.roofArea){
-              eagleViewSentences.push(`The EagleView calculated roof area of the residence was ${formatRoofArea(reportData.description.roofArea)}.`);
-            }
-            if(reportData.description.attachmentLetter){
-              eagleViewSentences.push(`Refer to Attachment ${reportData.description.attachmentLetter} – EagleView.`);
-            }
-          }
-
-          return [
-            descriptionSentences.filter(Boolean).join(" "),
-            roofSentences.filter(Boolean).join(" "),
-            eagleViewSentences.filter(Boolean).join(" ")
-          ].filter(Boolean).join("\n\n");
+          // Two-paragraph generator: Paragraph 1 covers the structure
+          // (opener, orientation+garage, roof opener, cladding, windows,
+          // fences, optional notable feature). Paragraph 2 covers the
+          // roof (slope, EagleView, shingle measurement, composition,
+          // installation, ridge, appurtenances). The implementation
+          // lives in src/report/descriptionGenerator.ts so it can be
+          // unit-tested independently.
+          return generateDescriptionParagraphs(
+            reportData.description,
+            { ...reportData.project, projectName: reportData.project.projectName || residenceName }
+          );
         };
         const formatAddressLine = (project) => {
           const parts = [project.address, project.city, project.state, project.zip].filter(Boolean);
@@ -10541,6 +10383,17 @@ const loadPdfJs = () => {
                           {FOUNDATION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
                       </div>
+                      <div>
+                        <div className="lbl">Opener Style <span className="lblHint">how paragraph 1 begins</span></div>
+                        <select className="inp" value={reportData.description.openerStyle || "inspected"} onChange={(e)=>updateReportSection("description", "openerStyle", e.target.value)}>
+                          <option value="inspected">"The inspected residence…"</option>
+                          <option value="named">"The {`{projectName}`} residence…"</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="lbl">Fence Type <span className="lblHint">used in narrative when populated</span></div>
+                        <input className="inp" value={reportData.description.fenceType || ""} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)} placeholder="e.g., wood, chain link, painted steel" />
+                      </div>
                     </div>
                     <div className="reportGrid" style={{marginTop:12}}>
                       <div>
@@ -10810,6 +10663,16 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
+                        <div className="lbl">Gutter Scope <span className="lblHint">used in narrative when gutters present</span></div>
+                        <select className="inp" value={reportData.description.gutterScope || ""} onChange={(e)=>updateReportSection("description", "gutterScope", e.target.value)}>
+                          <option value="">Select</option>
+                          <option value="along eaves">Along eaves</option>
+                          <option value="on some roof eaves">On some roof eaves</option>
+                          <option value="on the eave by the front entry">On the eave by the front entry</option>
+                          <option value="along the backyard perimeter">Along the backyard perimeter</option>
+                        </select>
+                      </div>
+                      <div>
                         <div className="lbl">Downspouts Present</div>
                         <select className="inp" value={reportData.description.downspoutsPresent} onChange={(e)=>updateReportSection("description", "downspoutsPresent", e.target.value)}>
                           <option value="">Select</option>
@@ -10850,6 +10713,20 @@ const loadPdfJs = () => {
                         <div className="lbl">Attachment Letter</div>
                         <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
                       </div>
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Roof Area Includes <span className="lblHint">free-text qualifier appended after the roof area</span></div>
+                      <input className="inp" value={reportData.description.roofAreaIncludes || ""} onChange={(e)=>updateReportSection("description", "roofAreaIncludes", e.target.value)} placeholder="e.g., which included the house, breezeway, and garage" />
+                    </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Notable Feature <span className="lblHint">optional sentence appended to paragraph 1 verbatim</span></div>
+                      <textarea
+                        className="inp"
+                        rows={2}
+                        value={reportData.description.notableFeature || ""}
+                        onChange={(e)=>updateReportSection("description", "notableFeature", e.target.value)}
+                        placeholder="e.g., Solar panels covered large portions of the rear west slope and the main south slope."
+                      />
                     </div>
                     <div className="sectionHint">
                       Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
