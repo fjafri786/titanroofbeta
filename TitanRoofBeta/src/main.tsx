@@ -61,6 +61,20 @@ const loadPdfJs = () => {
         roof: ["Shingles", "Ridge Cap", "Hip Cap", "Valley", "Flashing", "Other Roof Component"],
         exterior: ["Siding", "Downspout", "Gutter", "Trim", "Fascia", "Soffit", "Window Screen", "Fence", "Other Exterior Component"]
       };
+      // Per-component condition options for exterior-scope WIND markers.
+      // Wording follows ASTM E3176 §7.5.3 / HCI methodology — "displaced",
+      // "missing", "torn" rather than vague "damaged" or "broken".
+      const WIND_EXT_CONDITIONS: Record<string, string[]> = {
+        "Siding": ["Displaced", "Missing", "Torn", "Separated from substrate", "Fractured"],
+        "Downspout": ["Displaced", "Detached", "Bent", "Missing"],
+        "Gutter": ["Displaced", "Shifted", "Detached", "Dented by debris"],
+        "Trim": ["Displaced", "Detached", "Missing sections"],
+        "Fascia": ["Displaced", "Detached", "Separated"],
+        "Soffit": ["Displaced", "Detached", "Missing panels"],
+        "Window Screen": ["Torn", "Displaced from frame", "Missing"],
+        "Fence": ["Sections displaced", "Pickets missing", "Leaning", "Shifted"],
+        "Other Exterior Component": ["Displaced", "Missing", "Torn", "Detached"]
+      };
       const DAMAGE_MODES = [
         { key: "spatter", label: "Spatter" },
         { key: "dent", label: "Dent" },
@@ -103,18 +117,63 @@ const loadPdfJs = () => {
         { key: "missing", label: "Missing" }
       ];
 
-      const GARAGE_FACINGS = ["N", "S", "E", "W"];
+      const GARAGE_FACINGS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+      const GARAGE_BAYS = ["1", "2", "3", "4+"];
+      const GARAGE_ATTACHMENTS = ["Attached", "Detached", "Connected"];
 
       const OBS_CODES = [
-        { code: "DDM", label: "Deferred Maintenance" },
-        { code: "DMB", label: "Material Breakdown" },
-        { code: "DAR", label: "Aged Repairs" },
-        { code: "DMR", label: "Mismatched Repairs" },
-        { code: "DIF", label: "Improper Flashing" },
-        { code: "DII", label: "Improper Installation" },
-        { code: "ShP", label: "Premium Shingles" },
-        { code: "OTHER", label: "Other" }
+        // Roof / exterior deferred maintenance and quality observations
+        { code: "DDM", label: "Deferred Maintenance", area: "roof" },
+        { code: "DMB", label: "Material Breakdown", area: "roof" },
+        { code: "DAR", label: "Aged Repairs", area: "roof" },
+        { code: "DMR", label: "Mismatched Repairs", area: "roof" },
+        { code: "DIF", label: "Improper Flashing", area: "roof" },
+        { code: "DII", label: "Improper Installation", area: "roof" },
+        { code: "ShP", label: "Premium Shingles", area: "roof" },
+        // Interior / attic observations — added so the diagram is the
+        // primary input for moisture, drywall, and mechanical notes.
+        { code: "CWS", label: "Ceiling Water Stain", area: "int" },
+        { code: "AMO", label: "Active Moisture", area: "int" },
+        { code: "DWC", label: "Drywall Crack", area: "int" },
+        { code: "MOL", label: "Mold/Mildew", area: "int" },
+        { code: "MRE", label: "Mechanical Release", area: "int" },
+        { code: "ADS", label: "Attic Decking Stain", area: "int" },
+        { code: "OTHER", label: "Other", area: "any" }
       ];
+
+      // Codes that should render in blue on the diagram (water /
+      // moisture-related observations) so the inspector can spot them
+      // at a glance.
+      const MOISTURE_OBS_CODES = new Set(["CWS", "AMO", "MOL", "MRE", "ADS"]);
+
+      // Common interior rooms surfaced as quick-pick options on the
+      // OBS tool when area = "int". The user can also type a custom
+      // value via the room input.
+      const INTERIOR_ROOMS = [
+        "Kitchen",
+        "Living Room",
+        "Family Room",
+        "Master Bedroom",
+        "Bedroom",
+        "Bathroom",
+        "Hallway",
+        "Laundry",
+        "Garage Interior",
+        "Attic",
+        "Other",
+      ];
+
+      // Filtered condition options per OBS code (used only when
+      // area === "int"). Matches Paul Williams' phrasing patterns
+      // across recent reports.
+      const INT_CONDITION_OPTIONS: Record<string, string[]> = {
+        CWS: ["single-ringed stain", "multiple-ringed stains", "discoloration", "active drip"],
+        AMO: ["damp drywall", "wet flooring", "dripping condensate", "standing water"],
+        DWC: ["hairline crack", "horizontal crack", "vertical crack", "stair-step crack"],
+        MOL: ["surface mold", "mildew growth", "discoloration consistent with biological growth"],
+        MRE: ["corroded HVAC pan", "leaking supply line", "condensate drain blockage"],
+        ADS: ["water staining above this room", "decking discoloration", "rusted nail penetrations"],
+      };
       const OBS_AREAS = [
         { key: "roof", label: "Roof" },
         { key: "ext", label: "Ext" },
@@ -191,6 +250,54 @@ const loadPdfJs = () => {
         "Wood Shake",
         "Acrylic / Polycarbonate",
         "Copper (bay / decorative)",
+        "Other",
+      ];
+      // Primary roof covering options shown on the description tab.
+      // Maps to the lowercase phrasing the description generator
+      // expects (e.g. "laminated asphalt shingles" / "metal panel" /
+      // "TPO membrane"). Free-text remains supported via "Other".
+      const NOTABLE_FEATURE_TYPES = [
+        "Storage Building",
+        "Patio Cover",
+        "Carport",
+        "Pergola",
+        "Playset",
+        "Pool",
+        "Gazebo",
+        "Workshop",
+        "Solar Panels",
+        "Other",
+      ];
+      const NOTABLE_FEATURE_LOCATIONS = [
+        "Backyard",
+        "Front yard",
+        "North side",
+        "South side",
+        "East side",
+        "West side",
+        "Northeast corner",
+        "Northwest corner",
+        "Southeast corner",
+        "Southwest corner",
+      ];
+
+      const PRIMARY_ROOF_COVERINGS = [
+        "Laminated asphalt shingles",
+        "3-tab asphalt shingles",
+        "Metal panel",
+        "Standing-seam metal",
+        "R-panel metal",
+        "Stone-coated steel",
+        "Concrete tile",
+        "Clay tile",
+        "Slate",
+        "Wood shake",
+        "Wood shingle",
+        "TPO membrane",
+        "PVC membrane",
+        "EPDM membrane",
+        "Modified bitumen",
+        "Built-up roof (BUR)",
         "Other",
       ];
       const ROOF_COVERING_SCOPES = [
@@ -433,6 +540,35 @@ const loadPdfJs = () => {
           // Aerial figure (Description paragraph 2 closer)
           aerialFigureDate: "",
           aerialFigureSource: "Google Earth",
+          // Additional roof coverings — supports mixed-roof houses
+          // (e.g. main shingle + mod-bit patio + R-panel shed). Each
+          // entry produces a separate sentence appended after the
+          // primary roof description.
+          additionalCoverings: [] as Array<{
+            id: string;
+            type: string;
+            scope: string;
+            slope: string;
+            details: string;
+          }>,
+          // Per-elevation cladding override. When useDirectionalFinishes
+          // is true, each elevation has its own finish list and the
+          // generator builds direction-specific cladding sentences.
+          useDirectionalFinishes: false,
+          exteriorFinishesByDirection: { north: [] as string[], south: [] as string[], east: [] as string[], west: [] as string[] },
+          // Garage data (also synced from diagram garage marker when
+          // present). garageAttachment is a new field for "attached" /
+          // "detached" / "connected".
+          garageAttachment: "Attached",
+          // Notable features now a structured repeating list. The old
+          // notableFeature single-string field is preserved above for
+          // backward compat with saved projects.
+          notableFeatures: [] as Array<{
+            id: string;
+            type: string;
+            location: string;
+            description: string;
+          }>,
           // Reference fields preserved in the data model but moved off
           // the Description tab UI — surfaced on the Background tab and
           // consumed by Background / Inspection generators.
@@ -1489,8 +1625,8 @@ const loadPdfJs = () => {
           }>,
         });
 
-        // Project-properties modal tab (general | roof).
-        const [headerEditTab, setHeaderEditTab] = useState<"general" | "roof">("general");
+        // Project-properties modal is now single-tab (general only); roof
+        // covering and additional coverings live in the description tab.
 
         const initialPage = useMemo(() => ({
           id: uid(),
@@ -1687,23 +1823,42 @@ const loadPdfJs = () => {
           });
         }, [residenceName]);
 
+        // Roof covering / shingle properties live in description only.
+        // The legacy `roof` state at the top-level remains as a thin
+        // shim for any persisted-project compatibility but is no longer
+        // surfaced in the UI.
+
+        // Sync garage marker(s) from the diagram into the description
+        // tab. The diagram is the source of truth — when a garage
+        // polygon is placed, its facing/bays/attachment auto-fill the
+        // description fields so the inspector doesn't re-enter.
         useEffect(() => {
+          const garageMarkers = pageItems.filter(it => it.type === "garage");
+          if(garageMarkers.length === 0) return;
+          const m = garageMarkers[0];
+          const facing = m.data?.facing;
+          const bays = m.data?.bayCount;
+          const attachment = m.data?.attachment;
+          const facingMap: Record<string, string> = {
+            N: "North", S: "South", E: "East", W: "West",
+            NE: "Northeast", NW: "Northwest", SE: "Southeast", SW: "Southwest"
+          };
           setReportData(prev => {
-            const nextDesc = { ...prev.description };
-            if(!nextDesc.roofCovering){
-              nextDesc.roofCovering = roof.covering === "SHINGLE" ? "Laminated asphalt shingles" : (roof.covering === "METAL" ? "Metal" : "Other");
+            const next = { ...prev.description };
+            let changed = false;
+            if(next.garagePresent !== "Yes"){ next.garagePresent = "Yes"; changed = true; }
+            const desiredElev = facing ? (facingMap[facing] || facing) : next.garageElevation;
+            if(facing && next.garageElevation !== desiredElev){ next.garageElevation = desiredElev; changed = true; }
+            const desiredBays = bays ? String(bays) : next.garageBays;
+            if(bays && next.garageBays !== desiredBays){ next.garageBays = desiredBays; changed = true; }
+            const desiredAttachment = attachment || (next as any).garageAttachment || "Attached";
+            if(attachment && (next as any).garageAttachment !== desiredAttachment){
+              (next as any).garageAttachment = desiredAttachment;
+              changed = true;
             }
-            if(roof.covering === "SHINGLE"){
-              if(!nextDesc.shingleLength){
-                nextDesc.shingleLength = roof.shingleLength;
-              }
-              if(!nextDesc.shingleExposure){
-                nextDesc.shingleExposure = roof.shingleExposure;
-              }
-            }
-            return { ...prev, description: nextDesc };
+            return changed ? { ...prev, description: next } : prev;
           });
-        }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
+        }, [pageItems]);
 
         const serializeFile = (obj) => obj ? {
           name: obj.name,
@@ -4973,17 +5128,17 @@ const loadPdfJs = () => {
         }, [pageItems]);
 
         // === Roof summary line ===
+        // Pulls directly from description tab fields so the project header
+        // shows whatever the user typed in description.
         const roofSummary = useMemo(() => {
-          if(roof.covering === "SHINGLE"){
-            const kind = SHINGLE_KIND.find(x=>x.code===roof.shingleKind)?.label || "Shingles";
-            return `${kind} • ${roof.shingleLength} • ${roof.shingleExposure}`;
-          }
-          if(roof.covering === "METAL"){
-            const kind = METAL_KIND.find(x=>x.code===roof.metalKind)?.label || "Metal";
-            return `${kind} • ${roof.metalPanelWidth}`;
-          }
-          return roof.otherDesc ? `Other • ${roof.otherDesc}` : "Other";
-        }, [roof]);
+          const d: any = reportData.description;
+          const covering = (d.roofCovering || "").trim();
+          if(!covering) return "—";
+          const bits = [covering];
+          if(d.shingleLength) bits.push(d.shingleLength);
+          if(d.shingleExposure) bits.push(d.shingleExposure);
+          return bits.join(" • ");
+        }, [reportData.description]);
 
         const activeBackground = activePage?.background || null;
         const mapPreviewUrl = useMemo(() => {
@@ -5131,11 +5286,26 @@ const loadPdfJs = () => {
           );
         };
 
+        // Moisture / water observations render in blue so the
+        // inspector can distinguish them at a glance from structural
+        // observations (deferred maintenance, material breakdown, etc.).
+        const obsColor = (obs: any): string => {
+          const code = obs?.data?.code || "";
+          return MOISTURE_OBS_CODES.has(code) ? "#1d4ed8" : "var(--c-obs)";
+        };
+        const obsFillRgba = (obs: any, alpha: number): string => {
+          if(MOISTURE_OBS_CODES.has(obs?.data?.code || "")){
+            return `rgba(29,78,216,${alpha})`;
+          }
+          return `rgba(147,51,234,${alpha})`;
+        };
+
         const renderObsArea = (obs) => {
           const pts = obs.data.points || [];
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const isSel = selectedId === obs.id;
           const bb = bboxFromPoints(pts);
+          const oc = obsColor(obs);
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
@@ -5143,15 +5313,15 @@ const loadPdfJs = () => {
             <g key={obs.id}>
               <polygon
                 points={ptsPx}
-                fill={isSel ? "rgba(147,51,234,0.18)" : "rgba(147,51,234,0.12)"}
-                stroke="var(--c-obs)"
+                fill={obsFillRgba(obs, isSel ? 0.18 : 0.12)}
+                stroke={oc}
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill="var(--c-obs)" fontWeight="800" fontSize="10">
+              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill={oc} fontWeight="800" fontSize="10">
                 {obs.name} • {obs.data.code}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill="var(--c-obs)" fontWeight="700" fontSize="9">
+                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill={oc} fontWeight="700" fontSize="9">
                   {areaLabel}
                 </text>
               )}
@@ -5166,6 +5336,7 @@ const loadPdfJs = () => {
         };
 
         const renderObsArrow = (obs) => {
+          const oc = obsColor(obs);
           const [a, b] = obs.data.points || [];
           if(!a || !b) return null;
           const isSel = selectedId === obs.id;
@@ -5181,12 +5352,12 @@ const loadPdfJs = () => {
             const p2 = { x: x - headSize * Math.cos(theta - Math.PI / 6), y: y - headSize * Math.sin(theta - Math.PI / 6) };
             const p3 = { x: x - headSize * Math.cos(theta + Math.PI / 6), y: y - headSize * Math.sin(theta + Math.PI / 6) };
             if(obs.data.arrowType === "circle"){
-              return <circle cx={x} cy={y} r="6" fill="var(--c-obs)" />;
+              return <circle cx={x} cy={y} r="6" fill={oc} />;
             }
             if(obs.data.arrowType === "box"){
-              return <rect x={x - 6} y={y - 6} width="12" height="12" fill="var(--c-obs)" rx="2" />;
+              return <rect x={x - 6} y={y - 6} width="12" height="12" fill={oc} rx="2" />;
             }
-            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
+            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill={oc} />;
           };
           const labelOffset = 16;
           const labelPosition = obs.data.arrowLabelPosition || "end";
@@ -5206,16 +5377,16 @@ const loadPdfJs = () => {
           const perpY = Math.cos(angle) * perpOffset;
           return (
             <g key={obs.id}>
-              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={isSel ? 3 : 2} />
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke={oc} strokeWidth={isSel ? 3 : 2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="10">
+                <text x={labelX} y={labelY} fill={oc} fontWeight="800" fontSize="10">
                   {obs.data.label}
                 </text>
               )}
               {lengthLabel && (
-                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="8" textAnchor="middle">
+                <text x={midX + perpX} y={midY + perpY} fill={oc} fontWeight="700" fontSize="8" textAnchor="middle">
                   {lengthLabel}
                 </text>
               )}
@@ -5232,6 +5403,7 @@ const loadPdfJs = () => {
         };
 
         const renderObsAreaPrint = (obs) => {
+          const oc = obsColor(obs);
           const pts = obs.data.points || [];
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
@@ -5242,15 +5414,15 @@ const loadPdfJs = () => {
             <g key={`print-${obs.id}`}>
               <polygon
                 points={ptsPx}
-                fill="rgba(147,51,234,0.12)"
-                stroke="var(--c-obs)"
+                fill={obsFillRgba(obs, 0.12)}
+                stroke={oc}
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill="var(--c-obs)" fontWeight="800" fontSize="10">
+              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill={oc} fontWeight="800" fontSize="10">
                 {obs.name} • {obs.data.code}
               </text>
               {areaLabel && (
-                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill="var(--c-obs)" fontWeight="700" fontSize="9">
+                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill={oc} fontWeight="700" fontSize="9">
                   {areaLabel}
                 </text>
               )}
@@ -5259,6 +5431,7 @@ const loadPdfJs = () => {
         };
 
         const renderObsArrowPrint = (obs) => {
+          const oc = obsColor(obs);
           const [a, b] = obs.data.points || [];
           if(!a || !b) return null;
           const ax = toPxX(a.x);
@@ -5273,12 +5446,12 @@ const loadPdfJs = () => {
             const p2 = { x: x - headSize * Math.cos(theta - Math.PI / 6), y: y - headSize * Math.sin(theta - Math.PI / 6) };
             const p3 = { x: x - headSize * Math.cos(theta + Math.PI / 6), y: y - headSize * Math.sin(theta + Math.PI / 6) };
             if(obs.data.arrowType === "circle"){
-              return <circle cx={x} cy={y} r="6" fill="var(--c-obs)" />;
+              return <circle cx={x} cy={y} r="6" fill={oc} />;
             }
             if(obs.data.arrowType === "box"){
-              return <rect x={x - 6} y={y - 6} width="12" height="12" fill="var(--c-obs)" rx="2" />;
+              return <rect x={x - 6} y={y - 6} width="12" height="12" fill={oc} rx="2" />;
             }
-            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill="var(--c-obs)" />;
+            return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill={oc} />;
           };
           const labelOffset = 16;
           const labelPosition = obs.data.arrowLabelPosition || "end";
@@ -5298,16 +5471,16 @@ const loadPdfJs = () => {
           const perpY = Math.cos(angle) * perpOffset;
           return (
             <g key={`print-${obs.id}`}>
-              <line x1={ax} y1={ay} x2={bx} y2={by} stroke="var(--c-obs)" strokeWidth={2} />
+              <line x1={ax} y1={ay} x2={bx} y2={by} stroke={oc} strokeWidth={2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
               {obs.data.label && (
-                <text x={labelX} y={labelY} fill="var(--c-obs)" fontWeight="800" fontSize="10">
+                <text x={labelX} y={labelY} fill={oc} fontWeight="800" fontSize="10">
                   {obs.data.label}
                 </text>
               )}
               {lengthLabel && (
-                <text x={midX + perpX} y={midY + perpY} fill="var(--c-obs)" fontWeight="700" fontSize="8" textAnchor="middle">
+                <text x={midX + perpX} y={midY + perpY} fill={oc} fontWeight="700" fontSize="8" textAnchor="middle">
                   {lengthLabel}
                 </text>
               )}
@@ -5994,42 +6167,6 @@ const loadPdfJs = () => {
           if(has(w.notes)) parts.push(w.notes.trim());
           return parts.join(" ");
         };
-        const executiveSummaryParagraph = () => {
-          // Two-sentence synthesis used on the opening page. Sentence 1
-          // anchors the inspection date and reported event. Sentence 2
-          // states the finding (or absence of finding) using the same
-          // evidence anchors that drive Conclusions: test-square
-          // bruises and wind shingle counts.
-          const tsItems = pageItems.filter(item => item.type === "ts");
-          const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
-          const windItems = pageItems.filter(item => item.type === "wind");
-          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
-          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
-          const bg: any = reportData.background;
-          const inspectionDate = reportData.project.inspectionDate?.trim();
-          const addressLine = formatAddressLine(reportData.project);
-          const dateOfLoss = bg.dateOfLoss?.trim();
-          const bits: string[] = [];
-          bits.push(
-            `This report summarizes our findings from an engineering inspection of ${addressLine && addressLine !== "—" ? addressLine : "the captioned residence"}${inspectionDate ? ` conducted on ${inspectionDate}` : ""}${dateOfLoss ? ` following a reported weather event on ${dateOfLoss}` : ""}.`
-          );
-          const hailFound = tsBruiseTotal > 0;
-          const windFound = (creasedTotal + tornTotal) > 0;
-          if(hailFound || windFound){
-            const found: string[] = [];
-            if(hailFound) found.push(`${tsBruiseTotal} hail-caused bruise${tsBruiseTotal === 1 ? "" : "s"} in our test areas`);
-            if(windFound){
-              const wbits: string[] = [];
-              if(creasedTotal) wbits.push(`${creasedTotal} creased`);
-              if(tornTotal) wbits.push(`${tornTotal} torn or missing`);
-              found.push(`${wbits.join(" and ")} shingle${(creasedTotal + tornTotal) === 1 ? "" : "s"} from wind`);
-            }
-            bits.push(`We identified ${found.join("; and ")}.  Affected components can be repaired using standard industry methods.`);
-          } else {
-            bits.push("We did not identify hail- or wind-caused conditions to the roof covering that would necessitate repair or replacement.");
-          }
-          return bits.join("  ");
-        };
         const discussionParagraph = () => {
           // Forensic discussion: a paragraph each for hail, wind, and
           // (when interior findings exist) interior moisture. Each
@@ -6138,6 +6275,15 @@ const loadPdfJs = () => {
           return sentences.join("  ");
         };
         const coverLetterParagraph = () => {
+          // Haag-standard cover letter:
+          //   1. Date (right-aligned spelled-out month) at the top.
+          //   2. Recipient block: letterhead lines.
+          //   3. Attention: line.
+          //   4. Re: block — insured / property / file numbers.
+          //   5. Opening paragraph — scope is derived from diagram
+          //      markers (TS = hail, WIND = wind, OBS interior =
+          //      interior moisture).
+          //   6. Limiting conditions paragraph (full Haag boilerplate).
           const writer = reportData.writer;
           const project = reportData.project;
           const inspectionDate = project.inspectionDate?.trim();
@@ -6148,20 +6294,64 @@ const loadPdfJs = () => {
           const subject = writer.subject?.trim();
           const clientFile = writer.clientFile?.trim();
           const haagFile = writer.haagFile?.trim();
-          const lines = [];
+          const scopeName = project.projectName?.trim() || residenceName?.trim() || "captioned residence";
+
+          // ---- Date formatting ("June 20, 2025") ----
+          const formatLetterDate = (raw: string): string => {
+            if(!raw) return new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+            // Accept "YYYY-MM-DD", "MM/DD/YYYY", or already-spelled-out.
+            const tryDate = new Date(raw);
+            if(!isNaN(tryDate.getTime())){
+              return tryDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+            }
+            return raw;
+          };
+          const dateLine = formatLetterDate(inspectionDate || "");
+
+          // ---- Diagram-derived scope ----
+          const tsItems = pageItems.filter(it => it.type === "ts");
+          const windItems = pageItems.filter(it => it.type === "wind");
+          const obsInterior = pageItems.filter(it => it.type === "obs" && (it.data?.area === "int"));
+          const scopeBits: string[] = [];
+          if(tsItems.length > 0) scopeBits.push("hail");
+          if(windItems.length > 0) scopeBits.push("wind");
+          const perilClause = scopeBits.length === 0
+            ? "storm-related"
+            : scopeBits.length === 1
+              ? scopeBits[0]
+              : `${scopeBits[0]} and ${scopeBits[1]}`;
+          const interiorClause = obsInterior.length > 0
+            ? " We also evaluated reported interior moisture conditions."
+            : "";
+          const dateClause = inspectionDate ? ` Our inspection was conducted on ${formatLetterDate(inspectionDate)}.` : "";
+
+          // ---- Compose the letter ----
+          const lines: string[] = [];
+          // Date (the renderer right-aligns this when the cover letter
+          // is rendered in the preview; we mark it with a leading
+          // tab-like spacing for plain-text fallback.)
+          lines.push(dateLine);
+          lines.push("");
           if(letterhead) lines.push(letterhead);
           if(attention) lines.push(`Attention: ${attention}`);
-          if(reference) lines.push(`Re: ${reference}`);
-          if(subject) lines.push(subject);
-          if(addressLine && addressLine !== "—") lines.push(addressLine);
-          const fileLine = [clientFile ? `Client File: ${clientFile}` : "", haagFile ? `Haag File: ${haagFile}` : ""].filter(Boolean).join("    ");
-          if(fileLine) lines.push(fileLine);
-          const scopeName = project.projectName?.trim() || residenceName?.trim() || "captioned residence";
-          const dateClause = inspectionDate ? ` Our inspection was conducted on ${inspectionDate}.` : "";
+          // Re: block
+          const reBlock: string[] = [];
+          if(reference) reBlock.push(reference);
+          else if(scopeName) reBlock.push(scopeName);
+          if(subject) reBlock.push(subject);
+          if(addressLine && addressLine !== "—") reBlock.push(addressLine);
+          if(reBlock.length){
+            lines.push(`Re:  ${reBlock[0]}`);
+            for(let i = 1; i < reBlock.length; i++) lines.push(`     ${reBlock[i]}`);
+          }
+          if(clientFile) lines.push(`Client File: ${clientFile}`);
+          if(haagFile) lines.push(`Haag File: ${haagFile}`);
           lines.push("");
-          lines.push(`Complying with your request, we inspected the ${scopeName} to determine the extent of damage caused by wind and/or hail. Our procedures have included an on-site inspection and review of pertinent documents.${dateClause}`);
+          lines.push(`Complying with your request, we inspected the ${scopeName} to determine the extent of ${perilClause} damage to the roof and exterior. Our procedures included an on-site inspection, an interview with the property representative, and review of pertinent documents.${dateClause}${interiorClause}`);
           lines.push("");
-          lines.push("This engineering report has been written for your sole use and purpose. The findings and conclusions are based upon the inspection described herein and the information available at the time of writing.");
+          lines.push(
+            "This engineering report has been written for your sole use and purpose, and only you have the authority to distribute this report to any other person, firm, or corporation. The findings and conclusions presented herein are based upon the inspection described, the information available at the time of writing, and the application of generally accepted engineering principles. We do not have, and we disclaim, any contractual relationship with, or duty or obligation to, any party other than the addressee of this report."
+          );
           return lines.join("\n");
         };
         const conclusionsParagraph = () => {
@@ -6317,7 +6507,6 @@ const loadPdfJs = () => {
             .join("\n\n");
           const weatherText = weatherParagraph();
           const discussionText = discussionParagraph();
-          const executiveSummaryText = executiveSummaryParagraph();
           return [
             {
               key: "coverLetter",
@@ -6327,15 +6516,6 @@ const loadPdfJs = () => {
               generated: coverLetterParagraph(),
               override: overrides.coverLetter || "",
               status: previewSectionStatus("coverLetter")
-            },
-            {
-              key: "executiveSummary",
-              label: "Executive Summary",
-              tone: "project",
-              editTab: PREVIEW_EDIT_TAB.coverLetter,
-              generated: executiveSummaryText,
-              override: (overrides as any).executiveSummary || "",
-              status: executiveSummaryText.trim() ? "ready" : "partial"
             },
             {
               key: "description",
@@ -7105,26 +7285,85 @@ const loadPdfJs = () => {
           />
         );
 
-        // Helpers for the roof-properties multi-covering list.
+        // Helpers for the description-tab multi-covering list. Each
+        // entry captures a covering type, the scope it applies to, an
+        // optional slope, and free-text details so the report can
+        // describe houses with mixed coverings (e.g. shingle main +
+        // mod-bit patio + R-panel shed).
         const addAdditionalCovering = () => {
-          setRoof(p => ({
-            ...p,
-            additionalCoverings: [
-              ...(p.additionalCoverings || []),
-              { id: uid(), category: "Copper (bay / decorative)", scope: "Bay window", notes: "" },
-            ],
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              additionalCoverings: [
+                ...((prev.description as any).additionalCoverings || []),
+                { id: uid(), type: "Modified Bitumen", scope: "rear patio addition", slope: "", details: "" },
+              ],
+            },
           }));
         };
-        const updateAdditionalCovering = (id: string, patch: Partial<{category: string; scope: string; notes: string}>) => {
-          setRoof(p => ({
-            ...p,
-            additionalCoverings: (p.additionalCoverings || []).map(c => c.id === id ? { ...c, ...patch } : c),
+        const updateAdditionalCovering = (
+          id: string,
+          patch: Partial<{ type: string; scope: string; slope: string; details: string }>
+        ) => {
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              additionalCoverings: ((prev.description as any).additionalCoverings || []).map((c: any) =>
+                c.id === id ? { ...c, ...patch } : c
+              ),
+            },
           }));
         };
         const removeAdditionalCovering = (id: string) => {
-          setRoof(p => ({
-            ...p,
-            additionalCoverings: (p.additionalCoverings || []).filter(c => c.id !== id),
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              additionalCoverings: ((prev.description as any).additionalCoverings || []).filter(
+                (c: any) => c.id !== id
+              ),
+            },
+          }));
+        };
+
+        // Notable features helpers — structured replacement for the
+        // single-textarea field. Each entry produces a sentence
+        // appended to description paragraph 1.
+        const addNotableFeature = () => {
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              notableFeatures: [
+                ...(((prev.description as any).notableFeatures) || []),
+                { id: uid(), type: "Storage Building", location: "Backyard", description: "" },
+              ],
+            },
+          }));
+        };
+        const updateNotableFeature = (
+          id: string,
+          patch: Partial<{ type: string; location: string; description: string }>
+        ) => {
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              notableFeatures: (((prev.description as any).notableFeatures) || []).map((f: any) =>
+                f.id === id ? { ...f, ...patch } : f
+              ),
+            },
+          }));
+        };
+        const removeNotableFeature = (id: string) => {
+          setReportData(prev => ({
+            ...prev,
+            description: {
+              ...prev.description,
+              notableFeatures: (((prev.description as any).notableFeatures) || []).filter((f: any) => f.id !== id),
+            },
           }));
         };
 
@@ -7322,130 +7561,6 @@ const loadPdfJs = () => {
           </>
         );
 
-        const headerEditRoofTab = (
-          <>
-            <div className="reportCard tone-roof" style={{marginBottom:10}}>
-              <div className="reportSectionTitle">Primary Roof Covering</div>
-              <div className="rowTop" style={{marginBottom:10}}>
-                <div style={{flex:1}}>
-                  <div className="lbl">Covering</div>
-                  <select className="inp" value={roof.covering} onChange={(e)=>setRoof(p=>({...p, covering:e.target.value}))}>
-                    <option value="SHINGLE">Shingle</option>
-                    <option value="METAL">Metal</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              {roof.covering==="SHINGLE" && (
-                <>
-                  <div className="rowTop" style={{marginBottom:10}}>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Shingle Type</div>
-                      <select className="inp" value={roof.shingleKind} onChange={(e)=>setRoof(p=>({...p, shingleKind:e.target.value}))}>
-                        {SHINGLE_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                      </select>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div className="lbl">Length</div>
-                      <select className="inp" value={roof.shingleLength} onChange={(e)=>setRoof(p=>({...p, shingleLength:e.target.value}))}>
-                        {SHINGLE_LENGTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{marginBottom:10}}>
-                    <div className="lbl">Exposure</div>
-                    <select className="inp" value={roof.shingleExposure} onChange={(e)=>setRoof(p=>({...p, shingleExposure:e.target.value}))}>
-                      {SHINGLE_EXPOSURES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              {roof.covering==="METAL" && (
-                <div className="rowTop" style={{marginBottom:10}}>
-                  <div style={{flex:1}}>
-                    <div className="lbl">Metal Type</div>
-                    <select className="inp" value={roof.metalKind} onChange={(e)=>setRoof(p=>({...p, metalKind:e.target.value}))}>
-                      {METAL_KIND.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
-                    </select>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div className="lbl">Panel Width</div>
-                    <select className="inp" value={roof.metalPanelWidth} onChange={(e)=>setRoof(p=>({...p, metalPanelWidth:e.target.value}))}>
-                      {METAL_PANEL_WIDTHS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {roof.covering==="OTHER" && (
-                <div style={{marginBottom:10}}>
-                  <div className="lbl">Describe</div>
-                  <input className="inp" value={roof.otherDesc} onChange={(e)=>setRoof(p=>({...p, otherDesc:e.target.value}))} placeholder="e.g., TPO, mod-bit, tile, slate, wood shake, built-up, acrylic…"/>
-                </div>
-              )}
-            </div>
-
-            <div className="reportCard tone-roof" style={{marginBottom:10}}>
-              <div className="reportSectionTitle">Additional Coverings</div>
-              <div className="tiny" style={{marginBottom:10}}>
-                Add more entries when the structure has multiple covering materials — for example, laminate shingles on the main roof, copper on a bay window, or acrylic on a patio deck.
-              </div>
-              {(roof.additionalCoverings || []).map(c => (
-                <div key={c.id} className="card" style={{marginBottom:10}}>
-                  <div className="reportGrid">
-                    <div>
-                      <div className="lbl">Covering Category</div>
-                      <select
-                        className="inp"
-                        value={c.category}
-                        onChange={(e) => updateAdditionalCovering(c.id, { category: e.target.value })}
-                      >
-                        {ROOF_COVERING_CATEGORIES.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <div className="lbl">Applies To</div>
-                      <select
-                        className="inp"
-                        value={c.scope}
-                        onChange={(e) => updateAdditionalCovering(c.id, { scope: e.target.value })}
-                      >
-                        {ROOF_COVERING_SCOPES.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{marginTop:10}}>
-                    <div className="lbl">Notes</div>
-                    <input
-                      className="inp"
-                      value={c.notes}
-                      onChange={(e) => updateAdditionalCovering(c.id, { notes: e.target.value })}
-                      placeholder="e.g., copper standing seam over kitchen bay, 18 inch pans"
-                    />
-                  </div>
-                  <div style={{marginTop:10, textAlign:"right"}}>
-                    <button className="btn btnDanger" type="button" onClick={() => removeAdditionalCovering(c.id)}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {(!roof.additionalCoverings || roof.additionalCoverings.length === 0) && (
-                <div className="tiny">No additional coverings yet.</div>
-              )}
-              <button className="btn btnPrimary" type="button" onClick={addAdditionalCovering} style={{marginTop:10}}>
-                + Add Covering
-              </button>
-            </div>
-          </>
-        );
-
         const headerEditModal = hdrEditOpen && (
           <div
             className="modalBackdrop"
@@ -7455,31 +7570,11 @@ const loadPdfJs = () => {
               <div className="modalHeader">
                 <div className="projectPropsTitleRow">
                   <div className="modalTitle">Project properties</div>
-                  <div className="projectPropsTabs" role="tablist" aria-label="Project properties sections">
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={headerEditTab === "general"}
-                      className={"projectPropsTab" + (headerEditTab === "general" ? " active" : "")}
-                      onClick={() => setHeaderEditTab("general")}
-                    >
-                      General
-                    </button>
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={headerEditTab === "roof"}
-                      className={"projectPropsTab" + (headerEditTab === "roof" ? " active" : "")}
-                      onClick={() => setHeaderEditTab("roof")}
-                    >
-                      Roof
-                    </button>
-                  </div>
                 </div>
                 <button className="btn" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
               </div>
               <div className="modalBody">
-                {headerEditTab === "general" ? headerEditGeneralTab : headerEditRoofTab}
+                {headerEditGeneralTab}
               </div>
               <div className="modalActions">
                 <button className="btn btnPrimary" type="button" onClick={()=>setHdrEditOpen(false)}>Done</button>
@@ -9944,8 +10039,8 @@ const loadPdfJs = () => {
                         {activeItem.type === "garage" && (
                           <>
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Facing Direction</div>
-                              <div className="radioGrid">
+                              <div className="lbl">Opens toward</div>
+                              <div className="radioGrid wrap">
                                 {GARAGE_FACINGS.map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.facing===d ? "active":"")} onClick={()=>updateItemData("facing", d)}>{d}</div>
                                 ))}
@@ -9953,30 +10048,43 @@ const loadPdfJs = () => {
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Bay Count</div>
-                              <div className="row">
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("bayCount", Math.max(0, (activeItem.data.bayCount || 0) - 1))}
-                                >
-                                  −
-                                </button>
-                                <input
-                                  className="inp"
-                                  type="number"
-                                  min="0"
-                                  value={activeItem.data.bayCount || 0}
-                                  onChange={(e)=>updateItemData("bayCount", Math.max(0, parseInt(e.target.value, 10) || 0))}
-                                />
-                                <button
-                                  className="btn"
-                                  style={{flex:"0 0 auto"}}
-                                  onClick={()=>updateItemData("bayCount", (activeItem.data.bayCount || 0) + 1)}
-                                >
-                                  +
-                                </button>
+                              <div className="lbl">Bays</div>
+                              <div className="radioGrid">
+                                {GARAGE_BAYS.map(b => (
+                                  <div
+                                    key={b}
+                                    className={"radio " + (String(activeItem.data.bayCount || "") === b ? "active" : "")}
+                                    onClick={()=>updateItemData("bayCount", b)}
+                                  >
+                                    {b}
+                                  </div>
+                                ))}
                               </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Attachment</div>
+                              <div className="radioGrid">
+                                {GARAGE_ATTACHMENTS.map(a => (
+                                  <div
+                                    key={a}
+                                    className={"radio " + ((activeItem.data.attachment || "Attached") === a ? "active" : "")}
+                                    onClick={()=>updateItemData("attachment", a)}
+                                  >
+                                    {a}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="lbl">Dimensions (optional)</div>
+                              <input
+                                className="inp"
+                                value={activeItem.data.dimensions || ""}
+                                onChange={(e)=>updateItemData("dimensions", e.target.value)}
+                                placeholder="e.g., 24 x 24"
+                              />
                             </div>
 
                             <div style={{marginBottom:10}}>
@@ -9991,7 +10099,7 @@ const loadPdfJs = () => {
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Notes</div>
-                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Door condition, opener, etc."/>
+                              <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Door condition, etc."/>
                             </div>
 
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Garage</button>
@@ -10051,6 +10159,36 @@ const loadPdfJs = () => {
                                 ))}
                               </div>
                             </div>
+
+                            {activeItem.data.scope === "exterior" && (() => {
+                              const component = activeItem.data.component || "Siding";
+                              const options = WIND_EXT_CONDITIONS[component] || WIND_EXT_CONDITIONS["Other Exterior Component"];
+                              return (
+                                <>
+                                  <div style={{marginBottom:10}}>
+                                    <div className="lbl">Condition</div>
+                                    <select
+                                      className="inp"
+                                      value={activeItem.data.condition || ""}
+                                      onChange={(e)=>updateItemData("condition", e.target.value)}
+                                    >
+                                      <option value="">Select</option>
+                                      {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                  </div>
+                                  <div style={{marginBottom:10}}>
+                                    <div className="lbl">Count (optional)</div>
+                                    <input
+                                      className="inp"
+                                      type="number"
+                                      min="0"
+                                      value={activeItem.data.count || 0}
+                                      onChange={(e)=>updateItemData("count", Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                    />
+                                  </div>
+                                </>
+                              );
+                            })()}
 
                             {activeItem.data.scope !== "exterior" && (
                               <>
@@ -10181,7 +10319,7 @@ const loadPdfJs = () => {
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Area (optional)</div>
+                              <div className="lbl">Area</div>
                               <div className="radioGrid">
                                 {OBS_AREAS.map(area => (
                                   <div
@@ -10194,6 +10332,68 @@ const loadPdfJs = () => {
                                 ))}
                               </div>
                             </div>
+
+                            {activeItem.data.area === "int" && (
+                              <>
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Room</div>
+                                  <select
+                                    className="inp"
+                                    value={INTERIOR_ROOMS.includes(activeItem.data.room || "") ? (activeItem.data.room || "") : (activeItem.data.room ? "Other" : "")}
+                                    onChange={(e)=>{
+                                      if(e.target.value === "Other"){ updateItemData("room", ""); }
+                                      else updateItemData("room", e.target.value);
+                                    }}
+                                  >
+                                    <option value="">Select</option>
+                                    {INTERIOR_ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
+                                  </select>
+                                  {(activeItem.data.room === "" || (activeItem.data.room && !INTERIOR_ROOMS.includes(activeItem.data.room))) && (
+                                    <input
+                                      className="inp"
+                                      style={{marginTop:6}}
+                                      value={activeItem.data.room || ""}
+                                      onChange={(e)=>updateItemData("room", e.target.value)}
+                                      placeholder="Room name"
+                                    />
+                                  )}
+                                </div>
+
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Condition</div>
+                                  <select
+                                    className="inp"
+                                    value={activeItem.data.condition || ""}
+                                    onChange={(e)=>updateItemData("condition", e.target.value)}
+                                  >
+                                    <option value="">Select</option>
+                                    {(INT_CONDITION_OPTIONS[activeItem.data.code] || []).map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Location within room</div>
+                                  <input
+                                    className="inp"
+                                    value={activeItem.data.locationDetail || ""}
+                                    onChange={(e)=>updateItemData("locationDetail", e.target.value)}
+                                    placeholder="e.g., near the middle, NE corner, adjacent to HVAC register"
+                                  />
+                                </div>
+
+                                <div style={{marginBottom:10}}>
+                                  <div className="lbl">Dimensions (optional)</div>
+                                  <input
+                                    className="inp"
+                                    value={activeItem.data.dimensions || ""}
+                                    onChange={(e)=>updateItemData("dimensions", e.target.value)}
+                                    placeholder="e.g., approximately 12 inches in diameter"
+                                  />
+                                </div>
+                              </>
+                            )}
 
                             {activeItem.data.kind === "arrow" && (
                               <>
@@ -10640,7 +10840,7 @@ const loadPdfJs = () => {
                   {showSub("structure") && renderReportBubble({
                     tone: "structure",
                     title: "Structure",
-                    subtitle: "Stories, framing, foundation, exterior finishes, fenestration, fence, and garage.",
+                    subtitle: "Stories, framing, foundation, finishes, fenestration, garage.",
                     status: groupStatus(structureFields),
                     sectionKey: "description.structure",
                     children: (
@@ -10677,27 +10877,74 @@ const loadPdfJs = () => {
                           {FOUNDATION_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <div className="lbl">Opener Style <span className="lblHint">how paragraph 1 begins</span></div>
-                        <select className="inp" value={reportData.description.openerStyle || "inspected"} onChange={(e)=>updateReportSection("description", "openerStyle", e.target.value)}>
-                          <option value="inspected">"The inspected residence…"</option>
-                          <option value="named">"The {`{projectName}`} residence…"</option>
-                        </select>
-                      </div>
                     </div>
                     <div style={{marginTop:12}}>
-                      <div className="lbl">Exterior Finishes <span className="lblHint">renders as Oxford-joined list in paragraph 1</span></div>
-                      <div className="chipList">
-                        {EXTERIOR_FINISHES.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + ((reportData.description.exteriorFinishes || []).includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("description", "exteriorFinishes", option)}
-                          >
-                            {option}
-                          </div>
-                        ))}
+                      <div className="row" style={{alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
+                        <div className="lbl" style={{margin:0}}>Exterior finishes</div>
+                        <label className="tiny" style={{display:"flex", alignItems:"center", gap:6, cursor:"pointer"}}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean((reportData.description as any).useDirectionalFinishes)}
+                            onChange={(e)=>updateReportSection("description", "useDirectionalFinishes", e.target.checked)}
+                          />
+                          Specify by elevation
+                        </label>
                       </div>
+                      {!((reportData.description as any).useDirectionalFinishes) && (
+                        <div className="chipList">
+                          {EXTERIOR_FINISHES.map(option => (
+                            <div
+                              key={option}
+                              className={"chip " + ((reportData.description.exteriorFinishes || []).includes(option) ? "active" : "")}
+                              onClick={() => toggleReportList("description", "exteriorFinishes", option)}
+                            >
+                              {option}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(reportData.description as any).useDirectionalFinishes && (
+                        <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                          {[
+                            { key: "north", label: "North elevation" },
+                            { key: "south", label: "South elevation" },
+                            { key: "east", label: "East elevation" },
+                            { key: "west", label: "West elevation" },
+                          ].map(row => {
+                            const list = ((reportData.description as any).exteriorFinishesByDirection?.[row.key]) || [];
+                            const toggle = (option: string) => {
+                              setReportData(prev => {
+                                const current = (prev.description as any).exteriorFinishesByDirection || { north: [], south: [], east: [], west: [] };
+                                const arr = current[row.key] || [];
+                                const next = arr.includes(option) ? arr.filter((x: string) => x !== option) : [...arr, option];
+                                return {
+                                  ...prev,
+                                  description: {
+                                    ...prev.description,
+                                    exteriorFinishesByDirection: { ...current, [row.key]: next },
+                                  },
+                                };
+                              });
+                            };
+                            return (
+                              <div key={row.key}>
+                                <div className="tiny" style={{marginBottom:4, fontWeight:600}}>{row.label}</div>
+                                <div className="chipList">
+                                  {EXTERIOR_FINISHES.map(option => (
+                                    <div
+                                      key={option}
+                                      className={"chip " + (list.includes(option) ? "active" : "")}
+                                      onClick={() => toggle(option)}
+                                    >
+                                      {option}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                     <div className="reportGrid" style={{marginTop:12}}>
                       <div>
@@ -10725,66 +10972,138 @@ const loadPdfJs = () => {
                         </div>
                       </div>
                       <div>
-                        <div className="lbl">Fence Type <span className="lblHint">free text used in narrative when populated</span></div>
+                        <div className="lbl">Fence</div>
                         <input className="inp" value={reportData.description.fenceType || ""} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)} placeholder="e.g., wood, chain link, painted steel" />
                       </div>
                     </div>
-                    <div className="reportGrid" style={{marginTop:12}}>
-                      <div>
-                        <div className="lbl">Garage Present</div>
-                        <div className="storyChipRow" role="radiogroup" aria-label="Garage present">
-                          {["Yes","No"].map(opt => (
-                            <button
-                              key={opt}
-                              type="button"
-                              role="radio"
-                              aria-checked={reportData.description.garagePresent === opt}
-                              className={"storyChip" + (reportData.description.garagePresent === opt ? " active" : "")}
-                              onClick={() => updateReportSection("description", "garagePresent", opt)}
-                            >
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      {garageOn && (
-                        <>
+                    {(() => {
+                      const garageMarkers = pageItems.filter(it => it.type === "garage");
+                      const fromDiagram = garageMarkers.length > 0;
+                      return (
+                        <div className="reportGrid" style={{marginTop:12}}>
                           <div>
-                            <div className="lbl">Garage Bays</div>
-                            <div className="storyChipRow" role="radiogroup" aria-label="Garage bays">
-                              {["1","2","3"].map(opt => (
+                            <div className="lbl">Garage {fromDiagram ? "(from diagram)" : "Present"}</div>
+                            <div className="storyChipRow" role="radiogroup" aria-label="Garage present">
+                              {["Yes","No"].map(opt => (
                                 <button
                                   key={opt}
                                   type="button"
                                   role="radio"
-                                  aria-checked={reportData.description.garageBays === opt}
-                                  className={"storyChip" + (reportData.description.garageBays === opt ? " active" : "")}
-                                  onClick={() => updateReportSection("description", "garageBays", opt)}
+                                  aria-checked={reportData.description.garagePresent === opt}
+                                  className={"storyChip" + (reportData.description.garagePresent === opt ? " active" : "")}
+                                  onClick={() => updateReportSection("description", "garagePresent", opt)}
+                                  disabled={fromDiagram}
                                 >
                                   {opt}
                                 </button>
                               ))}
                             </div>
                           </div>
-                          <div>
-                            <div className="lbl">Garage Opens Toward</div>
-                            <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
-                              <option value="">Select</option>
-                              {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                            </select>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                          {garageOn && (
+                            <>
+                              <div>
+                                <div className="lbl">Bays</div>
+                                <div className="storyChipRow" role="radiogroup" aria-label="Garage bays">
+                                  {GARAGE_BAYS.map(opt => (
+                                    <button
+                                      key={opt}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={reportData.description.garageBays === opt}
+                                      className={"storyChip" + (reportData.description.garageBays === opt ? " active" : "")}
+                                      onClick={() => updateReportSection("description", "garageBays", opt)}
+                                      disabled={fromDiagram}
+                                    >
+                                      {opt}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="lbl">Opens toward</div>
+                                <select
+                                  className="inp"
+                                  value={reportData.description.garageElevation}
+                                  onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}
+                                  disabled={fromDiagram}
+                                >
+                                  <option value="">Select</option>
+                                  {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <div className="lbl">Attachment</div>
+                                <select
+                                  className="inp"
+                                  value={(reportData.description as any).garageAttachment || "Attached"}
+                                  onChange={(e)=>updateReportSection("description", "garageAttachment", e.target.value)}
+                                  disabled={fromDiagram}
+                                >
+                                  {GARAGE_ATTACHMENTS.map(option => <option key={option} value={option}>{option}</option>)}
+                                </select>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div style={{marginTop:12}}>
-                      <div className="lbl">Notable Feature <span className="lblHint">optional sentence appended to paragraph 1 verbatim</span></div>
-                      <textarea
-                        className="inp"
-                        rows={2}
-                        value={reportData.description.notableFeature || ""}
-                        onChange={(e)=>updateReportSection("description", "notableFeature", e.target.value)}
-                        placeholder="e.g., Solar panels covered large portions of the rear west slope and the main south slope."
-                      />
+                      <div className="lbl">Notable features</div>
+                      <div className="tiny" style={{marginBottom:8}}>
+                        Sheds, patio covers, playsets, carports, pools, etc. Each entry becomes a sentence in the description.
+                      </div>
+                      {(((reportData.description as any).notableFeatures) || []).map((f: any) => (
+                        <div key={f.id} className="card" style={{marginBottom:10}}>
+                          <div className="reportGrid">
+                            <div>
+                              <div className="lbl">Feature</div>
+                              <select
+                                className="inp"
+                                value={f.type || ""}
+                                onChange={(e) => updateNotableFeature(f.id, { type: e.target.value })}
+                              >
+                                {NOTABLE_FEATURE_TYPES.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Location</div>
+                              <select
+                                className="inp"
+                                value={f.location || ""}
+                                onChange={(e) => updateNotableFeature(f.id, { location: e.target.value })}
+                              >
+                                {NOTABLE_FEATURE_LOCATIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </div>
+                            <div style={{gridColumn:"1 / -1"}}>
+                              <div className="lbl">Description (optional)</div>
+                              <input
+                                className="inp"
+                                value={f.description || ""}
+                                onChange={(e) => updateNotableFeature(f.id, { description: e.target.value })}
+                                placeholder="e.g., metal-clad with a separate gable roof"
+                              />
+                            </div>
+                          </div>
+                          <div style={{marginTop:8, textAlign:"right"}}>
+                            <button className="btn btnDanger" type="button" onClick={() => removeNotableFeature(f.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <button className="btn btnPrimary" type="button" onClick={addNotableFeature}>
+                        + Add feature
+                      </button>
+                      {/* Backward-compat free-text fallback for previously-saved projects. */}
+                      {Boolean(reportData.description.notableFeature) && (
+                        <div style={{marginTop:8}}>
+                          <div className="tiny" style={{marginBottom:4, color:"#888"}}>Legacy note (not editable here):</div>
+                          <div className="tiny" style={{padding:"6px 8px", background:"#f6f6f6", borderRadius:4}}>
+                            {reportData.description.notableFeature}
+                          </div>
+                        </div>
+                      )}
                     </div>
                       </>
                     ),
@@ -10793,7 +11112,7 @@ const loadPdfJs = () => {
                   {showSub("roof") && renderReportBubble({
                     tone: "roof",
                     title: "Roof",
-                    subtitle: "Geometry, covering, slopes, shingle measurements, gutters, EagleView, and aerial figure.",
+                    subtitle: "Geometry, covering, slopes, gutters, aerial.",
                     status: groupStatus(roofFields),
                     sectionKey: "description.roof",
                     children: (
@@ -10807,8 +11126,38 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Roof Covering <span className="lblHint">auto-populated from diagram, editable</span></div>
-                        <input className="inp" value={reportData.description.roofCovering} onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)} />
+                        <div className="lbl">Roof Covering</div>
+                        <select
+                          className="inp"
+                          value={
+                            PRIMARY_ROOF_COVERINGS.includes(reportData.description.roofCovering || "")
+                              ? reportData.description.roofCovering
+                              : (reportData.description.roofCovering ? "Other" : "")
+                          }
+                          onChange={(e)=>{
+                            const next = e.target.value;
+                            // "Other" leaves the free-text input visible
+                            // for the user to type a custom covering.
+                            if(next === "Other"){
+                              updateReportSection("description", "roofCovering", "Other");
+                            } else {
+                              updateReportSection("description", "roofCovering", next);
+                            }
+                          }}
+                        >
+                          <option value="">Select</option>
+                          {PRIMARY_ROOF_COVERINGS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                        {(reportData.description.roofCovering === "Other" ||
+                          (reportData.description.roofCovering && !PRIMARY_ROOF_COVERINGS.includes(reportData.description.roofCovering))) && (
+                          <input
+                            className="inp"
+                            style={{marginTop:6}}
+                            value={reportData.description.roofCovering === "Other" ? "" : reportData.description.roofCovering}
+                            onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)}
+                            placeholder="Describe (e.g., copper standing seam)"
+                          />
+                        )}
                       </div>
                       {isAsphaltShingleRoof(reportData.description.roofCovering) && (
                         <>
@@ -10830,11 +11179,11 @@ const loadPdfJs = () => {
                             </div>
                           </div>
                           <div>
-                            <div className="lbl">Shingle Length <span className="lblHint">auto from diagram</span></div>
+                            <div className="lbl">Shingle Length</div>
                             <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} placeholder="e.g., 39 inches" />
                           </div>
                           <div>
-                            <div className="lbl">Shingle Exposure <span className="lblHint">auto from diagram</span></div>
+                            <div className="lbl">Shingle Exposure</div>
                             <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} placeholder="e.g., 5.5 inches" />
                           </div>
                           <div>
@@ -10927,7 +11276,7 @@ const loadPdfJs = () => {
                             <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
                           </div>
                           <div>
-                            <div className="lbl">Roof Area Includes <span className="lblHint">free-text qualifier appended after the roof area</span></div>
+                            <div className="lbl">Roof Area Includes</div>
                             <input className="inp" value={reportData.description.roofAreaIncludes || ""} onChange={(e)=>updateReportSection("description", "roofAreaIncludes", e.target.value)} placeholder="e.g., which included the house, breezeway, and garage" />
                           </div>
                         </>
@@ -10935,7 +11284,7 @@ const loadPdfJs = () => {
                     </div>
                     <div className="reportGrid" style={{marginTop:12}}>
                       <div>
-                        <div className="lbl">Aerial Figure Date <span className="lblHint">e.g., August 31, 2023</span></div>
+                        <div className="lbl">Aerial Figure Date</div>
                         <input className="inp" value={reportData.description.aerialFigureDate || ""} onChange={(e)=>updateReportSection("description", "aerialFigureDate", e.target.value)} placeholder="Month DD, YYYY" />
                       </div>
                       <div>
@@ -10943,9 +11292,134 @@ const loadPdfJs = () => {
                         <input className="inp" value={reportData.description.aerialFigureSource || ""} onChange={(e)=>updateReportSection("description", "aerialFigureSource", e.target.value)} placeholder="Google Earth" />
                       </div>
                     </div>
-                    <div className="sectionHint">
-                      Roof appurtenances are derived from APT markers placed on the diagram. Use the diagram editor to add plumbing stacks, vents, chimneys, and skylights.
+                    <div style={{marginTop:14}}>
+                      <div className="reportSectionTitle" style={{fontSize:14, marginBottom:4}}>Additional coverings</div>
+                      <div className="tiny" style={{marginBottom:8}}>
+                        Add an entry for each separate covering — e.g., mod-bit on a rear patio, R-panel on a shed, copper on a bay window.
+                      </div>
+                      {((reportData.description as any).additionalCoverings || []).map((c: any) => (
+                        <div key={c.id} className="card" style={{marginBottom:10}}>
+                          <div className="reportGrid">
+                            <div>
+                              <div className="lbl">Covering</div>
+                              <select
+                                className="inp"
+                                value={c.type || ""}
+                                onChange={(e) => updateAdditionalCovering(c.id, { type: e.target.value })}
+                              >
+                                <option value="">Select</option>
+                                {PRIMARY_ROOF_COVERINGS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Scope / Location</div>
+                              <input
+                                className="inp"
+                                value={c.scope || ""}
+                                onChange={(e) => updateAdditionalCovering(c.id, { scope: e.target.value })}
+                                placeholder="e.g., rear patio addition"
+                              />
+                            </div>
+                            <div>
+                              <div className="lbl">Slope (optional)</div>
+                              <input
+                                className="inp"
+                                value={c.slope || ""}
+                                onChange={(e) => updateAdditionalCovering(c.id, { slope: e.target.value })}
+                                placeholder="e.g., 2:12"
+                              />
+                            </div>
+                            <div>
+                              <div className="lbl">Details (optional)</div>
+                              <input
+                                className="inp"
+                                value={c.details || ""}
+                                onChange={(e) => updateAdditionalCovering(c.id, { details: e.target.value })}
+                                placeholder="e.g., over perlite insulation boards"
+                              />
+                            </div>
+                          </div>
+                          <div style={{marginTop:8, textAlign:"right"}}>
+                            <button className="btn btnDanger" type="button" onClick={() => removeAdditionalCovering(c.id)}>
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <button className="btn btnPrimary" type="button" onClick={addAdditionalCovering}>
+                        + Add additional covering
+                      </button>
                     </div>
+                    {(() => {
+                      // Diagram-derived appurtenances summary. Lists
+                      // every APT and DS marker placed on the active
+                      // page, grouped by type, with hail data shown
+                      // inline so the inspector can verify everything
+                      // is flowing into the description without
+                      // switching to the preview tab.
+                      const aptMarkers = pageItems.filter(it => it.type === "apt");
+                      const dsMarkers = pageItems.filter(it => it.type === "ds");
+                      const eaptMarkers = pageItems.filter(it => it.type === "eapt");
+                      if (aptMarkers.length + dsMarkers.length + eaptMarkers.length === 0) {
+                        return (
+                          <div className="sectionHint" style={{marginTop:14}}>
+                            Appurtenances pull from APT markers on the diagram. None placed yet.
+                          </div>
+                        );
+                      }
+                      const aptLabel = (code: string) => APT_TYPES.find(t => t.code === code)?.label || code;
+                      const eaptLabel = (code: string) => EAPT_TYPES.find(t => t.code === code)?.label || code;
+                      const grouped: Record<string, { count: number; dirs: string[]; hail: string[] }> = {};
+                      const pushMarker = (label: string, dir: string, hailNote: string) => {
+                        if(!grouped[label]) grouped[label] = { count: 0, dirs: [], hail: [] };
+                        grouped[label].count += 1;
+                        if(dir) grouped[label].dirs.push(dir);
+                        if(hailNote) grouped[label].hail.push(hailNote);
+                      };
+                      aptMarkers.forEach(m => {
+                        const label = aptLabel(m.data?.type || "");
+                        const dir = m.data?.direction || m.data?.dir || "";
+                        const hailNote = (m.data?.damageEntries || []).map((e: any) =>
+                          `${e.mode || "spatter"}${e.size ? ` ${e.size}` : ""}${e.dir ? ` ${e.dir}` : ""}`
+                        ).join("; ");
+                        pushMarker(label, dir, hailNote);
+                      });
+                      dsMarkers.forEach(m => {
+                        const dir = m.data?.dir || "";
+                        const hailNote = (m.data?.damageEntries || []).map((e: any) =>
+                          `${e.mode || "spatter"}${e.size ? ` ${e.size}` : ""}`
+                        ).join("; ");
+                        pushMarker("Downspout", dir, hailNote);
+                      });
+                      eaptMarkers.forEach(m => {
+                        const label = eaptLabel(m.data?.type || "");
+                        const dir = m.data?.dir || "";
+                        const hailNote = (m.data?.damageEntries || []).map((e: any) =>
+                          `${e.mode || "spatter"}${e.size ? ` ${e.size}` : ""}`
+                        ).join("; ");
+                        pushMarker(label, dir, hailNote);
+                      });
+                      return (
+                        <div style={{marginTop:14}}>
+                          <div className="reportSectionTitle" style={{fontSize:14, marginBottom:6}}>From the diagram</div>
+                          <div className="diagramSummaryTable" style={{display:"flex", flexDirection:"column", gap:4}}>
+                            {Object.entries(grouped).map(([label, info]) => (
+                              <div key={label} className="row" style={{padding:"6px 8px", background:"#f8f8fa", borderRadius:4, alignItems:"flex-start", gap:8, fontSize:13}}>
+                                <div style={{flex:1}}>
+                                  <strong>{label}</strong> ({info.count})
+                                  {info.dirs.length > 0 && <span style={{color:"#666"}}>: {[...new Set(info.dirs)].join(", ")}</span>}
+                                </div>
+                                {info.hail.length > 0 && (
+                                  <div className="tiny" style={{color:"#a40", flex:"0 0 auto"}}>
+                                    Hail: {info.hail.join(" / ")}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                       </>
                     ),
                   })}
@@ -11445,99 +11919,217 @@ const loadPdfJs = () => {
                 };
                 return (
                 <>
-                  {renderReportBubble({
-                    tone: "inspection",
-                    title: "Inspection Details",
-                    subtitle: "Findings captured as discrete observations. These feed the Bond Condition, Spatter Marks, and Damage Summary paragraphs.",
-                    status: detailStatus,
-                    sectionKey: "inspection.details",
-                    children: (
-                      <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Adhesive / Sealant Bond Condition</div>
-                            <select className="inp" value={insp.bondCondition || ""} onChange={(e)=>setInspectionField("bondCondition", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="good">Good — intact, resisted lifting</option>
-                              <option value="fair">Fair — partial adhesion</option>
-                              <option value="poor">Poor — lifted by hand with minimal effort</option>
-                              <option value="not-evaluated">Not evaluated</option>
-                            </select>
+                  {(() => {
+                    // ITEMS 8 + 12: Diagram-first inspection redesign.
+                    //
+                    // Section A — Manual assessments only (the small set
+                    // of roof-wide judgments that aren't spatially placed).
+                    // We removed the redundant spatter/damageFound/surfaces
+                    // form fields; those now derive from APT / EAPT / DS
+                    // markers placed on the diagram and surface in the
+                    // dashboard cards below.
+                    const aptHail = pageItems.filter(it =>
+                      (it.type === "apt" || it.type === "ds" || it.type === "eapt")
+                      && (it.data?.damageEntries || []).length > 0
+                    );
+                    const spatterObservedDerived = aptHail.length > 0;
+                    // Compute max spatter size across markers (best-effort
+                    // numeric parse on the size string).
+                    const parseSize = (s: string): number => {
+                      if(!s) return 0;
+                      const trimmed = s.trim().replace(/\"$/, "").replace(/\bin(ch|ches)?\b/i, "").trim();
+                      // Handle fractions like 1-1/4 or 3/4
+                      if(trimmed.includes("/")){
+                        const parts = trimmed.split(/[\s-]/);
+                        let total = 0;
+                        parts.forEach(p => {
+                          if(p.includes("/")){
+                            const [a, b] = p.split("/").map(Number);
+                            if(b) total += a / b;
+                          } else {
+                            const n = parseFloat(p);
+                            if(!isNaN(n)) total += n;
+                          }
+                        });
+                        return total;
+                      }
+                      const n = parseFloat(trimmed);
+                      return isNaN(n) ? 0 : n;
+                    };
+                    const allHailSizes: string[] = [];
+                    aptHail.forEach(m => {
+                      (m.data?.damageEntries || []).forEach((e: any) => {
+                        if(e?.size) allHailSizes.push(String(e.size));
+                      });
+                    });
+                    const maxHailSize = allHailSizes.length
+                      ? allHailSizes.reduce((max: string, cur: string) => parseSize(cur) > parseSize(max) ? cur : max, allHailSizes[0])
+                      : "";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Manual assessments",
+                      subtitle: "Roof-wide judgments that can't be diagrammed. Everything else flows from markers below.",
+                      status: detailStatus,
+                      sectionKey: "inspection.details",
+                      children: (
+                        <>
+                          <div className="reportGrid">
+                            <div>
+                              <div className="lbl">Adhesive bond</div>
+                              <select className="inp" value={insp.bondCondition || ""} onChange={(e)=>setInspectionField("bondCondition", e.target.value)}>
+                                <option value="">Select</option>
+                                <option value="good">Good</option>
+                                <option value="fair">Fair</option>
+                                <option value="poor">Poor</option>
+                                <option value="not-evaluated">Not evaluated</option>
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Roof condition</div>
+                              <select className="inp" value={insp.roofCondition || ""} onChange={(e)=>setInspectionField("roofCondition", e.target.value)}>
+                                <option value="">Select</option>
+                                <option value="good">Good</option>
+                                <option value="fair">Fair</option>
+                                <option value="poor">Poor</option>
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Decking type</div>
+                              <select className="inp" value={insp.deckingType || ""} onChange={(e)=>setInspectionField("deckingType", e.target.value)}>
+                                <option value="">Select</option>
+                                <option value="plywood">Plywood</option>
+                                <option value="OSB">OSB</option>
+                                <option value="spaced">Spaced</option>
+                              </select>
+                            </div>
+                            <div>
+                              <div className="lbl">Granule loss</div>
+                              <select className="inp" value={insp.granuleLossObserved || ""} onChange={(e)=>setInspectionField("granuleLossObserved", e.target.value)}>
+                                <option value="">Select</option>
+                                <option value="yes">Yes</option>
+                                <option value="no">No</option>
+                              </select>
+                            </div>
                           </div>
-                          <div>
-                            <div className="lbl">Spatter Marks Observed</div>
-                            <select className="inp" value={insp.spatterMarksObserved || ""} onChange={(e)=>setInspectionField("spatterMarksObserved", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="yes">Yes — observed</option>
-                              <option value="no">No — none found</option>
-                              <option value="not inspected">Not inspected</option>
-                            </select>
+                          {insp.granuleLossObserved === "yes" && (
+                            <div style={{marginTop:10}}>
+                              <div className="lbl">Granule loss notes</div>
+                              <textarea
+                                className="inp"
+                                rows={2}
+                                value={insp.granuleLossNotes || ""}
+                                onChange={(e)=>setInspectionField("granuleLossNotes", e.target.value)}
+                                placeholder="e.g., distribution and appearance consistent with age-related weathering"
+                              />
+                            </div>
+                          )}
+                          <div style={{marginTop:12, padding:"8px 10px", background:"#f8fafc", borderRadius:6, fontSize:12, color:"#475569", display:"flex", flexWrap:"wrap", gap:14}}>
+                            <span><strong>Spatter:</strong> {spatterObservedDerived ? `${aptHail.length} marker(s) on diagram` : "none on diagram"}</span>
+                            {maxHailSize && <span><strong>Max spatter size:</strong> {maxHailSize}"</span>}
                           </div>
-                          <div>
-                            <div className="lbl">Overall Damage Finding</div>
-                            <select className="inp" value={insp.damageFound || ""} onChange={(e)=>setInspectionField("damageFound", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="no">No storm-caused damage</option>
-                              <option value="yes">Storm-caused damage found</option>
-                              <option value="mixed">Mixed / partial</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Surfaces Inspected for Spatter</div>
-                          <div className="chipList">
-                            {["HVAC condenser", "Gutters", "Downspouts", "Metal vents", "Window screens", "Painted trim", "Fence", "Other"].map(surface => (
-                              <div
-                                key={surface}
-                                className={"chip " + ((insp.spatterMarksSurfaces || []).includes(surface) ? "active" : "")}
-                                onClick={() => toggleSpatterSurface(surface)}
-                              >
-                                {surface}
+                        </>
+                      ),
+                    });
+                  })()}
+
+                  {/* HAIL OBSERVATIONS DASHBOARD — fully diagram-derived */}
+                  {(() => {
+                    const aptCodeLabel = (m: any) => {
+                      if(m.type === "ds") return "Downspout";
+                      if(m.type === "eapt") return EAPT_TYPES.find(t => t.code === m.data?.type)?.label || m.data?.type;
+                      return APT_TYPES.find(t => t.code === m.data?.type)?.label || m.data?.type;
+                    };
+                    const hailRows: Array<{ id: string; component: string; dir: string; mode: string; size: string; thumb?: string }> = [];
+                    pageItems
+                      .filter(it => it.type === "apt" || it.type === "ds" || it.type === "eapt")
+                      .forEach(m => {
+                        (m.data?.damageEntries || []).forEach((e: any, idx: number) => {
+                          hailRows.push({
+                            id: `${m.id}-${idx}`,
+                            component: aptCodeLabel(m),
+                            dir: e.dir || m.data?.dir || m.data?.direction || "",
+                            mode: e.mode || "spatter",
+                            size: e.size || "",
+                            thumb: e.photo?.url || m.data?.overviewPhoto?.url,
+                          });
+                        });
+                      });
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Hail observations",
+                      subtitle: "Auto-populated from APT, DS, and EAPT markers placed on the diagram.",
+                      status: hailRows.length > 0 ? "ready" : "empty",
+                      sectionKey: "inspection.hail",
+                      children: hailRows.length > 0 ? (
+                        <div style={{display:"flex", flexDirection:"column", gap:6}}>
+                          {hailRows.map(r => (
+                            <div key={r.id} className="row" style={{padding:"6px 8px", background:"#f8f8fa", borderRadius:4, alignItems:"center", gap:10, fontSize:13}}>
+                              {r.thumb && (
+                                <img src={r.thumb} alt="" style={{width:48, height:48, objectFit:"cover", borderRadius:4, flex:"0 0 auto"}} />
+                              )}
+                              <div style={{flex:1}}>
+                                <div><strong>{r.component}</strong>{r.dir ? ` — ${r.dir}` : ""}</div>
+                                <div className="tiny" style={{color:"#666"}}>{r.mode}{r.size ? ` • ${r.size}"` : ""}</div>
                               </div>
-                            ))}
-                          </div>
+                            </div>
+                          ))}
                         </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Spatter Mark Notes <span className="lblHint">location, approximate age, size</span></div>
-                          <textarea
-                            className="inp"
-                            rows={2}
-                            value={insp.spatterMarksNotes || ""}
-                            onChange={(e)=>setInspectionField("spatterMarksNotes", e.target.value)}
-                            placeholder="e.g., Fresh spatter ~3/4&quot; on north-side HVAC condenser fins; dried oxide spatter on west downspout."
-                          />
+                      ) : (
+                        <div className="tiny" style={{color:"#94a3b8", fontStyle:"italic"}}>
+                          No exterior hail observations placed. Add APT/EAPT markers to the diagram to document spatter and dent findings.
                         </div>
-                        <div className="reportGrid" style={{marginTop:12}}>
-                          <div>
-                            <div className="lbl">Max Spatter Size</div>
-                            <select className="inp" value={insp.maxSpatterSize || ""} onChange={(e)=>setInspectionField("maxSpatterSize", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="1/8-inch">1/8-inch</option>
-                              <option value="1/4-inch">1/4-inch</option>
-                              <option value="3/8-inch">3/8-inch</option>
-                              <option value="1/2-inch">1/2-inch</option>
-                              <option value="3/4-inch">3/4-inch</option>
-                              <option value="1-inch">1-inch</option>
-                              <option value="1-1/4-inch">1-1/4-inch</option>
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Roof Condition</div>
-                            <select className="inp" value={insp.roofCondition || ""} onChange={(e)=>setInspectionField("roofCondition", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="good">Good</option>
-                              <option value="fair">Fair</option>
-                              <option value="poor">Poor</option>
-                            </select>
-                          </div>
+                      ),
+                    });
+                  })()}
+                  {/* INTERIOR OBSERVATIONS DASHBOARD — fully diagram-derived */}
+                  {(() => {
+                    const intObs = pageItems.filter(it => it.type === "obs" && it.data?.area === "int");
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Interior observations",
+                      subtitle: "Auto-populated from interior OBS markers placed on the diagram.",
+                      status: intObs.length > 0 ? "ready" : "empty",
+                      sectionKey: "inspection.interiorObs",
+                      children: intObs.length > 0 ? (
+                        <div style={{display:"flex", flexDirection:"column", gap:6}}>
+                          {intObs.map(m => {
+                            const code = m.data?.code || "";
+                            const label = OBS_CODES.find(c => c.code === code)?.label || code;
+                            const room = m.data?.room || "";
+                            const condition = m.data?.condition || "";
+                            const location = m.data?.locationDetail || "";
+                            const dimensions = m.data?.dimensions || "";
+                            const thumb = m.data?.photo?.url;
+                            return (
+                              <div key={m.id} className="row" style={{padding:"6px 8px", background:"#f8f8fa", borderRadius:4, alignItems:"flex-start", gap:10, fontSize:13}}>
+                                {thumb && (
+                                  <img src={thumb} alt="" style={{width:48, height:48, objectFit:"cover", borderRadius:4, flex:"0 0 auto"}} />
+                                )}
+                                <div style={{flex:1}}>
+                                  <div><strong>{label}</strong>{room ? ` — ${room}` : ""}</div>
+                                  <div className="tiny" style={{color:"#666"}}>
+                                    {[condition, location, dimensions].filter(Boolean).join(" • ")}
+                                  </div>
+                                  {m.data?.caption && (
+                                    <div className="tiny" style={{color:"#666", marginTop:2}}>{m.data.caption}</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </>
-                    ),
-                  })}
+                      ) : (
+                        <div className="tiny" style={{color:"#94a3b8", fontStyle:"italic"}}>
+                          Place an interior OBS marker on the diagram (set Area = Int) to capture moisture stains, drywall cracks, mold, etc.
+                        </div>
+                      ),
+                    });
+                  })()}
+
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Interior, Attic, & Other Findings",
-                    subtitle: "Focused inputs that drive the Inspection narrative paragraphs (interior rooms, attic, granule loss, prior inspection damage).",
+                    subtitle: "Manual entries when something can't be diagrammed (attic decking notes, prior inspection history).",
                     status: (insp.interiorInspected || insp.atticInspected || insp.granuleLossObserved || insp.priorInspectionDamage) ? "ready" : "empty",
                     sectionKey: "inspection.findings",
                     children: (
@@ -11720,22 +12312,38 @@ const loadPdfJs = () => {
                                            dir === "south" ? "South-facing slope" :
                                            dir === "east"  ? "East-facing slope"  : "West-facing slope";
                           const bruisesNum = derived.hasData ? Number(derived.bruises || 0) : 0;
+                          // Pull thumbnails (item 10): grab the overview photo
+                          // from each TS marker on this slope.
+                          const tsThumbs = pageItems
+                            .filter(it => it.type === "ts" && (it.data?.dir === dirShort || (derived.squareNames || []).includes(it.name)))
+                            .map(it => it.data?.overviewPhoto?.url)
+                            .filter(Boolean)
+                            .slice(0, 3);
                           return (
                             <div key={dir} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12}}>
-                              <div style={{display:"flex", flexDirection:"column", gap:4, minWidth:0}}>
-                                <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, margin:0}}>
-                                  {dirLabel}
-                                </div>
-                                {derived.hasData ? (
-                                  <div style={{fontSize:13, color:"#1e293b", display:"flex", flexWrap:"wrap", gap:12}}>
-                                    <span><strong>{derived.squareCount}</strong> test square{derived.squareCount === 1 ? "" : "s"}</span>
-                                    <span><strong>{bruisesNum}</strong> bruise{bruisesNum === 1 ? "" : "s"}</span>
-                                    {derived.maxSizeLabel && <span>max size <strong>{derived.maxSizeLabel}"</strong></span>}
-                                    {derived.squareNames.length > 0 && <span style={{color:"#64748b"}}>{derived.squareNames.join(", ")}</span>}
+                              <div style={{display:"flex", alignItems:"center", gap:10, minWidth:0, flex:1}}>
+                                {tsThumbs.length > 0 && (
+                                  <div style={{display:"flex", gap:4, flex:"0 0 auto"}}>
+                                    {tsThumbs.map((url: string, i: number) => (
+                                      <img key={i} src={url} alt="" style={{width:40, height:40, objectFit:"cover", borderRadius:4}} />
+                                    ))}
                                   </div>
-                                ) : (
-                                  <div style={{fontSize:13, color:"#94a3b8", fontStyle:"italic"}}>No test squares mapped on this slope</div>
                                 )}
+                                <div style={{display:"flex", flexDirection:"column", gap:4, minWidth:0}}>
+                                  <div className="lbl" style={{textTransform:"uppercase", letterSpacing:0.4, fontSize:11, margin:0}}>
+                                    {dirLabel}
+                                  </div>
+                                  {derived.hasData ? (
+                                    <div style={{fontSize:13, color:"#1e293b", display:"flex", flexWrap:"wrap", gap:12}}>
+                                      <span><strong>{derived.squareCount}</strong> test square{derived.squareCount === 1 ? "" : "s"}</span>
+                                      <span><strong>{bruisesNum}</strong> bruise{bruisesNum === 1 ? "" : "s"}</span>
+                                      {derived.maxSizeLabel && <span>max size <strong>{derived.maxSizeLabel}"</strong></span>}
+                                      {derived.squareNames.length > 0 && <span style={{color:"#64748b"}}>{derived.squareNames.join(", ")}</span>}
+                                    </div>
+                                  ) : (
+                                    <div style={{fontSize:13, color:"#94a3b8", fontStyle:"italic"}}>No test squares mapped on this slope</div>
+                                  )}
+                                </div>
                               </div>
                               <button
                                 type="button"
