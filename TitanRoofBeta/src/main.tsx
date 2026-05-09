@@ -61,10 +61,16 @@ const loadPdfJs = () => {
         roof: ["Shingles", "Ridge Cap", "Hip Cap", "Valley", "Flashing", "Other Roof Component"],
         exterior: ["Siding", "Downspout", "Gutter", "Trim", "Fascia", "Soffit", "Window Screen", "Fence", "Other Exterior Component"]
       };
+      // "none" lets the inspector record that a component was
+      // examined and showed no spatter or dents. Per HCI Segment 2,
+      // absence of spatter on soft metals is itself meaningful
+      // forensic evidence and the narrative engine relies on it to
+      // conclude that damaging hail did not fall at the property.
       const DAMAGE_MODES = [
         { key: "spatter", label: "Spatter" },
         { key: "dent", label: "Dent" },
-        { key: "both", label: "Spatter + Dent" }
+        { key: "both", label: "Spatter + Dent" },
+        { key: "none", label: "Inspected — no spatter / no dents" }
       ];
 
       const APT_TYPES = [
@@ -234,83 +240,70 @@ const loadPdfJs = () => {
         conclusions: "inspection"
       };
 
+      // v3 forensic paragraph order. Each paragraph is a node in the
+      // ASTM E2128 / HCI evidence chain; reordering changes the
+      // forensic logic of the report. Optional paragraphs are scoped
+      // to inspection conditions (interior access, file review).
       const INSPECTION_PARAGRAPH_ORDER = [
         { key: "scope", label: "1. Inspection Scope", optional: false },
-        { key: "interior", label: "2. Interior", optional: true },
-        { key: "exteriorWind", label: "3. Exterior – General / Wind Indicators", optional: false },
-        { key: "exteriorHail", label: "4. Exterior – Hail Indicators", optional: false },
-        { key: "roofGeneral", label: "5. Roof – General Condition", optional: false },
-        { key: "windRoof", label: "6. Wind Evaluation (roof)", optional: false },
-        { key: "hailAppurtenances", label: "7. Hail Evaluation – Roof Appurtenances", optional: false },
-        { key: "testSquares", label: "8. Test Squares", optional: false },
-        { key: "granuleLoss", label: "9. Granule Loss Interpretation", optional: false },
-        { key: "diagramReference", label: "10. Diagram Reference", optional: true }
+        { key: "exteriorHail", label: "2. Exterior – Hail Indicators", optional: false },
+        { key: "exteriorWind", label: "3. Exterior – Wind Indicators", optional: false },
+        { key: "interior", label: "4. Interior Findings", optional: true },
+        { key: "attic", label: "5. Attic / Pathway Tracing", optional: true },
+        { key: "roofGeneral", label: "6. Roof – General Condition", optional: false },
+        { key: "roofWindBond", label: "7. Roof – Wind & Bond Evaluation", optional: false },
+        { key: "hailEvaluation", label: "8. Roof – Hail Evaluation (Appurtenances)", optional: false },
+        { key: "testSquares", label: "9. Test Squares", optional: false },
+        { key: "fileReview", label: "10. File Review", optional: true }
       ];
 
+      // Default `text` is a fallback only — the narrative engine
+      // (inspectionGeneratedSections) regenerates each paragraph from
+      // diagram markers and the inspection form fields on every
+      // render, so the fallback only appears when the engine has no
+      // data to compose with. Includes default to true; the engineer
+      // toggles individual paragraphs off in the Inspection Narrative
+      // bubble.
       const buildInspectionParagraphDefaults = () => ({
         scope: {
           include: true,
-          text: "We inspected the residence roof, exterior elevations, and surrounding property for evidence of hailstone impact and/or wind-related conditions. We documented observed conditions with field notes and photographs. Representative photographs are attached to this report for reference."
-        },
-        interior: {
-          include: false,
-          text: "We inspected the interior area with the reported concerns. The room was located at the [location] of the residence. We observed [conditions]. The observed conditions were localized to this area. We also inspected the corresponding exterior location and found no visible separations, openings, fractured, missing, or deteriorated exterior components."
-        },
-        exteriorWind: {
-          include: true,
-          text: "We inspected the exterior elevations and components including fascia, trim, siding, fixtures, downspouts, and other exterior elements. We found no detached, loose, missing, or displaced exterior components on the elevations inspected."
+          text: "We inspected the exterior and roof of the residence. Our observations were documented with field notes and photographs. Representative photographs are attached to this report."
         },
         exteriorHail: {
           include: true,
-          text: "We examined exterior components for indicators of hailstone impact, including downspouts, window screens, garage door panels, light fixtures, fencing, and mechanical appurtenances. Spatter marks are spots cleaned of grime or oxidation where surfaces are impacted and may remain visible for one to two years, or more, depending on surface character and weather exposure."
+          text: "During ground-level exterior inspection, we did not find spatter marks on any exterior surfaces. Soft metal appurtenances did not display any hail-caused dents."
+        },
+        exteriorWind: {
+          include: true,
+          text: "The exterior masonry and trim did not display any scrapes or gouges caused by windborne debris impact. Roof edges and corners were intact when viewed from grade."
+        },
+        interior: {
+          include: false,
+          text: "No interior stains or conditions of concern were observed during the inspection."
+        },
+        attic: {
+          include: false,
+          text: "We accessed the attic and inspected the underside of the roof decking. Roof decking did not display any active moisture stains or deterioration."
         },
         roofGeneral: {
           include: true,
-          text: "Overall, the roof shingles were in fair condition with respect to age and weathering. Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas. Granule loss typical of roofs of this age was present on all directional facets, including ridges and hip cap shingles."
+          text: "The roof was in fair condition with regard to weathering. Granule loss was moderate across all slopes."
         },
-        windRoof: {
+        roofWindBond: {
           include: true,
-          text: "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. Affected shingles exhibited weathered exposed surfaces consistent with long-term exposure. The approximate locations of affected shingles were plotted on a roof diagram. Refer to Attachment D – Roof Diagram."
+          text: "Shingles lay flat and were well-sealed across all slopes. We did not identify any creased, torn, or missing shingle tabs attributable to wind forces."
         },
-        hailAppurtenances: {
+        hailEvaluation: {
           include: true,
-          text: "We examined roof appurtenances and soft metals, including vents, flue pipes, flashing, and other roof components, for evidence of hailstone impact. We found no tears, punctures, or fractures to the roof appurtenances inspected."
+          text: "Roof-level appurtenances were inspected for evidence of hail impact. Soft metals did not display any spatter marks, dents, or bruised conditions."
         },
         testSquares: {
           include: true,
-          text: "We examined 100-square-foot test areas on the north-, south-, east-, and west-facing roof slopes. Each shingle within the test areas was examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. We did not find any hail-caused bruises or punctured shingles in our test areas. We also inspected ridges, hips, rakes, and eaves—areas that are least supported—and found no hail-caused bruises or punctures."
+          text: "We established test areas on the roof slopes. Each test area was examined using visual and tactile methods. We did not identify any bruised, fractured, or punctured shingles within the test areas."
         },
-        granuleLoss: {
-          include: true,
-          text: "Within our test areas and elsewhere on the roof, we observed areas of missing granules. These areas varied in size and shape and exposed underlying asphalt or fiberglass mat reinforcement. Each area was inspected visually and tactilely, and no associated bruises, punctures, indentations, or impact features were identified. The distribution and appearance of the granule loss were similar across roof slopes and consistent with age-related weathering rather than impact damage."
-        },
-        diagramReference: {
+        fileReview: {
           include: false,
-          text: "The approximate locations of the observed conditions were plotted on a roof diagram. Refer to Attachment D – Roof Diagram."
-        },
-        // v4.1 additions: standard Haag phrases that appear in most
-        // reports. Toggle these off if a particular file doesn't need
-        // them. Variants are selected via the Inspection Details tab
-        // (damageFound, bondCondition, etc.).
-        spatterDefinition: {
-          include: true,
-          text: "Spatter marks are spots where grime or oxidation has been cleaned from a surface by the impact of a hailstone. Spatter marks may remain visible for one to two years, or more, depending on surface character and weather exposure."
-        },
-        thresholdDamage: {
-          include: true,
-          text: "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface. The threshold for 3-tab shingles is approximately 1 inch. Standing seam metal roof panels are more resistant to hailstone impact than composition shingles."
-        },
-        bondCondition: {
-          include: true,
-          text: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was found to be in fair condition. Shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age."
-        },
-        weathering: {
-          include: true,
-          text: "The roof exhibited weathering consistent with its estimated age, including granule erosion, surface oxidation, and typical wear along ridges and hips. Observed conditions were distributed across all roof slopes and are characteristic of age-related deterioration rather than a single weather event."
-        },
-        damageSummary: {
-          include: true,
-          text: "Based on our inspection, we found no evidence of hail-caused or wind-caused damage to the roof covering that would necessitate repair or replacement. The observed conditions are consistent with normal aging and weathering of the roof materials."
+          text: ""
         }
       });
 
@@ -363,30 +356,8 @@ const loadPdfJs = () => {
       ];
       const OBSERVED_CONDITIONS = ["Spatter Marks", "Dents", "Creases", "Tears", "Displaced Elements", "Other"];
 
-      const INSPECTION_COMPONENTS = [
-        { key: "roofCovering", label: "Roof covering" },
-        { key: "ridge", label: "Ridge" },
-        { key: "guttersDownspouts", label: "Gutters & Downspouts" },
-        { key: "appurtenances", label: "Roof Appurtenances" },
-        { key: "windowsScreens", label: "Windows & Screens" },
-        { key: "garageDoors", label: "Garage Doors" },
-        { key: "fence", label: "Fence" },
-        { key: "otherExterior", label: "Other Exterior Components" }
-      ];
-
       const uid = () => Math.random().toString(36).substr(2, 9);
       const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
-      const buildInspectionDefaults = () => INSPECTION_COMPONENTS.reduce((acc, comp) => ({
-        ...acc,
-        [comp.key]: {
-          conditions: [],
-          none: false,
-          maxSize: "",
-          directions: [],
-          notes: "",
-          photos: []
-        }
-      }), {});
       const buildReportDefaults = () => ({
         project: {
           reportNumber: "",
@@ -521,26 +492,56 @@ const loadPdfJs = () => {
         },
         inspection: {
           performed: "",
-          roofCondition: "fair",
-          components: buildInspectionDefaults(),
+          // Roof-level fields kept across the v3 rewrite. Diagram
+          // markers carry per-component findings; these capture
+          // condition assessments that are not naturally per-marker.
+          roofCondition: "fair",       // "good" | "fair" | "poor"
+          bondCondition: "",           // "good" | "fair" | "poor" | "not-evaluated"
+          shinglePliability: "",       // "pliable" | "moderately-pliable" | "brittle"
+          granuleNotes: "",            // free text per-slope observations
+          priorInspectionDamage: "",   // walkway granule loss, mechanical contact, etc.
+          fastenerNotes: "",           // overdriven nails, high nails, staples
           paragraphs: buildInspectionParagraphDefaults(),
-          // v4.1: detail fields surfaced in actual Haag reports.
-          // bondCondition feeds the Bond Condition paragraph;
-          // spatterMarks feeds the Spatter Marks observation; the
-          // test-square grid captures per-square bruise/puncture counts
-          // rather than aggregating them.
-          bondCondition: "",           // "good" | "fair" | "poor"
-          spatterMarksObserved: "",    // "yes" | "no" | "not inspected"
-          spatterMarksSurfaces: [],
-          spatterMarksNotes: "",
           testSquares: {
             north: { bruises: "", punctures: "", notes: "" },
             south: { bruises: "", punctures: "", notes: "" },
             east:  { bruises: "", punctures: "", notes: "" },
             west:  { bruises: "", punctures: "", notes: "" }
           },
-          damageFound: "",              // "yes" | "no" | "mixed"
-          variants: {}                  // per-paragraph variant id keyed by paragraph key
+          // Quick toggles for things that aren't naturally diagram
+          // markers (whole-property assessments). When intact === true
+          // the narrative engine emits the negative finding sentence;
+          // when false, notes carry the override description.
+          exteriorWalkthrough: {
+            masonryIntact: true,
+            masonryNotes: "",
+            fencesIntact: true,
+            fencesNotes: ""
+          },
+          // Interior + attic are surfaced only when the inspection
+          // scope includes them. Each room entry needs its own traced
+          // pathway per ASTM E2128 §5.3 — findings cannot be
+          // extrapolated across rooms without physical evidence.
+          interior: {
+            inspected: false,
+            noInteriorConcerns: true,
+            rooms: []                  // [{ id, location, conditions[], ageIndicator, correspondingSource, notes }]
+          },
+          attic: {
+            inspected: false,
+            accessible: "",            // "fully" | "partially" | "not-accessible"
+            deckingCondition: "",      // free text or canned phrase
+            condensatePan: "",
+            ventTubes: "",
+            notes: ""
+          },
+          priorRepairs: [],            // [{ id, location, description, ageIndicator }]
+          fileReview: {
+            reviewed: false,
+            sourceLabel: "",           // e.g. "photo sheet provided by Allstate Insurance"
+            sourceDate: "",
+            findings: ""               // free text summary
+          }
         },
         overrides: {
           coverLetter: "",
@@ -603,28 +604,66 @@ const loadPdfJs = () => {
             ...defaults.writer,
             ...(source.writer || {})
           },
-          inspection: {
-            ...defaults.inspection,
-            ...(source.inspection || {}),
-            roofCondition: source.inspection?.roofCondition || defaults.inspection.roofCondition,
-            components: {
-              ...defaults.inspection.components,
-              ...(source.inspection?.components || {})
-            },
-            paragraphs: {
-              ...defaults.inspection.paragraphs,
-              ...(source.inspection?.paragraphs || {})
-            },
-            spatterMarksSurfaces: normalizeList(source.inspection?.spatterMarksSurfaces),
-            testSquares: {
-              ...defaults.inspection.testSquares,
-              ...(source.inspection?.testSquares || {})
-            },
-            variants: {
-              ...defaults.inspection.variants,
-              ...(source.inspection?.variants || {})
-            }
-          },
+          inspection: (() => {
+            // Strip legacy fields silently on hydration. Reports saved
+            // before the v3 forensic rewrite carried `components`,
+            // `spatterMarks*`, `damageFound`, and `variants` — those
+            // are now expressed via diagram markers and the new
+            // detail fields. We drop them here so they don't leak
+            // back into render or autosave.
+            const {
+              components: _legacyComponents,
+              spatterMarksObserved: _legacySpatterObs,
+              spatterMarksSurfaces: _legacySpatterSurf,
+              spatterMarksNotes: _legacySpatterNotes,
+              damageFound: _legacyDamageFound,
+              variants: _legacyVariants,
+              ...src
+            } = (source.inspection || {}) as any;
+            return {
+              ...defaults.inspection,
+              ...src,
+              roofCondition: src.roofCondition || defaults.inspection.roofCondition,
+              paragraphs: {
+                ...defaults.inspection.paragraphs,
+                ...(src.paragraphs || {})
+              },
+              testSquares: {
+                ...defaults.inspection.testSquares,
+                ...(src.testSquares || {})
+              },
+              exteriorWalkthrough: {
+                ...defaults.inspection.exteriorWalkthrough,
+                ...(src.exteriorWalkthrough || {})
+              },
+              interior: {
+                ...defaults.inspection.interior,
+                ...(src.interior || {}),
+                rooms: normalizeList(src.interior?.rooms).map((room: any) => ({
+                  id: room?.id || uid(),
+                  location: room?.location || "",
+                  conditions: normalizeList(room?.conditions),
+                  ageIndicator: room?.ageIndicator || "",
+                  correspondingSource: room?.correspondingSource || "",
+                  notes: room?.notes || ""
+                }))
+              },
+              attic: {
+                ...defaults.inspection.attic,
+                ...(src.attic || {})
+              },
+              priorRepairs: normalizeList(src.priorRepairs).map((repair: any) => ({
+                id: repair?.id || uid(),
+                location: repair?.location || "",
+                description: repair?.description || "",
+                ageIndicator: repair?.ageIndicator || ""
+              })),
+              fileReview: {
+                ...defaults.inspection.fileReview,
+                ...(src.fileReview || {})
+              }
+            };
+          })(),
           overrides: {
             ...defaults.overrides,
             ...(source.overrides || {})
@@ -1601,42 +1640,6 @@ const loadPdfJs = () => {
               }
             }
           }));
-        };
-        const updateInspection = (componentKey, field, value) => {
-          setReportData(prev => ({
-            ...prev,
-            inspection: {
-              ...prev.inspection,
-              components: {
-                ...prev.inspection.components,
-                [componentKey]: {
-                  ...prev.inspection.components[componentKey],
-                  [field]: value
-                }
-              }
-            }
-          }));
-        };
-        const toggleInspectionList = (componentKey, field, value) => {
-          setReportData(prev => {
-            const current = prev.inspection.components[componentKey][field] || [];
-            const nextList = current.includes(value)
-              ? current.filter(v => v !== value)
-              : [...current, value];
-            return {
-              ...prev,
-              inspection: {
-                ...prev.inspection,
-                components: {
-                  ...prev.inspection.components,
-                  [componentKey]: {
-                    ...prev.inspection.components[componentKey],
-                    [field]: nextList
-                  }
-                }
-              }
-            };
-          });
         };
         const updateInspectionParagraph = (paragraphKey, field, value) => {
           setReportData(prev => ({
@@ -2942,226 +2945,428 @@ const loadPdfJs = () => {
           return out;
         }, [pageItems]);
 
+        // v3 forensic narrative engine. Each paragraph is composed
+        // from diagram markers and inspection form fields, not from
+        // free-text the engineer maintains. Style follows ASTM E2128
+        // / E2713 / E3176 and HCI residential curriculum: every
+        // paragraph is a node in an evidence chain, not a
+        // checkbox-driven boilerplate.
         const inspectionGeneratedSections = useMemo(() => {
-          const localJoinReadableList = (list = []) => {
-            if(!list.length) return "";
-            if(list.length === 1) return list[0];
-            if(list.length === 2) return `${list[0]} and ${list[1]}`;
-            return `${list.slice(0, -1).join(", ")}, and ${list[list.length - 1]}`;
+          const join = (list: string[] = []) => {
+            const cleaned = list.filter(Boolean);
+            if(!cleaned.length) return "";
+            if(cleaned.length === 1) return cleaned[0];
+            if(cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+            return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
           };
-          const localDirLabel = (dir = "") => ({ N: "north", S: "south", E: "east", W: "west" }[dir] || String(dir || "").toLowerCase());
-          const localComponentLabel = (item, dir) => {
-            let base;
+          const dirLong = (dir = "") =>
+            ({ N: "north", S: "south", E: "east", W: "west" } as Record<string, string>)[dir] ||
+            String(dir || "").toLowerCase();
+          const componentLabel = (item: any) => {
             if(item.type === "apt"){
-              base = (APT_TYPES.find(entry => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase();
-            } else if(item.type === "ds"){
-              base = "downspout";
-            } else if(item.type === "eapt"){
-              base = (EAPT_TYPES.find(entry => entry.code === item.data?.type)?.label || "exterior component").toLowerCase();
-            } else {
-              base = "component";
+              return (APT_TYPES.find(t => t.code === item.data?.type)?.label || "appurtenance").toLowerCase();
             }
-            const direction = localDirLabel(dir || item.data?.dir);
-            return direction ? `${direction} ${base}` : base;
+            if(item.type === "eapt"){
+              return (EAPT_TYPES.find(t => t.code === item.data?.type)?.label || "exterior component").toLowerCase();
+            }
+            if(item.type === "ds") return "downspout";
+            return "component";
+          };
+          const componentWithDir = (item: any, dir?: string) => {
+            const d = dirLong(dir || item.data?.dir);
+            const c = componentLabel(item);
+            return d ? `${d}-facing ${c}` : c;
           };
 
-          const byDir = { N: { creased: 0, torn: 0 }, S: { creased: 0, torn: 0 }, E: { creased: 0, torn: 0 }, W: { creased: 0, torn: 0 }, Ridge: { creased: 0, torn: 0 }, Hip: { creased: 0, torn: 0 }, Valley: { creased: 0, torn: 0 } };
-          const windByScope = { roof: [], exterior: [] };
-          // EAPT hail rolls into the exterior bucket; APT hail is roof.
-          // DS hail is exterior too (gutters). The report already used
-          // the combined list, so we just extend the scan.
-          const hailByType = { apt: [], ds: [], eapt: [] };
-          const windIndicatorEntries = []; // displaced / detached / loose on DS/APT/EAPT
+          const insp: any = reportData.inspection || {};
+          const desc: any = reportData.description || {};
+          const project: any = reportData.project || {};
 
-          pageItems.forEach(item => {
+          // ---------- Aggregate marker data ----------
+          const windByDir: Record<string, { creased: number; torn: number }> = {
+            N: { creased: 0, torn: 0 }, S: { creased: 0, torn: 0 },
+            E: { creased: 0, torn: 0 }, W: { creased: 0, torn: 0 },
+            Ridge: { creased: 0, torn: 0 }, Hip: { creased: 0, torn: 0 }, Valley: { creased: 0, torn: 0 }
+          };
+          const windByScope: { roof: any[]; exterior: any[] } = { roof: [], exterior: [] };
+          // Hail marker buckets keyed by mode. "none" = inspected,
+          // found nothing — significant evidence per HCI curriculum.
+          const hail = {
+            apt: { spatter: [] as any[], dent: [] as any[], both: [] as any[], none: [] as any[] },
+            ds:  { spatter: [] as any[], dent: [] as any[], both: [] as any[], none: [] as any[] },
+            eapt:{ spatter: [] as any[], dent: [] as any[], both: [] as any[], none: [] as any[] },
+          };
+          const windIndicatorEntries: Array<{ item: any; entry: any }> = [];
+          const tsItems: any[] = [];
+          let largestExteriorSpatter = 0;
+          let largestExteriorSpatterLabel = "";
+          let largestRoofSpatter = 0;
+          let largestRoofSpatterLabel = "";
+          const exteriorSpatterDirs = new Set<string>();
+          const roofSpatterDirs = new Set<string>();
+
+          (pageItems || []).forEach((item: any) => {
             if(item.type === "wind"){
-              const dir = item.data.dir || "N";
-              if(byDir[dir]){
-                byDir[dir].creased += item.data.creasedCount || 0;
-                byDir[dir].torn += item.data.tornMissingCount || 0;
+              const dir = item.data?.dir || "N";
+              if(windByDir[dir]){
+                windByDir[dir].creased += item.data?.creasedCount || 0;
+                windByDir[dir].torn += item.data?.tornMissingCount || 0;
               }
-              windByScope[item.data.scope === "exterior" ? "exterior" : "roof"].push(item);
+              windByScope[item.data?.scope === "exterior" ? "exterior" : "roof"].push(item);
             }
             if(item.type === "apt" || item.type === "ds" || item.type === "eapt"){
-              const entries = (item.data.damageEntries || []).filter(entry => (entry.mode || "").trim());
-              if(entries.length) hailByType[item.type].push({ item, entries });
-              (item.data.windEntries || []).forEach(entry => {
-                if(!entry?.condition) return;
-                windIndicatorEntries.push({ item, entry });
+              (item.data?.damageEntries || []).forEach((entry: any) => {
+                const mode = (entry?.mode || "").trim();
+                if(!mode) return;
+                if(!hail[item.type as keyof typeof hail][mode as keyof typeof hail.apt]) return;
+                hail[item.type as keyof typeof hail][mode as keyof typeof hail.apt].push({ item, entry });
+                if(mode === "spatter" || mode === "both"){
+                  const size = parseSize(entry.size);
+                  const sizeLabel = entry.size || "";
+                  const dirCode = entry.direction || item.data?.dir || "";
+                  if(item.type === "apt"){
+                    if(size > largestRoofSpatter){ largestRoofSpatter = size; largestRoofSpatterLabel = sizeLabel; }
+                    if(dirCode) roofSpatterDirs.add(dirCode);
+                  } else {
+                    if(size > largestExteriorSpatter){ largestExteriorSpatter = size; largestExteriorSpatterLabel = sizeLabel; }
+                    if(dirCode) exteriorSpatterDirs.add(dirCode);
+                  }
+                }
+              });
+              (item.data?.windEntries || []).forEach((entry: any) => {
+                if(entry?.condition) windIndicatorEntries.push({ item, entry });
               });
             }
+            if(item.type === "ts") tsItems.push(item);
           });
 
-          const selectedExteriorComponents = INSPECTION_COMPONENTS
-            .filter(comp => reportData.inspection.components?.[comp.key]?.none)
-            .map(comp => comp.label.toLowerCase());
+          // ---------- Address line for scope paragraph ----------
+          const addrParts = [project.address, project.city, [project.state, project.zip].filter(Boolean).join(" ")]
+            .map(s => (s || "").trim()).filter(Boolean);
+          const addrLine = addrParts.join(", ");
+          const scopeName = project.projectName?.trim() || residenceName?.trim() || "residence";
+          const scopeAddrPhrase = addrLine
+            ? `the residence located at ${addrLine}`
+            : `the ${scopeName}`;
 
-          const cardinalSummary = ["N", "S", "E", "W"].map(dir => {
-            const d = byDir[dir];
-            if(!d) return "";
-            const bits = [];
-            if(d.creased) bits.push(`${d.creased} creased`);
-            if(d.torn) bits.push(`${d.torn} torn or missing`);
-            if(!bits.length) return "";
-            return `${bits.join(" and ")} shingles on ${dir.toLowerCase()}-facing slopes`;
-          }).filter(Boolean);
+          // ---------- 1. SCOPE ----------
+          const scopeBuckets = ["exterior", "roof"];
+          if(insp.interior?.inspected) scopeBuckets.unshift("interior");
+          if(insp.attic?.inspected){
+            // attic sits between interior and exterior in the
+            // Haag-style scope phrasing
+            const idx = scopeBuckets.indexOf("exterior");
+            scopeBuckets.splice(idx, 0, "attic");
+          }
+          const scopeListPhrase = join(scopeBuckets);
+          const scopeText = `We inspected the ${scopeListPhrase} of ${scopeAddrPhrase}. Our observations were documented with field notes and photographs. Representative photographs are attached to this report.`;
 
-          const roofWindText = windByScope.roof.length
-            ? `We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. We noted ${cardinalSummary.length ? `${localJoinReadableList(cardinalSummary)}.` : "wind-related conditions on roof facets."}`
-            : "We inspected the roof for wind-caused conditions, including creased, torn, displaced, or missing shingles. We did not observe creased, torn, or missing shingles on the roof fields, ridges, hips, valleys, or edges.";
+          // ---------- 2. EXTERIOR HAIL INDICATORS ----------
+          // Group EAPT/DS markers by mode. "none" markers contribute
+          // affirmative negative findings ("did not display dents").
+          const extSpatterEntries = [...hail.eapt.spatter, ...hail.eapt.both, ...hail.ds.spatter, ...hail.ds.both];
+          const extDentEntries = [...hail.eapt.dent, ...hail.eapt.both, ...hail.ds.dent, ...hail.ds.both];
+          const extNoneEntries = [...hail.eapt.none, ...hail.ds.none];
+          const extHasAnyEvidence = extSpatterEntries.length + extDentEntries.length > 0;
+          let exteriorHailText = "";
+          if(extHasAnyEvidence){
+            const phrases: string[] = [];
+            if(extSpatterEntries.length){
+              const components = Array.from(new Set(extSpatterEntries.map(({ item }) => componentLabel(item))));
+              const dirPhrase = exteriorSpatterDirs.size
+                ? ` from the ${join(Array.from(exteriorSpatterDirs).map(dirLong))}`
+                : "";
+              const sizePhrase = largestExteriorSpatterLabel
+                ? `, measuring up to approximately ${largestExteriorSpatterLabel} inch across the darkest portion`
+                : "";
+              phrases.push(`we found spatter marks on the ${join(components)}${dirPhrase}${sizePhrase}`);
+            }
+            if(extDentEntries.length){
+              const dentComponents = Array.from(new Set(extDentEntries.map(({ item }) => componentLabel(item))));
+              phrases.push(`${extSpatterEntries.length ? "we observed" : "we found"} hail-caused dents on the ${join(dentComponents)}`);
+            }
+            const lead = `During ground-level exterior inspection, ${join(phrases)}.`;
+            const definition = extSpatterEntries.length
+              ? " Spatter marks are areas of grime, oxides, and organic accumulation cleaned from surfaces struck by hailstones. They provide evidence of the general size, fall direction, and relative age of hail fall at a property."
+              : "";
+            const noneTail = extNoneEntries.length
+              ? (() => {
+                  const noneComponents = Array.from(new Set(extNoneEntries.map(({ item }) => componentLabel(item))));
+                  return ` Other inspected appurtenances including the ${join(noneComponents)} did not display any hail-caused dents or spatter marks.`;
+                })()
+              : "";
+            exteriorHailText = `${lead}${definition}${noneTail}`;
+          } else if(extNoneEntries.length){
+            const noneComponents = Array.from(new Set(extNoneEntries.map(({ item }) => componentLabel(item))));
+            exteriorHailText = `During ground-level exterior inspection, we did not find spatter marks on any exterior surfaces. Soft metal appurtenances including the ${join(noneComponents)} did not display any hail-caused dents. The absence of spatter marks and dents on exterior surfaces indicated that hailstones of significant size did not fall at the property.`;
+          } else {
+            exteriorHailText = "During ground-level exterior inspection, we did not find spatter marks on any exterior surfaces. Soft metal appurtenances did not display any hail-caused dents. The absence of spatter marks and dents on exterior surfaces indicated that hailstones of significant size did not fall at the property.";
+          }
 
-          const exteriorScopeText = selectedExteriorComponents.length
-            ? localJoinReadableList(selectedExteriorComponents)
-            : "fascia, trim, siding, downspouts, and other exterior components";
-
-          // Fold per-marker wind indicator entries (displaced / detached
-          // / loose on DS, APT, EAPT markers) into the exterior wind
-          // narrative alongside the dedicated WIND markers.
-          const windIndicatorPhrases = windIndicatorEntries.map(({ item, entry }) => {
-            const cond = WIND_CONDITIONS.find(c => c.key === entry.condition);
-            const condLabel = cond ? cond.label.toLowerCase() : (entry.condition || "wind-damaged");
-            return `${condLabel} ${localComponentLabel(item, entry.dir || item.data?.dir)}`;
-          });
-
-          const windMarkerPhrases = windByScope.exterior.map(entry =>
-            `${(entry.data.component || "component").toLowerCase()} at the ${localDirLabel(entry.data.dir)} elevation`
+          // ---------- 3. EXTERIOR WIND INDICATORS ----------
+          const walk = insp.exteriorWalkthrough || {};
+          const masonryPhrase = walk.masonryIntact === false && (walk.masonryNotes || "").trim()
+            ? walk.masonryNotes.trim()
+            : "The exterior masonry and trim did not display any scrapes or gouges caused by windborne debris impact.";
+          const fencesPhrase = walk.fencesIntact === false && (walk.fencesNotes || "").trim()
+            ? walk.fencesNotes.trim()
+            : "Wood fences on the property had not been shifted or broken by wind forces.";
+          const exteriorWindMarkerPhrases = windByScope.exterior.map((entry: any) =>
+            `${(entry.data?.component || "component").toLowerCase()} at the ${dirLong(entry.data?.dir)} elevation`
           );
-          const combinedExteriorWindPhrases = [...windMarkerPhrases, ...windIndicatorPhrases];
-          const exteriorWindText = combinedExteriorWindPhrases.length
-            ? `We inspected the exterior elevations including ${exteriorScopeText}. We noted localized wind-related conditions at ${localJoinReadableList(combinedExteriorWindPhrases)}.`
-            : `We inspected the exterior elevations including ${exteriorScopeText}. We found no detached, loose, missing, or displaced exterior components.`;
+          const indicatorPhrases = windIndicatorEntries.map(({ item, entry }) => {
+            const cond = WIND_CONDITIONS.find(c => c.key === entry.condition);
+            const label = cond ? cond.label.toLowerCase() : (entry.condition || "wind-affected");
+            return `${label} ${componentWithDir(item, entry.dir)}`;
+          });
+          const allExtWindPhrases = [...exteriorWindMarkerPhrases, ...indicatorPhrases];
+          const extWindLead = allExtWindPhrases.length
+            ? `We observed ${join(allExtWindPhrases)} at grade level. `
+            : "";
+          const exteriorWindText = `${extWindLead}${masonryPhrase} ${fencesPhrase}`;
 
-          const hailEntries = ["apt", "ds", "eapt"].flatMap(type => hailByType[type].flatMap(({ item, entries }) => (
-            entries.map(entry => `${entry.mode === "both" ? "spatter and dent" : entry.mode} up to ${entry.size}" on ${localComponentLabel(item, entry.dir || item.data.dir)}`)
-          )));
-
-          const hailText = hailEntries.length
-            ? `We examined exterior and roof metal components for hail indicators. We observed ${localJoinReadableList(hailEntries)}.`
-            : "We examined exterior and roof metal components for hail indicators. We found no hail-caused dents or spatter marks on appurtenances or downspouts.";
-
-          const tsItems = pageItems.filter(item => item.type === "ts");
-          const tsCount = tsItems.length;
-          const tsByDirection = tsItems.reduce((acc, item) => {
-            const dir = item.data?.dir;
-            if(!dir) return acc;
-            if(!acc[dir]) acc[dir] = { squares: 0, hits: 0, maxSize: 0, maxSizeLabel: "" };
-            acc[dir].squares += 1;
-            (item.data?.bruises || []).forEach(bruise => {
-              const parsed = parseSize(bruise.size);
-              acc[dir].hits += 1;
-              if(parsed > acc[dir].maxSize){
-                acc[dir].maxSize = parsed;
-                acc[dir].maxSizeLabel = bruise.size || "";
-              }
-            });
-            return acc;
-          }, {});
-          const tsBruises = Object.values(tsByDirection).reduce((count, stats) => count + stats.hits, 0);
-          const tsFormOverrides = (reportData.inspection?.testSquares || {}) as Record<string, any>;
-          const tsNoteOverrides = ["N", "S", "E", "W"].map(dir => {
-            const long = ({ N: "north", S: "south", E: "east", W: "west" } as const)[dir as "N"|"S"|"E"|"W"];
-            const sq = tsFormOverrides[long] || {};
-            const parts: string[] = [];
-            if(typeof sq.punctures === "string" && sq.punctures.trim() && sq.punctures.trim() !== "0"){
-              parts.push(`${sq.punctures.trim()} puncture${sq.punctures.trim() === "1" ? "" : "s"} on the ${long}-facing slope`);
+          // ---------- 4. INTERIOR FINDINGS ----------
+          const interior = insp.interior || {};
+          const rooms = Array.isArray(interior.rooms) ? interior.rooms : [];
+          let interiorText = "";
+          if(interior.inspected){
+            if(interior.noInteriorConcerns || rooms.length === 0){
+              interiorText = "No interior stains or conditions of concern were observed during the inspection.";
+            } else {
+              const roomLocations = rooms.map((r: any) => (r.location || "").trim()).filter(Boolean);
+              const lead = roomLocations.length
+                ? `The homeowner reported concerns regarding ceiling stains in the ${join(roomLocations)}.`
+                : "We inspected the interior areas with reported concerns.";
+              const sourceLookup: Record<string, string> = {
+                roof: "consistent with a release from the roof assembly above this location",
+                mechanical: "consistent with a release from a mechanical source in the attic above this location",
+                plumbing: "consistent with a plumbing source",
+                condensation: "consistent with condensation rather than a roof-related water release",
+                undetermined: "for which the source had not been definitively identified at the time of this inspection"
+              };
+              const roomDetails = rooms.map((r: any) => {
+                const loc = (r.location || "the inspected area").trim();
+                const conds = Array.isArray(r.conditions) ? r.conditions.filter(Boolean) : [];
+                const condPhrase = conds.length ? join(conds) : "stained finishes";
+                const agePhrase = r.ageIndicator ? `, ${r.ageIndicator.trim()}` : "";
+                const sourcePhrase = sourceLookup[r.correspondingSource] || "";
+                const sourceClause = sourcePhrase ? `, ${sourcePhrase}` : "";
+                const notes = (r.notes || "").trim();
+                const notesClause = notes ? ` ${notes}` : "";
+                return `We observed ${condPhrase} at the ${loc}${agePhrase}${sourceClause}.${notesClause}`;
+              });
+              interiorText = `${lead} ${roomDetails.join(" ")}`.trim();
             }
-            if(typeof sq.notes === "string" && sq.notes.trim() && !/\btest square/i.test(sq.notes.trim())){
-              parts.push(`${long}-facing slope note: ${sq.notes.trim()}`);
-            }
-            return parts.join("; ");
+          }
+
+          // ---------- 5. ATTIC ----------
+          const attic = insp.attic || {};
+          let atticText = "";
+          if(attic.inspected){
+            const accessLookup: Record<string, string> = {
+              fully: "We accessed the attic and inspected the underside of the roof decking.",
+              partially: "We partially accessed the attic; portions were obstructed by congested framing or stored materials.",
+              "not-accessible": "We attempted to access the attic but the space was not accessible during this inspection."
+            };
+            const lead = accessLookup[attic.accessible] || "We inspected the attic.";
+            const detailParts: string[] = [];
+            if((attic.deckingCondition || "").trim()) detailParts.push(attic.deckingCondition.trim());
+            if((attic.condensatePan || "").trim()) detailParts.push(`The condensate drain pan ${attic.condensatePan.trim()}.`);
+            if((attic.ventTubes || "").trim()) detailParts.push(`Vent tubes ${attic.ventTubes.trim()}.`);
+            if((attic.notes || "").trim()) detailParts.push(attic.notes.trim());
+            atticText = [lead, ...detailParts].join(" ").trim();
+          }
+
+          // ---------- 6. ROOF GENERAL CONDITION ----------
+          const coveringLabel = ((desc.coveringLabel || desc.coveringCategory || desc.shingleClass || "composition shingles") + "")
+            .trim() || "composition shingles";
+          const roofCondition = insp.roofCondition || "fair";
+          const pliabilityLookup: Record<string, string> = {
+            pliable: "Shingles were pliable.",
+            "moderately-pliable": "Shingles were moderately pliable.",
+            brittle: "Shingles were brittle and fractured during attempted lifts."
+          };
+          const pliabilityPhrase = pliabilityLookup[insp.shinglePliability] || "";
+          const granulePhrase = (insp.granuleNotes || "").trim() || "Granule loss was moderate across all slopes, with heavier loss along ridges and in valleys.";
+          const fastenerPhrase = (insp.fastenerNotes || "").trim();
+          const priorRepairs = Array.isArray(insp.priorRepairs) ? insp.priorRepairs : [];
+          const priorRepairPhrase = priorRepairs.length
+            ? priorRepairs.map((r: any) => {
+                const desc = (r.description || "prior repairs").trim();
+                const loc = (r.location || "").trim();
+                const age = (r.ageIndicator || "").trim();
+                const ageClause = age ? `, ${age}` : "";
+                return loc ? `We observed ${desc} on the ${loc}${ageClause}, indicating a prior repair.` : `We observed ${desc}${ageClause}.`;
+              }).join(" ")
+            : "";
+          const priorInspectionPhrase = (insp.priorInspectionDamage || "").trim();
+          const roofGeneralText = [
+            `The roof was covered with ${coveringLabel} and was in ${roofCondition} condition with regard to weathering.`,
+            granulePhrase,
+            pliabilityPhrase,
+            priorRepairPhrase,
+            priorInspectionPhrase,
+            fastenerPhrase
+          ].filter(Boolean).join(" ");
+
+          // ---------- 7. ROOF WIND + BOND ----------
+          const roofWindCardinal = ["N", "S", "E", "W"].map(dir => {
+            const d = windByDir[dir];
+            const bits: string[] = [];
+            if(d.creased) bits.push(`${d.creased} creased shingle tab${d.creased === 1 ? "" : "s"}`);
+            if(d.torn) bits.push(`${d.torn} torn or missing shingle tab${d.torn === 1 ? "" : "s"}`);
+            if(!bits.length) return "";
+            return `${join(bits)} on the ${dirLong(dir)}-facing slope`;
           }).filter(Boolean);
-          const directionalHitText = ["N", "S", "E", "W"].map(dir => {
-            const stats = tsByDirection[dir];
-            if(!stats || !stats.hits) return "";
-            const maxSizeText = stats.maxSizeLabel ? ` with a largest mapped bruise of ${stats.maxSizeLabel}\"` : "";
-            return `${localDirLabel(dir)} slope (${stats.squares} test square${stats.squares === 1 ? "" : "s"}): ${stats.hits} hail hit${stats.hits === 1 ? "" : "s"}${maxSizeText}`;
-          }).filter(Boolean);
-          const overrideTail = tsNoteOverrides.length ? ` Additional observations: ${localJoinReadableList(tsNoteOverrides)}.` : "";
-          const coveredDirs = ["N", "S", "E", "W"].filter(d => tsByDirection[d]);
-          const slopeCoveragePhrase = coveredDirs.length === 4
-            ? "all roof slopes"
-            : `${localJoinReadableList(coveredDirs.map(localDirLabel))} roof slopes`;
-          const testSquaresText = tsCount
-            ? `We examined 100-square-foot test area${tsCount === 1 ? "" : "s"} on ${slopeCoveragePhrase}. Each shingle within the test area${tsCount === 1 ? " was" : "s were"} examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact. ${tsBruises ? `Within the test area${tsCount === 1 ? "" : "s"}, we noted ${tsBruises} mapped hail hit${tsBruises === 1 ? "" : "s"}${directionalHitText.length ? `, including ${localJoinReadableList(directionalHitText)}` : ""}.` : "We did not find hail-caused bruises or punctured shingles within the test areas."}${overrideTail}`
-            : "No test squares were documented for this inspection.";
-
-          const roofCondition = reportData.inspection?.roofCondition || "fair";
-          const roofGeneralText = `Overall, the roof shingles were in ${roofCondition} condition with respect to weathering. Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas.`;
-
-          const scopeName = reportData.project.projectName?.trim() || residenceName?.trim() || "residence";
-          const scopeText = `We inspected the ${scopeName} property exterior and roof components, and documented observed conditions paying particular attention to evidence of hailstone impact and wind-related conditions. Photographs of representative conditions are attached to this report.`;
-
-          // v4.1 auto-generated text for the new standard paragraphs.
-          // Each of these pulls from the Inspection Details tab so the
-          // narrative adapts to what the engineer captured on-site.
-          const insp: any = reportData.inspection;
-          const desc: any = reportData.description;
           const bondLookup: Record<string, string> = {
-            good: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in good condition. Shingles resisted lifting and the sealant strips were intact and adhered.",
-            fair: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in fair condition. Shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age.",
-            poor: "We evaluated the sealant bond condition of field shingles in multiple locations. The adhesive bond was in poor condition. Several shingles could be lifted by hand or with minimal effort, indicating weakened adhesive bonds.",
+            good: "The sealant bond of field shingles was in good condition. Shingles resisted lifting and the sealant strips were intact across the sampled areas.",
+            fair: "The sealant bond of field shingles was in fair condition. Shingles resisted lifting in most sampled locations, with isolated unbonded corners attributed to thermal effects and aging rather than wind forces.",
+            poor: "The sealant bond of field shingles was in poor condition. Several shingles could be lifted by hand or with minimal effort, indicating weakened adhesive bonds attributable to age or thermal effects rather than a single wind event.",
             "not-evaluated": "The adhesive bond condition was not evaluated as part of this inspection."
           };
-          const bondConditionText = bondLookup[insp.bondCondition as string]
-            || (reportData.inspection.paragraphs?.bondCondition?.text)
-            || "";
-          const shingleClass = (desc.shingleClass || "").toLowerCase();
-          const thresholdText = shingleClass === "3-tab"
-            ? "The threshold size for damage to 3-tab composition shingles is a frozen-solid hailstone of approximately 1 inch impacting perpendicular to the roof surface."
-            : shingleClass === "laminated" || shingleClass === "architectural"
-              ? "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface. The threshold for 3-tab shingles is approximately 1 inch."
-              : (reportData.inspection.paragraphs?.thresholdDamage?.text || "");
-          const roofAge = (desc.roofAge || "").trim();
-          const weatheringText = roofAge
-            ? `The roof exhibited weathering consistent with its estimated age of ${roofAge}. Observed conditions included granule erosion, surface oxidation, and typical wear along ridges and hips. These conditions were distributed across all roof slopes and are characteristic of age-related deterioration rather than a single weather event.`
-            : (reportData.inspection.paragraphs?.weathering?.text || "");
-          const damageFound = (insp.damageFound || "").toLowerCase();
-          const damageSummaryText = damageFound === "yes"
-            ? "Based on our inspection, we identified storm-caused conditions to identified components. The affected areas are identified on the attached roof diagram. The observed damage is consistent with the reported weather event."
-            : damageFound === "no"
-              ? "Based on our inspection, we found no evidence of hail-caused or wind-caused damage to the roof covering that would necessitate repair or replacement. The observed conditions are consistent with normal aging and weathering of the roof materials."
-              : (reportData.inspection.paragraphs?.damageSummary?.text || "");
-          const spatterText = (reportData.inspection.paragraphs?.spatterDefinition?.text || "");
+          const bondPhrase = bondLookup[insp.bondCondition] || "";
+          let roofWindLead: string;
+          if(roofWindCardinal.length){
+            roofWindLead = `We identified ${join(roofWindCardinal)}. The creased tabs displayed sharp fold lines with fractured reinforcement, consistent with wind-caused damage.`;
+          } else {
+            roofWindLead = "Shingles lay flat across all slopes. We did not identify any creased, torn, or missing shingle tabs attributable to wind forces.";
+          }
+          const roofWindBondText = `${roofWindLead} ${bondPhrase}`.trim();
 
+          // ---------- 8. HAIL EVALUATION (APPURTENANCES) ----------
+          const aptSpatter = [...hail.apt.spatter, ...hail.apt.both];
+          const aptDent = [...hail.apt.dent, ...hail.apt.both];
+          const aptNone = hail.apt.none;
+          const aptHasEvidence = aptSpatter.length + aptDent.length > 0;
+          let hailEvaluationText = "";
+          if(aptHasEvidence){
+            const aptPhrases: string[] = [];
+            if(aptSpatter.length){
+              const components = Array.from(new Set(aptSpatter.map(({ item }) => componentLabel(item))));
+              const dirPhrase = roofSpatterDirs.size
+                ? ` from the ${join(Array.from(roofSpatterDirs).map(dirLong))}`
+                : "";
+              const sizePhrase = largestRoofSpatterLabel
+                ? `, measuring up to approximately ${largestRoofSpatterLabel} inch`
+                : "";
+              aptPhrases.push(`spatter marks on the ${join(components)}${dirPhrase}${sizePhrase}`);
+            }
+            if(aptDent.length){
+              const components = Array.from(new Set(aptDent.map(({ item }) => componentLabel(item))));
+              aptPhrases.push(`hail-caused dents on the ${join(components)}`);
+            }
+            const corroborationPhrase = exteriorSpatterDirs.size && roofSpatterDirs.size
+              ? " These findings corroborated the ground-level evidence of hailfall at the property."
+              : "";
+            hailEvaluationText = `Roof-level appurtenances were inspected for evidence of hail impact. We observed ${join(aptPhrases)}.${corroborationPhrase}`;
+          } else {
+            const noneClause = aptNone.length
+              ? ` Inspected appurtenances including the ${join(Array.from(new Set(aptNone.map(({ item }) => componentLabel(item)))))} did not display any spatter marks, dents, or bruised conditions.`
+              : "";
+            const consistencyClause = !extHasAnyEvidence
+              ? " These findings were consistent with the ground-level assessment, which also did not identify evidence of hailstones of significant size at the property."
+              : "";
+            hailEvaluationText = `Roof-level appurtenances were inspected for evidence of hail impact.${noneClause || " Soft metals did not display any spatter marks, dents, or bruised conditions."}${consistencyClause}`;
+          }
+
+          // ---------- 9. TEST SQUARES ----------
+          const tsByDir: Record<string, { squares: number; bruises: number; maxSize: number; maxLabel: string }> = {};
+          tsItems.forEach((item: any) => {
+            const dir = item.data?.dir;
+            if(!dir) return;
+            if(!tsByDir[dir]) tsByDir[dir] = { squares: 0, bruises: 0, maxSize: 0, maxLabel: "" };
+            tsByDir[dir].squares += 1;
+            (item.data?.bruises || []).forEach((bruise: any) => {
+              const size = parseSize(bruise.size);
+              tsByDir[dir].bruises += 1;
+              if(size > tsByDir[dir].maxSize){
+                tsByDir[dir].maxSize = size;
+                tsByDir[dir].maxLabel = bruise.size || "";
+              }
+            });
+          });
+          const tsCount = tsItems.length;
+          const tsTotalBruises = Object.values(tsByDir).reduce((sum, v) => sum + v.bruises, 0);
+          const coveredDirs = ["N", "S", "E", "W"].filter(d => tsByDir[d]);
+          const slopePhrase = coveredDirs.length === 4
+            ? "facing north, south, east, and west"
+            : `facing ${join(coveredDirs.map(dirLong))}`;
+          let testSquaresText: string;
+          if(!tsCount){
+            testSquaresText = "No test squares were documented for this inspection.";
+          } else if(tsTotalBruises === 0){
+            testSquaresText = `We established test areas measuring approximately 100 square feet on slopes ${slopePhrase}. Each test area was examined using visual and tactile methods. We did not identify any bruised, fractured, or punctured shingles within the test areas. Scattered granule displacement was observed that did not involve fracture of the underlying fiberglass reinforcement mat. This was consistent with the exterior assessment, which did not identify evidence of hailstones reaching the damage threshold for this roof covering.`;
+          } else {
+            const perSlope = ["N", "S", "E", "W"].map(d => {
+              const stats = tsByDir[d];
+              if(!stats || !stats.bruises) return "";
+              const sizeClause = stats.maxLabel ? ` with a largest mapped bruise of approximately ${stats.maxLabel} inch` : "";
+              return `${stats.bruises} bruise${stats.bruises === 1 ? "" : "s"} on the ${dirLong(d)}-facing slope${sizeClause}`;
+            }).filter(Boolean);
+            testSquaresText = `We established test areas measuring approximately 100 square feet on slopes ${slopePhrase}. Each test area was examined using visual and tactile methods. Within the test areas we identified ${join(perSlope)}. The bruises were characterized by fractures of the fiberglass reinforcement mat with exposed, non-oxidized bitumen, consistent with recent hail impact.`;
+          }
+
+          // ---------- 10. FILE REVIEW ----------
+          const fileRev = insp.fileReview || {};
+          let fileReviewText = "";
+          if(fileRev.reviewed){
+            const src = (fileRev.sourceLabel || "the file materials").trim();
+            const date = (fileRev.sourceDate || "").trim();
+            const dateClause = date ? `, dated ${date}` : "";
+            const findings = (fileRev.findings || "").trim();
+            const tail = findings || "Conditions depicted in the file materials were consistent with those we observed during our inspection.";
+            fileReviewText = `We reviewed ${src}${dateClause}. ${tail}`;
+          }
+
+          // ---------- Group + return ----------
+          // Section keys must match INSPECTION_PARAGRAPH_ORDER so the
+          // include toggle in the Inspection Narrative bubble wires
+          // up correctly. Optional sections (interior, attic,
+          // fileReview) are only emitted with text when the engineer
+          // has indicated those scopes were inspected.
           return [
             {
-              key: "general",
-              label: "General",
+              key: "scope",
+              label: "Scope",
               sections: [
-                { key: "scope", title: "Scope", text: scopeText },
-                { key: "roofGeneral", title: "Roof general", text: roofGeneralText }
+                { key: "scope", title: "Inspection scope", text: scopeText }
               ]
             },
             {
               key: "exterior",
               label: "Exterior",
               sections: [
-                { key: "exteriorWind", title: "Wind evaluation", text: exteriorWindText },
-                { key: "exteriorHail", title: "Hail indicators", text: hailText }
+                { key: "exteriorHail", title: "Exterior hail indicators", text: exteriorHailText },
+                { key: "exteriorWind", title: "Exterior wind indicators", text: exteriorWindText }
               ]
             },
             {
               key: "interior",
-              label: "Interior and Roof",
+              label: "Interior & Attic",
               sections: [
-                { key: "interior", title: "Interior findings", text: "No interior observations were documented in the diagram for this export." },
-                { key: "windRoof", title: "Roof wind findings", text: roofWindText },
+                { key: "interior", title: "Interior findings", text: interiorText },
+                { key: "attic", title: "Attic / pathway tracing", text: atticText }
+              ]
+            },
+            {
+              key: "roof",
+              label: "Roof",
+              sections: [
+                { key: "roofGeneral", title: "Roof general condition", text: roofGeneralText },
+                { key: "roofWindBond", title: "Roof wind & bond", text: roofWindBondText },
+                { key: "hailEvaluation", title: "Roof hail evaluation", text: hailEvaluationText },
                 { key: "testSquares", title: "Test squares", text: testSquaresText }
               ]
             },
             {
-              key: "standardPhrases",
-              label: "Standard Phrases",
+              key: "fileReview",
+              label: "File Review",
               sections: [
-                { key: "spatterDefinition", title: "Spatter mark definition", text: spatterText },
-                { key: "thresholdDamage", title: "Hail damage threshold", text: thresholdText },
-                { key: "bondCondition", title: "Bond condition", text: bondConditionText },
-                { key: "weathering", title: "Weathering", text: weatheringText },
-                { key: "damageSummary", title: "Damage summary", text: damageSummaryText }
+                { key: "fileReview", title: "File review", text: fileReviewText }
               ]
             }
           ];
-        }, [pageItems, reportData.inspection, reportData.description, reportData.project.projectName, residenceName]);
+        }, [pageItems, reportData.inspection, reportData.description, reportData.project, residenceName]);
 
         const inspectionParagraphsForExport = useMemo(() => (
           inspectionGeneratedSections.flatMap(group => group.sections.map(section => {
@@ -5786,7 +5991,6 @@ const loadPdfJs = () => {
           );
           const hailFound = tsBruiseTotal > 0;
           const windFound = (creasedTotal + tornTotal) > 0;
-          const damage = (reportData.inspection as any).damageFound;
           if(hailFound || windFound){
             const found: string[] = [];
             if(hailFound) found.push(`${tsBruiseTotal} hail-caused bruise${tsBruiseTotal === 1 ? "" : "s"} in our test areas`);
@@ -5797,7 +6001,7 @@ const loadPdfJs = () => {
               found.push(`${wbits.join(" and ")} shingle${(creasedTotal + tornTotal) === 1 ? "" : "s"} from wind`);
             }
             bits.push(`We identified ${found.join("; and ")}.`);
-          } else if(damage === "no"){
+          } else if(tsItems.length){
             bits.push("We did not identify hail- or wind-caused damage to the roof covering that would necessitate repair or replacement.");
           }
           return bits.join(" ");
@@ -5811,9 +6015,29 @@ const loadPdfJs = () => {
           const has = (v: unknown) => v != null && String(v).trim() !== "";
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
-          const damageFound = (reportData.inspection as any).damageFound;
           const bondCondition = (reportData.inspection as any).bondCondition;
-          const spatter = (reportData.inspection as any).spatterMarksObserved;
+          // Spatter and storm-caused-damage signals are now derived
+          // from diagram markers — the legacy `spatterMarksObserved`
+          // and `damageFound` form fields were removed in the v3
+          // forensic rewrite. "Spatter observed" means at least one
+          // EAPT/DS/APT marker carries a spatter or both mode entry;
+          // "storm-caused conditions" means any wind marker has a
+          // creased/torn count or any test square has a bruise.
+          let spatterObserved = false;
+          let stormCausedConditions = false;
+          (pageItems || []).forEach((item: any) => {
+            if(item.type === "apt" || item.type === "ds" || item.type === "eapt"){
+              (item.data?.damageEntries || []).forEach((entry: any) => {
+                if(entry?.mode === "spatter" || entry?.mode === "both") spatterObserved = true;
+                if(entry?.mode === "spatter" || entry?.mode === "dent" || entry?.mode === "both") stormCausedConditions = true;
+              });
+              if((item.data?.windEntries || []).some((e: any) => e?.condition)) stormCausedConditions = true;
+            }
+            if(item.type === "wind"){
+              if((item.data?.creasedCount || 0) + (item.data?.tornMissingCount || 0) > 0) stormCausedConditions = true;
+            }
+          });
+          if(tsBruiseTotal > 0) stormCausedConditions = true;
           const lines: string[] = [];
           // Weather linkage
           if(has(w.nearestHailSize)){
@@ -5838,14 +6062,12 @@ const loadPdfJs = () => {
           } else if(bondCondition === "good"){
             lines.push(`The adhesive bond of field shingles was intact throughout the sampled areas, indicating the roof covering has not been subjected to a sustained wind uplift event.`);
           }
-          if(spatter === "yes"){
+          if(spatterObserved){
             lines.push(`Spatter marks were observed on soft-metal surfaces adjacent to the residence, indicating that hailstones did fall at the property even where shingle-level damage was not evident.`);
-          } else if(spatter === "no"){
-            lines.push(`No spatter marks were observed on soft-metal surfaces, which can indicate that either recent hailstones were insufficient to produce spatter or that any spatter has weathered away.`);
           }
-          if(damageFound === "no"){
+          if(!stormCausedConditions && tsItems.length){
             lines.push(`On balance, the observed conditions do not support a finding of storm-caused damage to the roof covering.`);
-          } else if(damageFound === "yes"){
+          } else if(stormCausedConditions){
             lines.push(`On balance, the observed conditions support a finding of storm-caused damage to the identified components.`);
           }
           return lines.join(" ");
@@ -11121,7 +11343,11 @@ const loadPdfJs = () => {
                   includedBlank === 0 && includedWithText > 0 ? "ready" : "partial";
                 const insp = reportData.inspection;
                 const hasVal2 = (v: unknown) => v != null && String(v).trim() !== "";
-                const detailKeys = [hasVal2(insp.bondCondition), hasVal2(insp.spatterMarksObserved), hasVal2(insp.damageFound)];
+                const detailKeys = [
+                  hasVal2(insp.bondCondition),
+                  hasVal2(insp.shinglePliability),
+                  hasVal2(insp.granuleNotes)
+                ];
                 const detailFilled = detailKeys.filter(Boolean).length;
                 const detailStatus: "ready" | "partial" | "empty" =
                   detailFilled === detailKeys.length ? "ready" :
@@ -11130,22 +11356,129 @@ const loadPdfJs = () => {
                 const tsAny = testSquareKeys.some(dir => testSquaresDerived[dir]?.hasData);
                 const tsAll = testSquareKeys.every(dir => testSquaresDerived[dir]?.hasData);
                 const tsStatus: "ready" | "partial" | "empty" = tsAll ? "ready" : tsAny ? "partial" : "empty";
-                const setInspectionField = (key: string, value: string) => {
+                const setInspectionField = (key: string, value: any) => {
                   setReportData((prev: any) => ({ ...prev, inspection: { ...prev.inspection, [key]: value } }));
                 };
-                const toggleSpatterSurface = (surface: string) => {
-                  setReportData((prev: any) => {
-                    const cur = normalizeList(prev.inspection.spatterMarksSurfaces);
-                    const next = cur.includes(surface) ? cur.filter((x: string) => x !== surface) : [...cur, surface];
-                    return { ...prev, inspection: { ...prev.inspection, spatterMarksSurfaces: next } };
-                  });
+                const setExtWalkField = (key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      exteriorWalkthrough: { ...prev.inspection.exteriorWalkthrough, [key]: value }
+                    }
+                  }));
                 };
+                const setInteriorField = (key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      interior: { ...prev.inspection.interior, [key]: value }
+                    }
+                  }));
+                };
+                const setAtticField = (key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      attic: { ...prev.inspection.attic, [key]: value }
+                    }
+                  }));
+                };
+                const setFileReviewField = (key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      fileReview: { ...prev.inspection.fileReview, [key]: value }
+                    }
+                  }));
+                };
+                const addInteriorRoom = () => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      interior: {
+                        ...prev.inspection.interior,
+                        rooms: [
+                          ...(prev.inspection.interior?.rooms || []),
+                          { id: uid(), location: "", conditions: [], ageIndicator: "", correspondingSource: "", notes: "" }
+                        ]
+                      }
+                    }
+                  }));
+                };
+                const updateInteriorRoom = (id: string, key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      interior: {
+                        ...prev.inspection.interior,
+                        rooms: (prev.inspection.interior?.rooms || []).map((r: any) =>
+                          r.id === id ? { ...r, [key]: value } : r
+                        )
+                      }
+                    }
+                  }));
+                };
+                const removeInteriorRoom = (id: string) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      interior: {
+                        ...prev.inspection.interior,
+                        rooms: (prev.inspection.interior?.rooms || []).filter((r: any) => r.id !== id)
+                      }
+                    }
+                  }));
+                };
+                const addPriorRepair = () => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      priorRepairs: [
+                        ...(prev.inspection.priorRepairs || []),
+                        { id: uid(), location: "", description: "", ageIndicator: "" }
+                      ]
+                    }
+                  }));
+                };
+                const updatePriorRepair = (id: string, key: string, value: any) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      priorRepairs: (prev.inspection.priorRepairs || []).map((r: any) =>
+                        r.id === id ? { ...r, [key]: value } : r
+                      )
+                    }
+                  }));
+                };
+                const removePriorRepair = (id: string) => {
+                  setReportData((prev: any) => ({
+                    ...prev,
+                    inspection: {
+                      ...prev.inspection,
+                      priorRepairs: (prev.inspection.priorRepairs || []).filter((r: any) => r.id !== id)
+                    }
+                  }));
+                };
+                const interior = insp.interior || { inspected: false, noInteriorConcerns: true, rooms: [] };
+                const attic = insp.attic || { inspected: false, accessible: "", deckingCondition: "", condensatePan: "", ventTubes: "", notes: "" };
+                const walk = insp.exteriorWalkthrough || { masonryIntact: true, masonryNotes: "", fencesIntact: true, fencesNotes: "" };
+                const priorRepairs = Array.isArray(insp.priorRepairs) ? insp.priorRepairs : [];
+                const fileReview = insp.fileReview || { reviewed: false, sourceLabel: "", sourceDate: "", findings: "" };
                 return (
                 <>
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Inspection Details",
-                    subtitle: "Findings captured as discrete observations. These feed the Bond Condition, Spatter Marks, and Damage Summary paragraphs.",
+                    subtitle: "Roof-level condition fields that aren't naturally per-marker. These feed the Roof General Condition and Roof Wind & Bond paragraphs.",
                     status: detailStatus,
                     sectionKey: "inspection.details",
                     children: (
@@ -11162,51 +11495,335 @@ const loadPdfJs = () => {
                             </select>
                           </div>
                           <div>
-                            <div className="lbl">Spatter Marks Observed</div>
-                            <select className="inp" value={insp.spatterMarksObserved || ""} onChange={(e)=>setInspectionField("spatterMarksObserved", e.target.value)}>
+                            <div className="lbl">Shingle Pliability</div>
+                            <select className="inp" value={insp.shinglePliability || ""} onChange={(e)=>setInspectionField("shinglePliability", e.target.value)}>
                               <option value="">Select</option>
-                              <option value="yes">Yes — observed</option>
-                              <option value="no">No — none found</option>
-                              <option value="not inspected">Not inspected</option>
+                              <option value="pliable">Pliable</option>
+                              <option value="moderately-pliable">Moderately pliable</option>
+                              <option value="brittle">Brittle — fractured during lift</option>
                             </select>
                           </div>
                           <div>
-                            <div className="lbl">Overall Damage Finding</div>
-                            <select className="inp" value={insp.damageFound || ""} onChange={(e)=>setInspectionField("damageFound", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="no">No storm-caused damage</option>
-                              <option value="yes">Storm-caused damage found</option>
-                              <option value="mixed">Mixed / partial</option>
+                            <div className="lbl">Roof General Condition</div>
+                            <select className="inp" value={insp.roofCondition || "fair"} onChange={(e)=>setInspectionField("roofCondition", e.target.value)}>
+                              <option value="good">Good</option>
+                              <option value="fair">Fair</option>
+                              <option value="poor">Poor</option>
                             </select>
                           </div>
                         </div>
                         <div style={{marginTop:12}}>
-                          <div className="lbl">Surfaces Inspected for Spatter</div>
-                          <div className="chipList">
-                            {["HVAC condenser", "Gutters", "Downspouts", "Metal vents", "Window screens", "Painted trim", "Fence", "Other"].map(surface => (
-                              <div
-                                key={surface}
-                                className={"chip " + ((insp.spatterMarksSurfaces || []).includes(surface) ? "active" : "")}
-                                onClick={() => toggleSpatterSurface(surface)}
-                              >
-                                {surface}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Spatter Mark Notes <span className="lblHint">location, approximate age, size</span></div>
+                          <div className="lbl">Granule Loss Notes <span className="lblHint">per-slope observations</span></div>
                           <textarea
                             className="inp"
                             rows={2}
-                            value={insp.spatterMarksNotes || ""}
-                            onChange={(e)=>setInspectionField("spatterMarksNotes", e.target.value)}
-                            placeholder="e.g., Fresh spatter ~3/4&quot; on north-side HVAC condenser fins; dried oxide spatter on west downspout."
+                            value={insp.granuleNotes || ""}
+                            onChange={(e)=>setInspectionField("granuleNotes", e.target.value)}
+                            placeholder="e.g., Granule loss was moderate across all slopes, with heavier loss along ridges and in valleys."
+                          />
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Prior Inspection / Walkway Damage <span className="lblHint">granule loss attributed to foot traffic, mechanical contact</span></div>
+                          <textarea
+                            className="inp"
+                            rows={2}
+                            value={insp.priorInspectionDamage || ""}
+                            onChange={(e)=>setInspectionField("priorInspectionDamage", e.target.value)}
+                            placeholder="e.g., Heavier granule loss along walkable pathways on east and west slopes attributed to foot traffic."
+                          />
+                        </div>
+                        <div style={{marginTop:12}}>
+                          <div className="lbl">Fastener Notes <span className="lblHint">overdriven nails, high nails, staples</span></div>
+                          <textarea
+                            className="inp"
+                            rows={2}
+                            value={insp.fastenerNotes || ""}
+                            onChange={(e)=>setInspectionField("fastenerNotes", e.target.value)}
+                            placeholder="e.g., Isolated overdriven fasteners observed on the south slope; not consistent with storm forces."
                           />
                         </div>
                       </>
                     ),
                   })}
+                  {(() => {
+                    const walkStatus: "ready" | "partial" | "empty" =
+                      walk.masonryIntact === false || walk.fencesIntact === false ? "partial" : "ready";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Exterior Walkthrough",
+                      subtitle: "Whole-property assessments that aren't naturally diagram markers. Toggle off if debris impact, displaced fences, or other wind indicators were observed.",
+                      status: walkStatus,
+                      sectionKey: "inspection.walkthrough",
+                      children: (
+                        <>
+                          <div className="reportGrid">
+                            <div>
+                              <div className="lbl">Masonry / Trim</div>
+                              <label style={{display:"flex", alignItems:"center", gap:8, marginTop:6}}>
+                                <input
+                                  type="checkbox"
+                                  checked={walk.masonryIntact !== false}
+                                  onChange={(e)=>setExtWalkField("masonryIntact", e.target.checked)}
+                                />
+                                <span>No scrapes or gouges from windborne debris</span>
+                              </label>
+                            </div>
+                            <div>
+                              <div className="lbl">Fences</div>
+                              <label style={{display:"flex", alignItems:"center", gap:8, marginTop:6}}>
+                                <input
+                                  type="checkbox"
+                                  checked={walk.fencesIntact !== false}
+                                  onChange={(e)=>setExtWalkField("fencesIntact", e.target.checked)}
+                                />
+                                <span>Not shifted or broken by wind</span>
+                              </label>
+                            </div>
+                          </div>
+                          {walk.masonryIntact === false && (
+                            <div style={{marginTop:12}}>
+                              <div className="lbl">Masonry Notes <span className="lblHint">describe the observed condition</span></div>
+                              <textarea
+                                className="inp"
+                                rows={2}
+                                value={walk.masonryNotes || ""}
+                                onChange={(e)=>setExtWalkField("masonryNotes", e.target.value)}
+                                placeholder="e.g., A scrape gouge was observed on the south brick column, consistent with debris impact from the south."
+                              />
+                            </div>
+                          )}
+                          {walk.fencesIntact === false && (
+                            <div style={{marginTop:12}}>
+                              <div className="lbl">Fence Notes</div>
+                              <textarea
+                                className="inp"
+                                rows={2}
+                                value={walk.fencesNotes || ""}
+                                onChange={(e)=>setExtWalkField("fencesNotes", e.target.value)}
+                                placeholder="e.g., A section of wood fence on the south side was displaced in a northward direction."
+                              />
+                            </div>
+                          )}
+                        </>
+                      ),
+                    });
+                  })()}
+                  {(() => {
+                    const intStatus: "ready" | "partial" | "empty" =
+                      !interior.inspected ? "empty" :
+                      interior.noInteriorConcerns || (interior.rooms || []).length > 0 ? "ready" : "partial";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Interior Findings",
+                      subtitle: "Only complete this section if interior was in scope. Each stained room needs its own pathway traced per ASTM E2128 — findings cannot be extrapolated across rooms.",
+                      status: intStatus,
+                      sectionKey: "inspection.interior",
+                      children: (
+                        <>
+                          <label style={{display:"flex", alignItems:"center", gap:8}}>
+                            <input
+                              type="checkbox"
+                              checked={interior.inspected || false}
+                              onChange={(e)=>setInteriorField("inspected", e.target.checked)}
+                            />
+                            <span>Interior was inspected</span>
+                          </label>
+                          {interior.inspected && (
+                            <>
+                              <label style={{display:"flex", alignItems:"center", gap:8, marginTop:8}}>
+                                <input
+                                  type="checkbox"
+                                  checked={interior.noInteriorConcerns !== false}
+                                  onChange={(e)=>setInteriorField("noInteriorConcerns", e.target.checked)}
+                                />
+                                <span>No interior stains or conditions of concern</span>
+                              </label>
+                              {!interior.noInteriorConcerns && (
+                                <div style={{marginTop:12, display:"flex", flexDirection:"column", gap:10}}>
+                                  {(interior.rooms || []).map((room: any) => (
+                                    <div key={room.id} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:12, display:"flex", flexDirection:"column", gap:8}}>
+                                      <div className="reportGrid">
+                                        <div>
+                                          <div className="lbl">Location</div>
+                                          <input className="inp" value={room.location || ""} onChange={(e)=>updateInteriorRoom(room.id, "location", e.target.value)} placeholder="e.g., master bedroom ceiling" />
+                                        </div>
+                                        <div>
+                                          <div className="lbl">Age Indicator</div>
+                                          <input className="inp" value={room.ageIndicator || ""} onChange={(e)=>updateInteriorRoom(room.id, "ageIndicator", e.target.value)} placeholder="e.g., appeared years old" />
+                                        </div>
+                                        <div>
+                                          <div className="lbl">Corresponding Source</div>
+                                          <select className="inp" value={room.correspondingSource || ""} onChange={(e)=>updateInteriorRoom(room.id, "correspondingSource", e.target.value)}>
+                                            <option value="">Select</option>
+                                            <option value="roof">Roof assembly</option>
+                                            <option value="mechanical">Attic mechanical (HVAC, condensate)</option>
+                                            <option value="plumbing">Plumbing</option>
+                                            <option value="condensation">Condensation</option>
+                                            <option value="undetermined">Undetermined</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="lbl">Conditions <span className="lblHint">comma-separated</span></div>
+                                        <input
+                                          className="inp"
+                                          value={(room.conditions || []).join(", ")}
+                                          onChange={(e)=>updateInteriorRoom(room.id, "conditions", e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
+                                          placeholder="e.g., multi-ringed stain, delaminated drywall"
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="lbl">Notes</div>
+                                        <textarea className="inp" rows={2} value={room.notes || ""} onChange={(e)=>updateInteriorRoom(room.id, "notes", e.target.value)} />
+                                      </div>
+                                      <div style={{display:"flex", justifyContent:"flex-end"}}>
+                                        <button type="button" className="btn btnGhost" onClick={()=>removeInteriorRoom(room.id)}>Remove room</button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <button type="button" className="btn btnGhost" onClick={addInteriorRoom} style={{alignSelf:"flex-start"}}>+ Add room</button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </>
+                      ),
+                    });
+                  })()}
+                  {(() => {
+                    const atticStatus: "ready" | "partial" | "empty" =
+                      !attic.inspected ? "empty" : hasVal2(attic.accessible) ? "ready" : "partial";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Attic / Pathway Tracing",
+                      subtitle: "Validates or invalidates the roof-to-interior pathway. Document mechanical sources (condensate pans, vent tubes) that could explain interior stains.",
+                      status: atticStatus,
+                      sectionKey: "inspection.attic",
+                      children: (
+                        <>
+                          <label style={{display:"flex", alignItems:"center", gap:8}}>
+                            <input
+                              type="checkbox"
+                              checked={attic.inspected || false}
+                              onChange={(e)=>setAtticField("inspected", e.target.checked)}
+                            />
+                            <span>Attic was inspected</span>
+                          </label>
+                          {attic.inspected && (
+                            <>
+                              <div className="reportGrid" style={{marginTop:8}}>
+                                <div>
+                                  <div className="lbl">Accessibility</div>
+                                  <select className="inp" value={attic.accessible || ""} onChange={(e)=>setAtticField("accessible", e.target.value)}>
+                                    <option value="">Select</option>
+                                    <option value="fully">Fully accessible</option>
+                                    <option value="partially">Partially accessible</option>
+                                    <option value="not-accessible">Not accessible</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div style={{marginTop:12}}>
+                                <div className="lbl">Decking Condition <span className="lblHint">stains, deterioration, daylight</span></div>
+                                <textarea className="inp" rows={2} value={attic.deckingCondition || ""} onChange={(e)=>setAtticField("deckingCondition", e.target.value)} placeholder="e.g., Roof decking did not display any active moisture stains, with the exception of a localized area directly above the master bedroom." />
+                              </div>
+                              <div style={{marginTop:12}}>
+                                <div className="lbl">Condensate Pan / HVAC <span className="lblHint">corrosion, standing water, secondary line</span></div>
+                                <textarea className="inp" rows={2} value={attic.condensatePan || ""} onChange={(e)=>setAtticField("condensatePan", e.target.value)} placeholder="e.g., displayed corrosion and a residue of standing water; secondary drain line was not present" />
+                              </div>
+                              <div style={{marginTop:12}}>
+                                <div className="lbl">Vent Tubes / Ducts</div>
+                                <textarea className="inp" rows={2} value={attic.ventTubes || ""} onChange={(e)=>setAtticField("ventTubes", e.target.value)} placeholder="e.g., were properly terminated through the roof; or, an exhaust fan vented into the attic space." />
+                              </div>
+                              <div style={{marginTop:12}}>
+                                <div className="lbl">Other Notes</div>
+                                <textarea className="inp" rows={2} value={attic.notes || ""} onChange={(e)=>setAtticField("notes", e.target.value)} />
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ),
+                    });
+                  })()}
+                  {(() => {
+                    const repairStatus: "ready" | "partial" | "empty" =
+                      priorRepairs.length === 0 ? "empty" :
+                      priorRepairs.every((r: any) => hasVal2(r.description) && hasVal2(r.location)) ? "ready" : "partial";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "Prior Repairs",
+                      subtitle: "Document factual observable conditions: mismatched shingles, replacement counts, locations. Don't speculate on who or why.",
+                      status: repairStatus,
+                      sectionKey: "inspection.priorRepairs",
+                      children: (
+                        <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                          {priorRepairs.map((repair: any) => (
+                            <div key={repair.id} style={{border:"1px solid rgba(148,163,184,0.25)", borderRadius:12, padding:12, display:"flex", flexDirection:"column", gap:8}}>
+                              <div className="reportGrid">
+                                <div>
+                                  <div className="lbl">Location</div>
+                                  <input className="inp" value={repair.location || ""} onChange={(e)=>updatePriorRepair(repair.id, "location", e.target.value)} placeholder="e.g., south slope near the ridge" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Age Indicator</div>
+                                  <input className="inp" value={repair.ageIndicator || ""} onChange={(e)=>updatePriorRepair(repair.id, "ageIndicator", e.target.value)} placeholder="e.g., weathered to match" />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="lbl">Description</div>
+                                <textarea className="inp" rows={2} value={repair.description || ""} onChange={(e)=>updatePriorRepair(repair.id, "description", e.target.value)} placeholder="e.g., 19 replaced shingles, mismatched in color and texture" />
+                              </div>
+                              <div style={{display:"flex", justifyContent:"flex-end"}}>
+                                <button type="button" className="btn btnGhost" onClick={()=>removePriorRepair(repair.id)}>Remove</button>
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" className="btn btnGhost" onClick={addPriorRepair} style={{alignSelf:"flex-start"}}>+ Add prior repair</button>
+                        </div>
+                      ),
+                    });
+                  })()}
+                  {(() => {
+                    const frStatus: "ready" | "partial" | "empty" =
+                      !fileReview.reviewed ? "empty" :
+                      hasVal2(fileReview.sourceLabel) && hasVal2(fileReview.findings) ? "ready" : "partial";
+                    return renderReportBubble({
+                      tone: "inspection",
+                      title: "File Review",
+                      subtitle: "Optional. Document review of prior inspection photos, adjuster notes, or contractor estimates when provided.",
+                      status: frStatus,
+                      sectionKey: "inspection.fileReview",
+                      children: (
+                        <>
+                          <label style={{display:"flex", alignItems:"center", gap:8}}>
+                            <input
+                              type="checkbox"
+                              checked={fileReview.reviewed || false}
+                              onChange={(e)=>setFileReviewField("reviewed", e.target.checked)}
+                            />
+                            <span>File materials were reviewed</span>
+                          </label>
+                          {fileReview.reviewed && (
+                            <>
+                              <div className="reportGrid" style={{marginTop:8}}>
+                                <div>
+                                  <div className="lbl">Source</div>
+                                  <input className="inp" value={fileReview.sourceLabel || ""} onChange={(e)=>setFileReviewField("sourceLabel", e.target.value)} placeholder="e.g., the photo sheet provided by Allstate Insurance" />
+                                </div>
+                                <div>
+                                  <div className="lbl">Source Date</div>
+                                  <input className="inp" value={fileReview.sourceDate || ""} onChange={(e)=>setFileReviewField("sourceDate", e.target.value)} placeholder="e.g., April 11, 2025" />
+                                </div>
+                              </div>
+                              <div style={{marginTop:12}}>
+                                <div className="lbl">Findings</div>
+                                <textarea className="inp" rows={3} value={fileReview.findings || ""} onChange={(e)=>setFileReviewField("findings", e.target.value)} placeholder="e.g., Conditions depicted in the file photographs were consistent with those we observed during our inspection." />
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ),
+                    });
+                  })()}
                   {renderReportBubble({
                     tone: "inspection",
                     title: "Test Squares",
@@ -11342,39 +11959,7 @@ const loadPdfJs = () => {
                                         Include
                                       </label>
                                     </summary>
-                                    <div className="inspectionNarrativeText">{section.text}</div>
-                                    {section.key === "roofGeneral" && (
-                                      <div className="inspectionInlineControls">
-                                        <div className="lbl">Roof General Condition</div>
-                                        <div className="radioGrid compact">
-                                          {["good", "fair", "poor"].map(condition => (
-                                            <div
-                                              key={condition}
-                                              className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
-                                              onClick={() => updateReportSection("inspection", "roofCondition", condition)}
-                                            >
-                                              {condition.charAt(0).toUpperCase() + condition.slice(1)}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {section.key === "exteriorWind" && (
-                                      <div className="inspectionInlineControls">
-                                        <div className="lbl">Exterior Components Inspected</div>
-                                        <div className="chipList compact">
-                                          {INSPECTION_COMPONENTS.map(component => (
-                                            <div
-                                              key={component.key}
-                                              className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
-                                              onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
-                                            >
-                                              {component.label}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
+                                    <div className="inspectionNarrativeText">{section.text || <em style={{color:"#94a3b8"}}>No data captured for this paragraph yet — fill in the Inspection Details, Walkthrough, Interior, Attic, or marker entries.</em>}</div>
                                   </details>
                                 );
                               })}
