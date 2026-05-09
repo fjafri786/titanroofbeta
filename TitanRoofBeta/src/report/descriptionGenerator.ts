@@ -193,8 +193,7 @@ const buildOpener = (d: any, p: any): string => {
   if (!stories && !framing && !foundation) return "";
 
   const projectName = trim(p.projectName);
-  const openerStyle = trim(d.openerStyle) || "inspected";
-  const subject = openerStyle === "named" && projectName
+  const subject = projectName
     ? `The ${projectName} residence`
     : "The inspected residence";
 
@@ -213,15 +212,31 @@ const buildOpener = (d: any, p: any): string => {
 
 const buildOrientationAndGarage = (d: any, p: any): string => {
   const orientation = normalizeOrientation(p.orientation);
-  if (!orientation) return "";
   const garagePresent = trim(d.garagePresent) === "Yes";
+  if (!orientation && !garagePresent) return "";
   if (!garagePresent) {
     return `The front faced ${orientation}.`;
   }
   const bays = trim(d.garageBays).toLowerCase();
-  const bayPhrase = bays ? `${bays}-car ` : "";
+  const bayWord = bays === "1" ? "one-car"
+    : bays === "2" ? "two-car"
+    : bays === "3" ? "three-car"
+    : bays === "4+" ? "four-car"
+    : (bays ? `${bays}-car` : "");
+  const bayPhrase = bayWord ? `${bayWord} ` : "";
   const elevation = trim(d.garageElevation).toLowerCase() || "front";
-  return `The front faced ${orientation}, and a ${bayPhrase}garage was attached at the ${elevation}.`;
+  const attachmentRaw = trim(d.garageAttachment).toLowerCase();
+  const attachment = attachmentRaw === "detached" ? "detached"
+    : attachmentRaw === "connected" ? "connected"
+    : "attached";
+  const orientationPrefix = orientation ? `The front faced ${orientation}, and ` : "";
+  if (attachment === "connected") {
+    return `${orientationPrefix}a ${bayPhrase}garage was connected to the ${elevation} of the house.`;
+  }
+  if (attachment === "detached") {
+    return `${orientationPrefix}a ${bayPhrase}garage was detached at the ${elevation}.`;
+  }
+  return `${orientationPrefix}a ${bayPhrase}garage was attached at the ${elevation}.`;
 };
 
 const buildRoofOpener = (d: any): string => {
@@ -240,6 +255,35 @@ const buildRoofOpener = (d: any): string => {
 };
 
 const buildCladding = (d: any): string => {
+  // Directional cladding mode: group elevations by their finish list
+  // and emit a sentence per group ("The north and east elevations were
+  // clad with brick veneer, and the south and west elevations were
+  // clad with vinyl siding.").
+  if (d.useDirectionalFinishes) {
+    const byDir = (d.exteriorFinishesByDirection || {}) as Record<string, string[]>;
+    const dirs = ["north", "south", "east", "west"] as const;
+    const sigToDirs: Record<string, string[]> = {};
+    dirs.forEach(dir => {
+      const list = (byDir[dir] || []).map(normalizeExteriorFinish).filter(Boolean);
+      if (!list.length) return;
+      const sig = list.join("|");
+      if (!sigToDirs[sig]) sigToDirs[sig] = [];
+      sigToDirs[sig].push(dir);
+    });
+    const groups = Object.entries(sigToDirs);
+    if (!groups.length) return "";
+    if (groups.length === 1 && groups[0][1].length === 4) {
+      return `Exterior walls were clad with ${oxfordJoin(groups[0][0].split("|"))}.`;
+    }
+    const sentences = groups.map(([sig, dirList]) => {
+      const finishes = sig.split("|");
+      const dirPhrase = dirList.length === 1
+        ? `${sentenceCase(dirList[0])} elevation was`
+        : `${sentenceCase(oxfordJoin(dirList))} elevations were`;
+      return `${dirPhrase} clad with ${oxfordJoin(finishes)}.`;
+    });
+    return sentences.join(" ");
+  }
   const finishes = collectExteriorFinishes(d);
   if (!finishes.length) return "";
   return `Exterior walls were clad with ${oxfordJoin(finishes)}.`;
@@ -328,6 +372,48 @@ const buildAppurtenancesLegacy = (d: any): string => {
   return `Roof appurtenances included ${oxfordJoin(formatted)}.`;
 };
 
+// Notable features — one sentence per entry. Generates phrasing in
+// Paul Williams' voice: "A metal-clad storage building with a separate
+// gable roof was located in the backyard."
+const buildNotableFeatures = (d: any): string[] => {
+  const list = (d.notableFeatures || []) as Array<any>;
+  return list
+    .filter(f => trim(f?.type))
+    .map(f => {
+      const type = trim(f.type).toLowerCase();
+      const location = trim(f.location).toLowerCase();
+      const description = trim(f.description);
+      const adjective = description ? `${description} ` : "";
+      const article = /^[aeiou]/i.test(adjective || type) ? "An" : "A";
+      const where = location ? ` in the ${location.replace(/^the\s+/, "")}` : "";
+      return `${article} ${adjective}${type} was located${where}.`;
+    });
+};
+
+// Additional coverings — emits one sentence per entry. Mirrors the
+// pattern Paul/James use when a structure has mixed coverings (mod-bit
+// patio, R-panel shed, copper bay window).
+const buildAdditionalCoverings = (d: any): string[] => {
+  const list = (d.additionalCoverings || []) as Array<any>;
+  return list
+    .filter(c => trim(c?.type))
+    .map(c => {
+      const type = trim(c.type).toLowerCase();
+      const scope = trim(c.scope);
+      const slope = trim(c.slope);
+      const details = trim(c.details);
+      const parts: string[] = [];
+      if (scope) {
+        parts.push(`A ${type} covering was installed on the ${scope}`);
+      } else {
+        parts.push(`A ${type} covering was also installed`);
+      }
+      if (slope) parts.push(`pitched approximately ${slope}`);
+      if (details) parts.push(details);
+      return parts.join(", ") + ".";
+    });
+};
+
 // --- Public API --------------------------------------------------------
 
 // Supports both signatures:
@@ -361,7 +447,14 @@ export function generateDescriptionParagraphs(
   const cladding = buildCladding(d); if (cladding) para1.push(cladding);
   const windows = buildWindows(d); if (windows) para1.push(windows);
   const fences = buildFences(d); if (fences) para1.push(fences);
-  const notable = trim(d.notableFeature); if (notable) para1.push(notable);
+  // Structured notable features take precedence; the legacy
+  // single-string field is retained as a tail fallback.
+  const features = buildNotableFeatures(d);
+  if (features.length) {
+    features.forEach(s => para1.push(s));
+  } else {
+    const notable = trim(d.notableFeature); if (notable) para1.push(notable);
+  }
 
   const para2: string[] = [];
   const slope = buildSlope(d); if (slope) para2.push(slope);
@@ -379,6 +472,8 @@ export function generateDescriptionParagraphs(
     para2.push(buildInstallation());
   }
   const ridge = buildRidge(d); if (ridge) para2.push(ridge);
+  const additionalCoverings = buildAdditionalCoverings(d);
+  additionalCoverings.forEach(s => para2.push(s));
   const fromDiagram = buildAppurtenancesFromDiagram(aptMarkers);
   const apps = fromDiagram || buildAppurtenancesLegacy(d);
   if (apps) para2.push(apps);
