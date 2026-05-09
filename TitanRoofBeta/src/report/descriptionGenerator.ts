@@ -7,6 +7,7 @@
 export type DescriptionInputs = {
   description: Record<string, any>;
   project: Record<string, any>;
+  aptMarkers?: Array<{ type: string; subtype?: string }>;
 };
 
 const trim = (value: any): string => (value == null ? "" : String(value).trim());
@@ -130,25 +131,57 @@ const formatAppurtenanceItem = (item: string): string => {
 };
 
 const collectExteriorFinishes = (d: any): string[] => {
-  const fromArray = (d.exteriorFinishes || [])
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  (d.exteriorFinishes || [])
     .map((s: string) => normalizeExteriorFinish(s))
-    .filter(Boolean);
-  if (fromArray.length) {
-    const seen = new Set<string>();
-    const unique: string[] = [];
-    fromArray.forEach((m: string) => {
+    .filter(Boolean)
+    .forEach((m: string) => {
       if (!seen.has(m)) { seen.add(m); unique.push(m); }
     });
-    return unique;
-  }
-  const byElevation = d.exteriorFinishByElevation || {};
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  Object.values(byElevation).forEach((v: any) => {
-    const m = normalizeExteriorFinish(v as string);
-    if (m && !seen.has(m)) { seen.add(m); unique.push(m); }
-  });
   return unique;
+};
+
+// APT marker codes mapped to the canonical Haag appurtenance phrase
+// Paul Williams uses across signed reports. Codes match APT_TYPES /
+// EAPT_TYPES in main.tsx so anything captured on the diagram surfaces
+// in the description without re-entry on the form.
+const APT_TO_PHRASE: Record<string, string> = {
+  PS: "PVC plumbing stacks in lead boots",
+  EF: "metal utility exhaust vents",
+  RV: "ridge vents",
+  SV: "static attic vents",
+  TV: "turbine-type attic vents",
+  CH: "a brick-clad chimney",
+  SK: "skylights",
+  SAT: "a satellite dish",
+};
+
+const buildAppurtenancesFromDiagram = (
+  aptMarkers: Array<{ type: string; subtype?: string }>
+): string => {
+  if (!aptMarkers?.length) return "";
+  const seen = new Set<string>();
+  const phrases: string[] = [];
+  aptMarkers.forEach(marker => {
+    const code = (marker.type || "").toUpperCase();
+    if (!seen.has(code) && APT_TO_PHRASE[code]) {
+      seen.add(code);
+      phrases.push(APT_TO_PHRASE[code]);
+    }
+  });
+  if (!phrases.length) return "";
+  return `Roof appurtenances included ${oxfordJoin(phrases)}.`;
+};
+
+const buildAerialFigure = (d: any): string => {
+  const source = trim(d.aerialFigureSource) || "Google Earth";
+  const date = trim(d.aerialFigureDate);
+  if (!date && !trim(d.aerialFigureSource)) return "";
+  if (date) {
+    return `Figure 1, below, is an aerial view of the property from ${source} dated ${date}.`;
+  }
+  return `Figure 1, below, is an aerial view of the property.`;
 };
 
 // --- Paragraph 1 sentences ---------------------------------------------
@@ -285,7 +318,10 @@ const buildRidge = (d: any): string => {
   return `Ridges were covered with individual shingle tabs with ${exposure} exposed to the weather.`;
 };
 
-const buildAppurtenances = (d: any): string => {
+// Legacy fallback: when aptMarkers are not provided (older saved
+// reports, isolated unit tests) fall back to the free-text appurtenance
+// chip list. New flows should pass aptMarkers from the diagram.
+const buildAppurtenancesLegacy = (d: any): string => {
   const list = (d.roofAppurtenances || []).map((s: string) => trim(s)).filter(Boolean);
   if (!list.length) return "";
   const formatted = list.map(formatAppurtenanceItem);
@@ -294,10 +330,27 @@ const buildAppurtenances = (d: any): string => {
 
 // --- Public API --------------------------------------------------------
 
-export const generateDescriptionParagraphs = (
-  description: any,
-  project: any
-): string => {
+// Supports both signatures:
+//   generateDescriptionParagraphs({ description, project, aptMarkers })  // new
+//   generateDescriptionParagraphs(description, project)                  // legacy
+export function generateDescriptionParagraphs(inputs: DescriptionInputs): string;
+export function generateDescriptionParagraphs(description: any, project: any): string;
+export function generateDescriptionParagraphs(
+  arg1: DescriptionInputs | any,
+  arg2?: any
+): string {
+  let description: any;
+  let project: any;
+  let aptMarkers: Array<{ type: string; subtype?: string }> = [];
+  if (arg1 && typeof arg1 === "object" && "description" in arg1) {
+    description = (arg1 as DescriptionInputs).description;
+    project = (arg1 as DescriptionInputs).project;
+    aptMarkers = (arg1 as DescriptionInputs).aptMarkers || [];
+  } else {
+    description = arg1;
+    project = arg2;
+  }
+
   const d = description || {};
   const p = project || {};
 
@@ -326,9 +379,13 @@ export const generateDescriptionParagraphs = (
     para2.push(buildInstallation());
   }
   const ridge = buildRidge(d); if (ridge) para2.push(ridge);
-  const apps = buildAppurtenances(d); if (apps) para2.push(apps);
+  const fromDiagram = buildAppurtenancesFromDiagram(aptMarkers);
+  const apps = fromDiagram || buildAppurtenancesLegacy(d);
+  if (apps) para2.push(apps);
+  const aerial = buildAerialFigure(d);
+  if (aerial) para2.push(aerial);
 
   return [para1.join(" "), para2.join(" ")]
-    .filter(p => p && p.length)
+    .filter(s => s && s.length)
     .join("\n\n");
-};
+}
