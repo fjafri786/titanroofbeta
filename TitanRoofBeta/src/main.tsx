@@ -11,7 +11,7 @@ import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import { useProject } from "./project/ProjectContext";
 import AppShell from "./app/AppShell";
 import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
-import { generateDescriptionParagraphs } from "./report/descriptionGenerator";
+import { generateDescriptionParagraphs, isAsphaltShingleRoof } from "./report/descriptionGenerator";
 import "./ui/tailwind.css";
 import "./styles.css";
 
@@ -400,74 +400,46 @@ const loadPdfJs = () => {
           parties: []
         },
         description: {
-          occupancy: "",
+          // Structure
           stories: "",
           framing: "",
           foundation: "",
+          openerStyle: "inspected",
           exteriorFinishes: [],
-          exteriorFinishByElevation: {
-            north: "",
-            south: "",
-            east: "",
-            west: ""
-          },
-          trimComponents: [],
-          windowType: "",
           windowMaterial: "",
           windowScreens: "",
+          fenceType: "",
+          notableFeature: "",
+          // Garage
           garagePresent: "",
           garageBays: "",
-          garageDoors: "",
-          garageDoorMaterial: "",
           garageElevation: "",
-          terrain: "",
-          vegetation: "",
+          // Roof
           roofGeometry: "",
           roofCovering: "",
+          shingleClass: "",
           shingleLength: "",
           shingleExposure: "",
-          ridgeWidth: "",
+          granuleColor: "",
           ridgeExposure: "",
           primarySlope: "",
           additionalSlopes: [],
           guttersPresent: "",
-          downspoutsPresent: "",
-          roofAppurtenances: [],
+          gutterScope: "",
           eagleView: "",
           roofArea: "",
           attachmentLetter: "",
-          // v4.1: shingle product details used for the Haag
-          // description paragraph ("surfaced with [color] granules",
-          // threshold paragraph variants, etc.).
+          roofAreaIncludes: "",
+          // Aerial figure (Description paragraph 2 closer)
+          aerialFigureDate: "",
+          aerialFigureSource: "Google Earth",
+          // Reference fields preserved in the data model but moved off
+          // the Description tab UI — surfaced on the Background tab and
+          // consumed by Background / Inspection generators.
           shingleManufacturer: "",
           shingleProduct: "",
-          shingleClass: "",        // "Laminated" | "3-Tab" | "Architectural" | other
-          shingleMat: "",          // "Fiberglass" | "Organic"
-          granuleColor: "",
-          roofAge: "",             // free text; e.g., "approximately 8 years"
-          roofLayers: "",          // "1" | "2" | "Unknown"
-          underlayment: "",
-          sidingByElevation: {
-            north: "",
-            south: "",
-            east: "",
-            west: ""
-          },
-          fenceType: "",
-          hvacPresent: "",
-          hvacLocation: "",
-          // v4.2: minimal extra fields needed by the two-paragraph
-          // description generator. openerStyle toggles between
-          // "The inspected residence" and "The {projectName} residence".
-          // notableFeature is a free-text full-sentence callout
-          // (e.g. solar panels, chimney location). gutterScope qualifies
-          // the gutters-installed phrasing in the roof opener sentence.
-          // roofAreaIncludes is a free-text qualifier appended after
-          // the EagleView roof area.
-          openerStyle: "inspected",
-          notableFeature: "",
-          gutterScope: "",
-          roofAreaIncludes: ""
+          roofAge: "",
+          roofLayers: ""
         },
         background: {
           dateOfLoss: "",
@@ -503,7 +475,21 @@ const loadPdfJs = () => {
           nearestWindSpeed: "",      // mph / knots
           nearestWindDate: "",
           weatherStation: "",
-          notes: ""
+          notes: "",
+          // Tropical / named-storm fields. When stormName is populated,
+          // the generator emits the ASOS paragraph instead of the NCEI
+          // search summary.
+          stormName: "",
+          stormClassification: "",   // "tropical storm" | "hurricane" | "derecho"
+          landfallLocation: "",
+          landfallDistance: "",
+          asosStation: "",
+          asosDistance: "",
+          asosDirection: "",
+          asosPeakGust: "",
+          asosSustainedWind: "",
+          asosWindDirection: "",
+          asosRainfall: ""
         },
         writer: {
           letterhead: "",
@@ -540,7 +526,25 @@ const loadPdfJs = () => {
             west:  { bruises: "", punctures: "", notes: "" }
           },
           damageFound: "",              // "yes" | "no" | "mixed"
-          variants: {}                  // per-paragraph variant id keyed by paragraph key
+          variants: {},                 // per-paragraph variant id keyed by paragraph key
+          // Continuous-prose Inspection paragraph fields. The diagram
+          // remains the source of truth for spatial findings (TS, WIND,
+          // APT, DS, EAPT markers). Form fields capture only
+          // non-spatial details that can't be diagrammed: interior /
+          // attic observations, decking type, the maximum spatter size
+          // on soft metals, granule loss interpretation, and prior
+          // inspection damage commentary.
+          interiorInspected: "",        // "yes" | "no"
+          interiorRooms: [],            // [{ room, conditions, location }]
+          atticInspected: "",           // "yes" | "no"
+          atticFindings: "",
+          deckingType: "",              // "plywood" | "OSB" | "spaced"
+          deckingCondition: "",
+          granuleLossObserved: "",      // "yes" | "no"
+          granuleLossNotes: "",
+          priorInspectionDamage: "",    // "yes" | "no"
+          priorInspectionNotes: "",
+          maxSpatterSize: ""            // "1/8-inch" | "1/4-inch"
         },
         overrides: {
           coverLetter: "",
@@ -575,17 +579,7 @@ const loadPdfJs = () => {
             ...defaults.description,
             ...(source.description || {}),
             exteriorFinishes: normalizeList(source.description?.exteriorFinishes),
-            exteriorFinishByElevation: {
-              ...defaults.description.exteriorFinishByElevation,
-              ...(source.description?.exteriorFinishByElevation || {})
-            },
-            sidingByElevation: {
-              ...defaults.description.sidingByElevation,
-              ...(source.description?.sidingByElevation || {})
-            },
-            trimComponents: normalizeList(source.description?.trimComponents),
-            additionalSlopes: normalizeList(source.description?.additionalSlopes),
-            roofAppurtenances: normalizeList(source.description?.roofAppurtenances)
+            additionalSlopes: normalizeList(source.description?.additionalSlopes)
           },
           background: {
             ...defaults.background,
@@ -616,6 +610,7 @@ const loadPdfJs = () => {
               ...(source.inspection?.paragraphs || {})
             },
             spatterMarksSurfaces: normalizeList(source.inspection?.spatterMarksSurfaces),
+            interiorRooms: normalizeList(source.inspection?.interiorRooms),
             testSquares: {
               ...defaults.inspection.testSquares,
               ...(source.inspection?.testSquares || {})
@@ -1590,18 +1585,6 @@ const loadPdfJs = () => {
             };
           });
         };
-        const updateExteriorFinish = (elevation, material) => {
-          setReportData(prev => ({
-            ...prev,
-            description: {
-              ...prev.description,
-              exteriorFinishByElevation: {
-                ...prev.description.exteriorFinishByElevation,
-                [elevation]: material
-              }
-            }
-          }));
-        };
         const updateInspection = (componentKey, field, value) => {
           setReportData(prev => ({
             ...prev,
@@ -1721,27 +1704,6 @@ const loadPdfJs = () => {
             return { ...prev, description: nextDesc };
           });
         }, [roof.covering, roof.shingleLength, roof.shingleExposure]);
-
-        useEffect(() => {
-          setReportData(prev => {
-            const mapping = prev.description.exteriorFinishByElevation || {};
-            const hasDirectionalValue = Object.values(mapping).some(Boolean);
-            if(hasDirectionalValue || prev.description.exteriorFinishes.length !== 1) return prev;
-            const fallbackMaterial = prev.description.exteriorFinishes[0];
-            return {
-              ...prev,
-              description: {
-                ...prev.description,
-                exteriorFinishByElevation: {
-                  north: fallbackMaterial,
-                  south: fallbackMaterial,
-                  east: fallbackMaterial,
-                  west: fallbackMaterial
-                }
-              }
-            };
-          });
-        }, []);
 
         const serializeFile = (obj) => obj ? {
           name: obj.name,
@@ -3163,16 +3125,216 @@ const loadPdfJs = () => {
           ];
         }, [pageItems, reportData.inspection, reportData.description, reportData.project.projectName, residenceName]);
 
-        const inspectionParagraphsForExport = useMemo(() => (
-          inspectionGeneratedSections.flatMap(group => group.sections.map(section => {
-            const configured = reportData.inspection.paragraphs?.[section.key];
-            return {
-              key: section.key,
-              include: configured?.include ?? true,
-              text: section.text
+        // Continuous-prose Inspection generator (Paul Williams pattern).
+        // Produces 8–10 flowing paragraphs, no titled sub-headers,
+        // anchored on diagram markers and the focused inspection-form
+        // fields (interior rooms, attic, granule loss, prior inspection,
+        // max spatter size). Supersedes the titled-block output for the
+        // exported report; the legacy `inspectionGeneratedSections`
+        // memo is retained so the existing per-paragraph toggle UI on
+        // the Inspection tab continues to work without rewrite.
+        const inspectionContinuousProseParagraphs = useMemo(() => {
+          const insp: any = reportData.inspection || {};
+          const localJoinReadableList = (list: string[]) => {
+            const xs = (list || []).filter(Boolean);
+            if(!xs.length) return "";
+            if(xs.length === 1) return xs[0];
+            if(xs.length === 2) return `${xs[0]} and ${xs[1]}`;
+            return `${xs.slice(0, -1).join(", ")}, and ${xs[xs.length - 1]}`;
+          };
+          const localDirLabel = (dir = "") => ({ N: "north", S: "south", E: "east", W: "west" } as Record<string, string>)[dir] || String(dir || "").toLowerCase();
+          const localComponentLabel = (item: any) => {
+            if(item.type === "apt"){
+              return (APT_TYPES.find((entry: any) => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase();
+            }
+            if(item.type === "ds") return "downspout";
+            if(item.type === "eapt"){
+              return (EAPT_TYPES.find((entry: any) => entry.code === item.data?.type)?.label || "exterior component").toLowerCase();
+            }
+            return "component";
+          };
+          const tsItems = pageItems.filter(item => item.type === "ts");
+          const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
+          const windItems = pageItems.filter(item => item.type === "wind");
+          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
+          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
+          const cardinalCovered = ["N","S","E","W"].filter(dir => tsItems.some(ts => ts.data?.dir === dir));
+          const tsSlopePhrase = cardinalCovered.length === 4
+            ? "the north-, south-, east-, and west-facing roof slopes"
+            : cardinalCovered.length
+              ? `the ${localJoinReadableList(cardinalCovered.map(localDirLabel))}-facing roof slope${cardinalCovered.length === 1 ? "" : "s"}`
+              : "accessible roof slopes";
+
+          const paragraphs: string[] = [];
+
+          // Paragraph 1 — scope of inspection
+          {
+            const areas: string[] = [];
+            if(insp.interiorInspected === "yes") areas.push("interior");
+            if(insp.atticInspected === "yes") areas.push("attic");
+            areas.push("exterior");
+            areas.push("roof");
+            paragraphs.push(
+              `We inspected the ${localJoinReadableList(areas)}.  Our observations were documented with field notes and photographs.  Representative photographs are attached to this report.  (Refer to those photographs for details of our specific observations.)`
+            );
+          }
+
+          // Paragraph 2 — exterior hail observations
+          {
+            const spatter = insp.spatterMarksObserved;
+            const maxSize = (insp.maxSpatterSize || "").trim();
+            const surfaces = (insp.spatterMarksSurfaces || []).map((s: string) => s.toLowerCase());
+            if(spatter === "no"){
+              paragraphs.push(
+                "During ground-level exterior inspection, we did not find any spatter marks or hail-caused dents.  Window screens were intact.  Gutters and downspouts did not display hail-caused dents.  There was no evidence of hail impact on the garage doors."
+              );
+            } else if(spatter === "yes"){
+              const surfaceText = surfaces.length ? localJoinReadableList(surfaces) : "exterior soft-metal surfaces";
+              const sizePhrase = maxSize ? `up to ${maxSize} wide ` : "";
+              paragraphs.push(
+                `During ground-level exterior inspection, we found spatter marks ${sizePhrase}on ${surfaceText}.`
+              );
+            } else {
+              paragraphs.push(
+                "During ground-level exterior inspection, we examined exterior components and soft metals for spatter marks and hail-caused dents."
+              );
+            }
+          }
+
+          // Paragraph 3 — exterior wind observations
+          {
+            const desc: any = reportData.description;
+            const fenceClause = (desc.fenceType || "").trim()
+              ? `  The ${desc.fenceType.trim().toLowerCase()} fences had not been shifted or broken by wind.`
+              : "";
+            paragraphs.push(
+              `The exterior masonry and trim did not display any scrapes or gouges caused by windborne debris impact.  Roof corners and edges were intact when viewed from grade.${fenceClause}`
+            );
+          }
+
+          // Paragraph 4 — interior observations (when applicable)
+          const rooms = (insp.interiorRooms || []).filter((r: any) => (r?.room || "").trim() || (r?.conditions || "").trim());
+          if(insp.interiorInspected === "yes" && rooms.length){
+            const sentences = rooms.map((r: any) => {
+              const room = (r.room || "interior area").trim();
+              const cond = (r.conditions || "stains").trim();
+              const loc = (r.location || "").trim();
+              const where = loc ? ` ${loc}` : "";
+              return `The ${room} ceiling had ${cond}${where}.`;
+            });
+            sentences.push("We located the stains on a diagram for use during roof and attic inspections.");
+            paragraphs.push(sentences.join("  "));
+          }
+
+          // Paragraph 5 — attic observations (when applicable)
+          if(insp.atticInspected === "yes" && (insp.atticFindings || "").trim()){
+            const decking: string[] = [];
+            if((insp.deckingType || "").trim()) decking.push(`The roof decking was ${insp.deckingType.trim().toLowerCase()}.`);
+            if((insp.deckingCondition || "").trim()) decking.push(insp.deckingCondition.trim());
+            const parts: string[] = [];
+            parts.push(`In the attic, we observed ${insp.atticFindings.trim()}`);
+            if(decking.length) parts.push(decking.join("  "));
+            paragraphs.push(parts.join("  "));
+          }
+
+          // Paragraph 6 — roof general condition + wind findings
+          {
+            const condition = (insp.roofCondition || "fair").toLowerCase();
+            const sentences: string[] = [];
+            sentences.push(`Overall, the roof shingles were in ${condition} condition with respect to weathering.  Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas.`);
+            if(creasedTotal > 0 || tornTotal > 0){
+              const bits: string[] = [];
+              if(creasedTotal) bits.push(`${creasedTotal} creased`);
+              if(tornTotal) bits.push(`${tornTotal} torn or missing`);
+              const totalShingles = creasedTotal + tornTotal;
+              sentences.push(`We noted ${bits.join(" and ")} shingle${totalShingles === 1 ? "" : "s"} spread across the roof.  Affected shingles exhibited sharp fold lines and fractured reinforcement mats consistent with wind uplift.`);
+            }
+            if(insp.priorInspectionDamage === "yes" && (insp.priorInspectionNotes || "").trim()){
+              sentences.push(insp.priorInspectionNotes.trim());
+            }
+            paragraphs.push(sentences.join("  "));
+          }
+
+          // Paragraph 7 — test square findings
+          if(tsItems.length){
+            const sentences: string[] = [];
+            sentences.push(`We examined 100-square-foot test areas on ${tsSlopePhrase}.  Each shingle within the test areas was examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact.`);
+            if(tsBruiseTotal > 0){
+              sentences.push(`Within the test areas, we noted ${tsBruiseTotal} bruise${tsBruiseTotal === 1 ? "" : "s"} characteristic of hailstone impact.`);
+            } else {
+              sentences.push("We did not find any hail-caused bruises or punctured shingles in our test areas.  We also inspected ridges, hips, rakes, and eaves and found no hail-caused bruises or punctures.");
+            }
+            paragraphs.push(sentences.join("  "));
+          }
+
+          // Paragraph 8 — appurtenance hail examination
+          {
+            const aptItems = pageItems.filter(it => it.type === "apt" || it.type === "ds" || it.type === "eapt");
+            const aptHailEntries = aptItems.flatMap(item => (item.data?.damageEntries || [])
+              .filter((e: any) => (e.mode || "").trim())
+              .map((e: any) => ({ item, entry: e })));
+            const sentences: string[] = ["We examined roof appurtenances and soft metals, including vents, flue pipes, flashing, and other roof components, for evidence of hailstone impact."];
+            if(aptHailEntries.length){
+              const phrases = aptHailEntries.map(({ item, entry }: any) => {
+                const mode = entry.mode === "both" ? "spatter and dents" : `${entry.mode}s`;
+                const size = entry.size ? ` up to ${entry.size}\"` : "";
+                return `${mode}${size} on the ${localComponentLabel(item)}`;
+              });
+              sentences.push(`We observed ${localJoinReadableList(phrases)}.`);
+            } else {
+              sentences.push("We found no tears, punctures, or fractures to the roof appurtenances inspected.");
+            }
+            paragraphs.push(sentences.join("  "));
+          }
+
+          // Paragraph 9 — granule loss interpretation
+          if(insp.granuleLossObserved === "yes"){
+            const note = (insp.granuleLossNotes || "").trim();
+            const sentences: string[] = ["Within our test areas and elsewhere, we observed areas of missing granules.  These areas varied in size and shape and exposed underlying asphalt or fiberglass mat reinforcement."];
+            if(note){
+              sentences.push(note);
+            } else {
+              sentences.push("Each area was inspected visually and tactilely, and no associated bruises, punctures, indentations, or impact features were identified.  The distribution and appearance of the granule loss were similar across roof slopes and consistent with age-related weathering rather than impact.");
+            }
+            paragraphs.push(sentences.join("  "));
+          }
+
+          // Paragraph 10 — standard phrases (threshold + bond + summary)
+          {
+            const desc: any = reportData.description;
+            const cls = (desc.shingleClass || "").toLowerCase();
+            const covering = (desc.roofCovering || "").toLowerCase();
+            const threshold = /metal|standing.seam|r.panel/i.test(covering)
+              ? "The threshold size for damage to standing-seam metal roof panels is a frozen-solid hailstone of approximately 2-1/2 inches impacting perpendicular to the roof surface."
+              : cls === "3-tab"
+                ? "The threshold size for damage to 3-tab composition shingles is a frozen-solid hailstone of approximately 1 inch impacting perpendicular to the roof surface."
+                : "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface.  The threshold for 3-tab shingles is approximately 1 inch.";
+            const bondLookup: Record<string, string> = {
+              good: "The adhesive bond of field shingles was intact and sealed in the locations sampled.",
+              fair: "The adhesive bond of field shingles was in fair condition; shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age.",
+              poor: "The adhesive bond of field shingles was in poor condition; several shingles could be lifted by hand or with minimal effort, indicating weakened adhesive bonds."
             };
-          })).filter(paragraph => paragraph.include && paragraph.text)
-        ), [inspectionGeneratedSections, reportData.inspection.paragraphs]);
+            const bond = bondLookup[(insp.bondCondition || "").toString().toLowerCase()] || "";
+            const damage = (insp.damageFound || "").toLowerCase();
+            const summary = damage === "yes"
+              ? "Based on our inspection, we identified storm-caused conditions to the components listed on the diagram.  The affected components are individually repairable using standard industry methods."
+              : damage === "no"
+                ? "Based on our inspection, we found no evidence of hail- or wind-caused damage to the roof covering that would necessitate repair or replacement.  The observed conditions were consistent with normal aging and weathering of the roof materials."
+                : "";
+            const closing = [threshold, bond, summary].filter(Boolean).join("  ");
+            if(closing) paragraphs.push(closing);
+          }
+
+          return paragraphs.filter(p => p && p.trim().length);
+        }, [pageItems, reportData.inspection, reportData.description]);
+
+        const inspectionParagraphsForExport = useMemo(() => (
+          inspectionContinuousProseParagraphs.map((text, idx) => ({
+            key: `prose-${idx}`,
+            include: true,
+            text
+          }))
+        ), [inspectionContinuousProseParagraphs]);
 
         const completeness = useMemo(() => {
           const projectComplete = Boolean(
@@ -3181,8 +3343,11 @@ const loadPdfJs = () => {
             reportData.project.inspectionDate
           );
           const descriptionComplete = Boolean(
-            reportData.description.occupancy &&
-            reportData.description.roofGeometry
+            reportData.description.stories &&
+            reportData.description.framing &&
+            reportData.description.foundation &&
+            reportData.description.roofGeometry &&
+            reportData.description.exteriorFinishes?.length
           );
           const backgroundComplete = Boolean(
             reportData.background.dateOfLoss &&
@@ -5643,17 +5808,22 @@ const loadPdfJs = () => {
           return `${trimmed} square feet (SF)`;
         };
         const descriptionParagraph = () => {
-          // Two-paragraph generator: Paragraph 1 covers the structure
+          // Two-paragraph generator. Paragraph 1 covers the structure
           // (opener, orientation+garage, roof opener, cladding, windows,
           // fences, optional notable feature). Paragraph 2 covers the
           // roof (slope, EagleView, shingle measurement, composition,
-          // installation, ridge, appurtenances). The implementation
-          // lives in src/report/descriptionGenerator.ts so it can be
-          // unit-tested independently.
-          return generateDescriptionParagraphs(
-            reportData.description,
-            { ...reportData.project, projectName: reportData.project.projectName || residenceName }
-          );
+          // installation, ridge, appurtenances derived from diagram APT
+          // markers, aerial figure callout). Generator lives in
+          // src/report/descriptionGenerator.ts so it can be unit-tested.
+          const aptMarkers = pageItems
+            .filter(item => item.type === "apt" || item.type === "eapt")
+            .map(item => ({ type: (item.data?.type || "").toString(), subtype: item.data?.subtype }))
+            .filter(m => m.type);
+          return generateDescriptionParagraphs({
+            description: reportData.description,
+            project: { ...reportData.project, projectName: reportData.project.projectName || residenceName },
+            aptMarkers,
+          });
         };
         const formatAddressLine = (project) => {
           const parts = [project.address, project.city, project.state, project.zip].filter(Boolean);
@@ -5719,7 +5889,15 @@ const loadPdfJs = () => {
           if(claimBits.length) sentences.push(`The claim was ${claimBits.join("; ")}.`);
           if(bg.priorClaims?.trim()) sentences.push(`Prior claims / repairs: ${bg.priorClaims.trim()}`);
           if((bg.documentsReviewed || []).length){
-            sentences.push(`Documents reviewed included ${joinReadableList(bg.documentsReviewed.map((d: string) => d.toLowerCase()))}.`);
+            sentences.push(`As part of our work, we reviewed documents provided to us with the assignment and other pertinent information, including ${joinReadableList(bg.documentsReviewed.map((d: string) => d.toLowerCase()))}.`);
+          } else {
+            sentences.push("As part of our work, we reviewed documents provided to us with the assignment and other pertinent information.");
+          }
+          // Roof age belongs to the Description data model but is reported
+          // in the Background narrative once the engineer establishes it.
+          const roofAge = (reportData.description.roofAge || "").trim();
+          if(roofAge){
+            sentences.push(`The roof covering was estimated to be ${roofAge} old.`);
           }
           const statementParties = (reportData.project.parties || [])
             .filter((p: any) => (p?.notes || "").trim() && !p?.excludeFromNarrative);
@@ -5735,6 +5913,55 @@ const loadPdfJs = () => {
         const weatherParagraph = () => {
           const w: any = (reportData as any).weather || {};
           const has = (v: unknown) => v != null && String(v).trim() !== "";
+          // Tropical / named-storm path: when the engineer captures a
+          // storm name, the report cites the ASOS station rather than
+          // the NCEI Storm Events Database. Mirrors Paul's Beryl
+          // reports: NWS landfall sentence, ASOS distance/direction
+          // sentence, and (when sustained wind < 74 mph) the
+          // hurricane-status caveat.
+          if(has(w.stormName)){
+            const parts: string[] = [];
+            const classification = (w.stormClassification || "tropical storm").toString().toLowerCase();
+            const stormPrefix = classification === "hurricane" ? "Hurricane" : "Tropical Storm";
+            const landfallPhrase = has(w.landfallLocation)
+              ? `near ${w.landfallLocation}`
+              : "near the Texas coast";
+            const dateClause = has(w.nearestWindDate) ? ` on ${w.nearestWindDate}` : "";
+            parts.push(
+              `According to the National Weather Service (NWS), ${stormPrefix} ${w.stormName} made landfall ${landfallPhrase}${dateClause}.`
+            );
+            if(has(w.landfallLocation) && has(w.landfallDistance)){
+              parts.push(`${w.landfallLocation} is approximately ${w.landfallDistance} of the inspected property.`);
+            }
+            if(has(w.asosStation)){
+              const dist = has(w.asosDistance) ? ` approximately ${w.asosDistance}` : "";
+              const dir = has(w.asosDirection) ? ` ${w.asosDirection}` : "";
+              const evDate = has(w.nearestWindDate) ? w.nearestWindDate : "the event date";
+              parts.push(
+                `We searched NOAA's Local Climatological Data (LCD) website for weather information specifically for ${evDate}.  The closest official Automated Surface Observing Systems (ASOS) station was located${dist}${dir} of the property at ${w.asosStation}.`
+              );
+              if(has(w.asosPeakGust) || has(w.asosSustainedWind)){
+                const gust = has(w.asosPeakGust) ? w.asosPeakGust : "not recorded";
+                const sustained = has(w.asosSustainedWind) ? w.asosSustainedWind : "not recorded";
+                parts.push(
+                  `On ${evDate}, the peak gust measured at ${w.asosStation} was ${gust}, and the maximum sustained wind speed was ${sustained}.`
+                );
+              }
+              if(has(w.asosRainfall)){
+                parts.push(`Rainfall recorded at ${w.asosStation} on ${evDate} totaled ${w.asosRainfall}.`);
+              }
+            }
+            // Hurricane-status caveat when sustained windspeeds at the
+            // ASOS station fall below the NWS 74 mph hurricane threshold.
+            const sustainedNum = parseFloat((w.asosSustainedWind || "").toString().replace(/[^0-9.]/g, ""));
+            if(!isNaN(sustainedNum) && sustainedNum < 74){
+              parts.push(
+                `We note that hurricane status requires sustained windspeeds of at least 74 mph; thus, ${w.stormName} was ${classification} strength as it passed through the area of the inspected property.`
+              );
+            }
+            if(has(w.notes)) parts.push(w.notes.trim());
+            return parts.join("  ");
+          }
           if(!has(w.searchRadius) && !has(w.searchStart) && !has(w.searchEnd) && !has(w.hailReportCount) && !has(w.windReportCount)){
             return "";
           }
@@ -5768,9 +5995,11 @@ const loadPdfJs = () => {
           return parts.join(" ");
         };
         const executiveSummaryParagraph = () => {
-          // Synthesizes the inspection findings into a short summary
-          // suitable for the opening page of the report. Falls back to
-          // a stub when no diagram items or inspection details exist.
+          // Two-sentence synthesis used on the opening page. Sentence 1
+          // anchors the inspection date and reported event. Sentence 2
+          // states the finding (or absence of finding) using the same
+          // evidence anchors that drive Conclusions: test-square
+          // bruises and wind shingle counts.
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
           const windItems = pageItems.filter(item => item.type === "wind");
@@ -5786,7 +6015,6 @@ const loadPdfJs = () => {
           );
           const hailFound = tsBruiseTotal > 0;
           const windFound = (creasedTotal + tornTotal) > 0;
-          const damage = (reportData.inspection as any).damageFound;
           if(hailFound || windFound){
             const found: string[] = [];
             if(hailFound) found.push(`${tsBruiseTotal} hail-caused bruise${tsBruiseTotal === 1 ? "" : "s"} in our test areas`);
@@ -5796,59 +6024,118 @@ const loadPdfJs = () => {
               if(tornTotal) wbits.push(`${tornTotal} torn or missing`);
               found.push(`${wbits.join(" and ")} shingle${(creasedTotal + tornTotal) === 1 ? "" : "s"} from wind`);
             }
-            bits.push(`We identified ${found.join("; and ")}.`);
-          } else if(damage === "no"){
-            bits.push("We did not identify hail- or wind-caused damage to the roof covering that would necessitate repair or replacement.");
+            bits.push(`We identified ${found.join("; and ")}.  Affected components can be repaired using standard industry methods.`);
+          } else {
+            bits.push("We did not identify hail- or wind-caused conditions to the roof covering that would necessitate repair or replacement.");
           }
-          return bits.join(" ");
+          return bits.join("  ");
         };
         const discussionParagraph = () => {
-          // Bridges the observed conditions to the weather data so the
-          // reader sees the logical link between what the engineer saw
-          // on-site and the NCEI/SPC records. Lightweight by design —
-          // the engineer tailors the final language in Override mode.
+          // Forensic discussion: a paragraph each for hail, wind, and
+          // (when interior findings exist) interior moisture. Each
+          // paragraph anchors weather data to inspection findings and
+          // ends with a finding rather than speculation. Empty
+          // paragraphs drop out so the section adapts to the perils
+          // claimed.
+          const paragraphs: string[] = [];
+          const hailPara = buildHailDiscussion();
+          if(hailPara) paragraphs.push(hailPara);
+          const windPara = buildWindDiscussion();
+          if(windPara) paragraphs.push(windPara);
+          const interiorPara = buildInteriorDiscussion();
+          if(interiorPara) paragraphs.push(interiorPara);
+          return paragraphs.join("\n\n");
+        };
+
+        // --- Discussion paragraph builders -----------------------------
+        // Threshold sizes per Haag conventions:
+        //   3-Tab composition shingles ........... 1 inch
+        //   Laminated composition shingles ....... 1-1/4 inches
+        //   Standing-seam / metal panels ......... 2-1/2 inches
+        //   Concrete tile ........................ 1-3/4 inches
+        //   Clay tile ............................ 1-1/2 inches
+        //   Wood shingle ......................... 1-1/4 inches
+        //   Wood shake ........................... 1-1/2 inches
+        const resolveHailThreshold = () => {
+          const desc: any = reportData.description;
+          const covering = (desc.roofCovering || "").toLowerCase();
+          const cls = (desc.shingleClass || "").toLowerCase();
+          if(/metal|standing.seam|r.panel/i.test(covering)){
+            return { num: 2.5, label: "2-1/2 inches", item: "metal roof panels" };
+          }
+          if(cls === "3-tab"){
+            return { num: 1.0, label: "1 inch", item: "3-tab composition shingles" };
+          }
+          return { num: 1.25, label: "1-1/4 inches", item: "laminated composition shingles" };
+        };
+        const buildHailDiscussion = () => {
           const w: any = (reportData as any).weather || {};
-          const has = (v: unknown) => v != null && String(v).trim() !== "";
+          const insp: any = reportData.inspection;
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
-          const damageFound = (reportData.inspection as any).damageFound;
-          const bondCondition = (reportData.inspection as any).bondCondition;
-          const spatter = (reportData.inspection as any).spatterMarksObserved;
-          const lines: string[] = [];
-          // Weather linkage
-          if(has(w.nearestHailSize)){
+          const sentences: string[] = [];
+          if(w.nearestHailSize){
             const size = parseFloat(w.nearestHailSize);
-            const threshold = 1.25;
             if(!isNaN(size)){
-              if(size >= threshold){
-                lines.push(`The nearest documented hail report of ${w.nearestHailSize} inches meets or exceeds the Haag damage threshold of approximately 1-1/4 inches for laminated composition shingles.`);
+              const t = resolveHailThreshold();
+              if(size >= t.num){
+                sentences.push(`The nearest documented hail report of ${w.nearestHailSize} inches meets or exceeds the threshold size of approximately ${t.label} for damage to ${t.item}.`);
               } else {
-                lines.push(`The nearest documented hail report of ${w.nearestHailSize} inches is below the Haag damage threshold of approximately 1-1/4 inches for laminated composition shingles.`);
+                sentences.push(`The nearest documented hail report of ${w.nearestHailSize} inches is below the threshold size of approximately ${t.label} for damage to ${t.item}.`);
               }
             }
           }
-          // Inspection synthesis
+          if(insp.spatterMarksObserved === "yes"){
+            sentences.push("Spatter marks were observed on exterior soft-metal surfaces, indicating that hailstones of at least minimal size fell at the property.");
+          } else if(insp.spatterMarksObserved === "no"){
+            sentences.push("No spatter marks were observed on exterior soft-metal surfaces, which indicates that hailstones of damaging size did not fall at the property, or that any evidence had weathered away.");
+          }
           if(tsBruiseTotal > 0){
-            lines.push(`Bruises observed in our test areas exhibited fractured reinforcements consistent with hailstone impact, supporting a finding of hail-caused damage.`);
-          } else if(tsItems.length){
-            lines.push(`No bruises or punctures consistent with hailstone impact were found in our test areas, indicating that the observed surface variations are characteristic of normal weathering rather than impact damage.`);
+            sentences.push("Bruises observed in our test areas exhibited fractured reinforcement mats consistent with hailstone impact. The distribution and character of the bruises support a finding of hail-caused conditions to the roof covering.");
+          } else if(tsItems.length > 0){
+            sentences.push("No bruises or punctures consistent with hailstone impact were found in our test areas. The granule conditions observed in the test areas were consistent with normal weathering and aging rather than hailstone impact.");
           }
-          if(bondCondition === "poor"){
-            lines.push(`The adhesive bond of field shingles was found to be in poor condition; however, weakened bonds alone are not diagnostic of a specific weather event and must be interpreted alongside other evidence.`);
-          } else if(bondCondition === "good"){
-            lines.push(`The adhesive bond of field shingles was intact throughout the sampled areas, indicating the roof covering has not been subjected to a sustained wind uplift event.`);
+          return sentences.join("  ");
+        };
+        const buildWindDiscussion = () => {
+          const insp: any = reportData.inspection;
+          const windItems = pageItems.filter(item => item.type === "wind");
+          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
+          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
+          if(creasedTotal === 0 && tornTotal === 0 && !windItems.length) return "";
+          const sentences: string[] = [];
+          if(creasedTotal > 0 || tornTotal > 0){
+            const bits: string[] = [];
+            if(creasedTotal) bits.push(`${creasedTotal} creased`);
+            if(tornTotal) bits.push(`${tornTotal} torn or missing`);
+            sentences.push(`We identified ${bits.join(" and ")} shingle${(creasedTotal + tornTotal) === 1 ? "" : "s"} consistent with wind forces.  The affected shingles exhibited sharp fold lines and fractured reinforcement mats characteristic of wind uplift.`);
+            sentences.push("The wind-affected shingles were individually repairable using insert replacement techniques.  The surrounding shingles were pliable and serviceable such that insert repairs could be completed by a competent contractor.");
+          } else {
+            sentences.push("We did not identify creased, torn, or missing shingles consistent with wind forces on the roof fields, ridges, hips, valleys, or edges.");
           }
-          if(spatter === "yes"){
-            lines.push(`Spatter marks were observed on soft-metal surfaces adjacent to the residence, indicating that hailstones did fall at the property even where shingle-level damage was not evident.`);
-          } else if(spatter === "no"){
-            lines.push(`No spatter marks were observed on soft-metal surfaces, which can indicate that either recent hailstones were insufficient to produce spatter or that any spatter has weathered away.`);
+          if(insp.bondCondition === "poor"){
+            sentences.push("The adhesive bond of field shingles was in poor condition; however, weakened adhesive bonds can result from aging, cold-weather installation, thermal cycling, or manufacturing variability, and are not solely attributable to a specific weather event.");
           }
-          if(damageFound === "no"){
-            lines.push(`On balance, the observed conditions do not support a finding of storm-caused damage to the roof covering.`);
-          } else if(damageFound === "yes"){
-            lines.push(`On balance, the observed conditions support a finding of storm-caused damage to the identified components.`);
+          return sentences.join("  ");
+        };
+        const buildInteriorDiscussion = () => {
+          const insp: any = reportData.inspection;
+          const rooms = (insp.interiorRooms || []).filter((r: any) => (r?.room || "").trim() || (r?.conditions || "").trim());
+          if(insp.interiorInspected !== "yes" && !rooms.length) return "";
+          const sentences: string[] = [];
+          if(rooms.length){
+            const list = rooms.map((r: any) => {
+              const room = (r.room || "interior area").trim();
+              const cond = (r.conditions || "").trim();
+              return cond ? `${cond} in the ${room}` : `staining in the ${room}`;
+            });
+            sentences.push(`Interior moisture indicators were documented at ${joinReadableList(list)}.`);
           }
-          return lines.join(" ");
+          sentences.push("We traced the spatial relationship between interior staining, the attic above, and the corresponding roof location.  The pathway is consistent with top-down water entry rather than from-below sources.");
+          if((insp.atticFindings || "").trim()){
+            sentences.push(insp.atticFindings.trim());
+          }
+          return sentences.join("  ");
         };
         const coverLetterParagraph = () => {
           const writer = reportData.writer;
@@ -5878,7 +6165,13 @@ const loadPdfJs = () => {
           return lines.join("\n");
         };
         const conclusionsParagraph = () => {
-          const items = [];
+          // ASTM E3176 §7.13.1: each numbered conclusion must be
+          // self-contained — it cites the specific evidence (test
+          // square count, wind shingle count, threshold) that supports
+          // it. Order: hail, wind, appurtenances, weathering. The
+          // weathering conclusion only renders when the roof condition
+          // is documented as "poor".
+          const items: string[] = [];
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
           const windItems = pageItems.filter(item => item.type === "wind");
@@ -5887,27 +6180,40 @@ const loadPdfJs = () => {
           const aptWithDamage = pageItems
             .filter(item => item.type === "apt" || item.type === "ds" || item.type === "eapt")
             .filter(item => ((item.data?.damageEntries || []).length > 0 || (item.data?.windEntries || []).length > 0));
+
+          // 1) Hail
+          if(tsBruiseTotal > 0){
+            items.push(`The residence roof sustained hail-caused conditions.  ${tsBruiseTotal} bruise${tsBruiseTotal === 1 ? "" : "s"} characteristic of hailstone impact ${tsBruiseTotal === 1 ? "was" : "were"} identified in test areas on the roof.`);
+          } else if(tsItems.length > 0){
+            items.push("The residence roof did not sustain hailstone impact.  No bruises or punctures characteristic of hailstone impact were found in our test areas.");
+          } else {
+            items.push("No test squares were documented for this inspection; hail impact to the roof covering cannot be assessed from the diagram items alone.");
+          }
+
+          // 2) Wind
           if(creasedTotal > 0 || tornTotal > 0){
-            const bits = [];
+            const bits: string[] = [];
             if(creasedTotal) bits.push(`${creasedTotal} creased`);
             if(tornTotal) bits.push(`${tornTotal} torn or missing`);
-            items.push(`The residence roof sustained wind damage: ${bits.join(" and ")} shingles were identified.`);
+            const totalShingles = creasedTotal + tornTotal;
+            items.push(`The residence roof sustained wind-caused conditions.  ${bits.join(" and ")} shingle${totalShingles === 1 ? " was" : "s were"} identified.  Affected shingles were individually repairable using insert replacement techniques.`);
           } else {
-            items.push("There were no torn or creased shingles on the residence roof consistent with wind forces. No roof repairs are needed for wind-caused damage.");
+            items.push("The residence roof did not sustain wind-caused conditions.  No creased, torn, or missing shingles consistent with wind uplift were identified.");
           }
-          if(tsBruiseTotal > 0){
-            items.push(`The residence roof sustained damage from hailstone impact. ${tsBruiseTotal} bruise${tsBruiseTotal === 1 ? "" : "s"} characteristic of hailstone impact ${tsBruiseTotal === 1 ? "was" : "were"} identified in the test areas.`);
-          } else if(tsItems.length){
-            items.push("The residence roof was not damaged by hailstone impact.");
-          } else {
-            items.push("No test squares were documented for this inspection; hail impact to roofing cannot be assessed from the diagram items alone.");
-          }
+
+          // 3) Appurtenances
           if(aptWithDamage.length){
-            items.push(`Roof appurtenances and soft metals exhibited ${aptWithDamage.length} location${aptWithDamage.length === 1 ? "" : "s"} of hail-caused damage.`);
+            items.push(`Roof appurtenances and soft metals exhibited hail-caused conditions at ${aptWithDamage.length} location${aptWithDamage.length === 1 ? "" : "s"}.`);
           } else {
-            items.push("Roof appurtenances did not exhibit damage consistent with hailstone impact.");
+            items.push("Roof appurtenances and soft metals did not exhibit conditions consistent with hailstone impact.");
           }
-          items.push("No exterior repairs are needed for wind-caused damage.");
+
+          // 4) Weathering (only when the roof is documented as poor)
+          const roofCondition = (reportData.inspection?.roofCondition || "").toLowerCase();
+          if(roofCondition === "poor"){
+            items.push("The roof covering exhibited advanced weathering consistent with a roof at or near the end of its expected service life.  The weathering conditions existed independently of any storm event.");
+          }
+
           return items.map((t, i) => `${i + 1}. ${t}`).join("\n");
         };
         const previewSectionStatus = (key) => {
@@ -5920,8 +6226,8 @@ const loadPdfJs = () => {
           }
           if(key === "description"){
             const d = reportData.description;
-            const filled = Boolean(d.occupancy && d.roofGeometry && d.stories);
-            const started = Boolean(d.occupancy || d.roofGeometry || d.stories);
+            const filled = Boolean(d.stories && d.framing && d.roofGeometry && d.exteriorFinishes?.length);
+            const started = Boolean(d.stories || d.framing || d.roofGeometry || d.exteriorFinishes?.length);
             return filled ? "ready" : started ? "partial" : "empty";
           }
           if(key === "background"){
@@ -10275,28 +10581,24 @@ const loadPdfJs = () => {
               {reportTab === "description" && (() => {
                 // Per-sub-section completion status so the nav pills
                 // can show the user exactly which sub-sections still
-                // have missing inputs (empty / partial / ready).
+                // have missing inputs (empty / partial / ready). The
+                // Description tab now has just two sub-sections:
+                // "Structure" (and garage when present) and "Roof".
+                // Spatial details (appurtenances, scuffs, condition by
+                // direction) are captured on the diagram instead.
                 const d = reportData.description;
                 const val = (v) => (v != null && String(v).trim() !== "");
+                const garageOn = String(d.garagePresent).toLowerCase() === "yes";
                 const structureFields = [
-                  val(d.occupancy), val(d.stories), val(d.framing), val(d.foundation),
-                  val(d.exteriorFinishByElevation?.north),
-                  val(d.exteriorFinishByElevation?.south),
-                  val(d.exteriorFinishByElevation?.east),
-                  val(d.exteriorFinishByElevation?.west),
-                  val(d.windowType), val(d.windowMaterial), val(d.windowScreens),
+                  val(d.stories), val(d.framing), val(d.foundation),
+                  d.exteriorFinishes?.length ? true : false,
+                  val(d.windowMaterial), val(d.windowScreens),
+                  val(d.garagePresent),
+                  ...(garageOn ? [val(d.garageBays), val(d.garageElevation)] : []),
                 ];
-                const garageFields = [
-                  val(d.garagePresent), val(d.garageBays), val(d.garageDoors),
-                  val(d.garageDoorMaterial), val(d.garageElevation),
-                ];
-                const siteFields = [val(d.terrain), val(d.vegetation)];
                 const roofFields = [
                   val(d.roofGeometry), val(d.roofCovering),
-                  val(d.shingleLength), val(d.shingleExposure),
-                  val(d.ridgeWidth), val(d.ridgeExposure),
-                  val(d.primarySlope), val(d.guttersPresent), val(d.downspoutsPresent),
-                  val(d.eagleView), val(d.roofArea),
+                  val(d.primarySlope), val(d.guttersPresent),
                 ];
                 const groupStatus = (flags) => {
                   const filled = flags.filter(Boolean).length;
@@ -10307,11 +10609,10 @@ const loadPdfJs = () => {
                 const subNav = [
                   { key: "all", label: "All", icon: "layers" },
                   { key: "structure", label: "Structure", icon: "home", status: groupStatus(structureFields) },
-                  { key: "garage", label: "Garage", icon: "garage", status: groupStatus(garageFields) },
-                  { key: "site", label: "Site", icon: "tree", status: groupStatus(siteFields) },
                   { key: "roof", label: "Roof", icon: "roofHouse", status: groupStatus(roofFields) },
                 ];
-                const showSub = (key) => descriptionSubTab === "all" || descriptionSubTab === key;
+                const showSub = (key) => descriptionSubTab === "all" || descriptionSubTab === key
+                  || (descriptionSubTab === "garage" || descriptionSubTab === "site") && key === "structure";
                 return (
                 <>
                   <div className="descriptionSubNav" role="tablist" aria-label="Description sub-sections">
@@ -10339,23 +10640,16 @@ const loadPdfJs = () => {
                   {showSub("structure") && renderReportBubble({
                     tone: "structure",
                     title: "Structure",
-                    subtitle: "Building type, framing, foundation, exterior finishes, and fenestration.",
+                    subtitle: "Stories, framing, foundation, exterior finishes, fenestration, fence, and garage.",
                     status: groupStatus(structureFields),
                     sectionKey: "description.structure",
                     children: (
                       <>
                     <div className="reportGrid">
                       <div>
-                        <div className="lbl">Occupancy Type</div>
-                        <select className="inp" value={reportData.description.occupancy} onChange={(e)=>updateReportSection("description", "occupancy", e.target.value)}>
-                          <option value="">Select</option>
-                          {OCCUPANCY_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                        </select>
-                      </div>
-                      <div>
                         <div className="lbl">Number of Stories</div>
                         <div className="storyChipRow" role="radiogroup" aria-label="Number of stories">
-                          {["1","1.5","2","2.5","3","3+"].map(val => (
+                          {["1","2","3"].map(val => (
                             <button
                               key={val}
                               type="button"
@@ -10390,49 +10684,15 @@ const loadPdfJs = () => {
                           <option value="named">"The {`{projectName}`} residence…"</option>
                         </select>
                       </div>
-                      <div>
-                        <div className="lbl">Fence Type <span className="lblHint">used in narrative when populated</span></div>
-                        <input className="inp" value={reportData.description.fenceType || ""} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)} placeholder="e.g., wood, chain link, painted steel" />
-                      </div>
-                    </div>
-                    <div className="reportGrid" style={{marginTop:12}}>
-                      <div>
-                        <div className="lbl">North Exterior Finish</div>
-                        <select className="inp" value={reportData.description.exteriorFinishByElevation.north} onChange={(e)=>updateExteriorFinish("north", e.target.value)}>
-                          <option value="">Select</option>
-                          {EXTERIOR_FINISHES.map(option => <option key={`north-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">South Exterior Finish</div>
-                        <select className="inp" value={reportData.description.exteriorFinishByElevation.south} onChange={(e)=>updateExteriorFinish("south", e.target.value)}>
-                          <option value="">Select</option>
-                          {EXTERIOR_FINISHES.map(option => <option key={`south-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">East Exterior Finish</div>
-                        <select className="inp" value={reportData.description.exteriorFinishByElevation.east} onChange={(e)=>updateExteriorFinish("east", e.target.value)}>
-                          <option value="">Select</option>
-                          {EXTERIOR_FINISHES.map(option => <option key={`east-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">West Exterior Finish</div>
-                        <select className="inp" value={reportData.description.exteriorFinishByElevation.west} onChange={(e)=>updateExteriorFinish("west", e.target.value)}>
-                          <option value="">Select</option>
-                          {EXTERIOR_FINISHES.map(option => <option key={`west-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
                     </div>
                     <div style={{marginTop:12}}>
-                      <div className="lbl">Trim Components Present</div>
+                      <div className="lbl">Exterior Finishes <span className="lblHint">renders as Oxford-joined list in paragraph 1</span></div>
                       <div className="chipList">
-                        {TRIM_COMPONENTS.map(option => (
+                        {EXTERIOR_FINISHES.map(option => (
                           <div
                             key={option}
-                            className={"chip " + (reportData.description.trimComponents.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("description", "trimComponents", option)}
+                            className={"chip " + ((reportData.description.exteriorFinishes || []).includes(option) ? "active" : "")}
+                            onClick={() => toggleReportList("description", "exteriorFinishes", option)}
                           >
                             {option}
                           </div>
@@ -10441,13 +10701,6 @@ const loadPdfJs = () => {
                     </div>
                     <div className="reportGrid" style={{marginTop:12}}>
                       <div>
-                        <div className="lbl">Window Type</div>
-                        <select className="inp" value={reportData.description.windowType} onChange={(e)=>updateReportSection("description", "windowType", e.target.value)}>
-                          <option value="">Select</option>
-                          {WINDOW_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
                         <div className="lbl">Window Material</div>
                         <select className="inp" value={reportData.description.windowMaterial} onChange={(e)=>updateReportSection("description", "windowMaterial", e.target.value)}>
                           <option value="">Select</option>
@@ -10455,92 +10708,83 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Screens Present</div>
-                        <select className="inp" value={reportData.description.windowScreens} onChange={(e)=>updateReportSection("description", "windowScreens", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Mixed">Mixed</option>
-                        </select>
+                        <div className="lbl">Window Screens</div>
+                        <div className="storyChipRow" role="radiogroup" aria-label="Window screens">
+                          {["Yes","No","Mixed"].map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.windowScreens === opt}
+                              className={"storyChip" + (reportData.description.windowScreens === opt ? " active" : "")}
+                              onClick={() => updateReportSection("description", "windowScreens", opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="lbl">Fence Type <span className="lblHint">free text used in narrative when populated</span></div>
+                        <input className="inp" value={reportData.description.fenceType || ""} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)} placeholder="e.g., wood, chain link, painted steel" />
                       </div>
                     </div>
-                      </>
-                    ),
-                  })}
-
-                  {showSub("garage") && renderReportBubble({
-                    tone: "description",
-                    title: "Garage",
-                    subtitle: "Garage presence, bay count, overhead doors, and orientation.",
-                    status: groupStatus(garageFields),
-                    sectionKey: "description.garage",
-                    children: (
-                      <>
-                    <div className="reportGrid">
+                    <div className="reportGrid" style={{marginTop:12}}>
                       <div>
                         <div className="lbl">Garage Present</div>
-                        <select className="inp" value={reportData.description.garagePresent} onChange={(e)=>updateReportSection("description", "garagePresent", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                        </select>
+                        <div className="storyChipRow" role="radiogroup" aria-label="Garage present">
+                          {["Yes","No"].map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.garagePresent === opt}
+                              className={"storyChip" + (reportData.description.garagePresent === opt ? " active" : "")}
+                              onClick={() => updateReportSection("description", "garagePresent", opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <div className="lbl">Garage Bays</div>
-                        <select className="inp" value={reportData.description.garageBays} onChange={(e)=>updateReportSection("description", "garageBays", e.target.value)}>
-                          <option value="">Select</option>
-                          {GARAGE_BAY_OPTIONS.map(option => <option key={`bays-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Overhead Doors</div>
-                        <select className="inp" value={reportData.description.garageDoors} onChange={(e)=>updateReportSection("description", "garageDoors", e.target.value)}>
-                          <option value="">Select</option>
-                          {GARAGE_OVERHEAD_DOOR_OPTIONS.map(option => <option key={`doors-${option}`} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Door Panel Material</div>
-                        <select className="inp" value={reportData.description.garageDoorMaterial} onChange={(e)=>updateReportSection("description", "garageDoorMaterial", e.target.value)}>
-                          <option value="">Select</option>
-                          {GARAGE_DOOR_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Garage Opens Toward</div>
-                        <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
-                          <option value="">Select</option>
-                          {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
+                      {garageOn && (
+                        <>
+                          <div>
+                            <div className="lbl">Garage Bays</div>
+                            <div className="storyChipRow" role="radiogroup" aria-label="Garage bays">
+                              {["1","2","3"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={reportData.description.garageBays === opt}
+                                  className={"storyChip" + (reportData.description.garageBays === opt ? " active" : "")}
+                                  onClick={() => updateReportSection("description", "garageBays", opt)}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="lbl">Garage Opens Toward</div>
+                            <select className="inp" value={reportData.description.garageElevation} onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}>
+                              <option value="">Select</option>
+                              {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          </div>
+                        </>
+                      )}
                     </div>
-                      </>
-                    ),
-                  })}
-
-                  {showSub("site") && renderReportBubble({
-                    tone: "site",
-                    title: "Site Conditions",
-                    subtitle: "Surrounding terrain and vegetation that affect wind and hail exposure.",
-                    status: groupStatus(siteFields),
-                    sectionKey: "description.site",
-                    children: (
-                      <>
-                    <div className="reportGrid">
-                      <div>
-                        <div className="lbl">Terrain</div>
-                        <select className="inp" value={reportData.description.terrain} onChange={(e)=>updateReportSection("description", "terrain", e.target.value)}>
-                          <option value="">Select</option>
-                          {TERRAIN_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Trees & Vegetation</div>
-                        <select className="inp" value={reportData.description.vegetation} onChange={(e)=>updateReportSection("description", "vegetation", e.target.value)}>
-                          <option value="">Select</option>
-                          {VEGETATION_TYPES.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Notable Feature <span className="lblHint">optional sentence appended to paragraph 1 verbatim</span></div>
+                      <textarea
+                        className="inp"
+                        rows={2}
+                        value={reportData.description.notableFeature || ""}
+                        onChange={(e)=>updateReportSection("description", "notableFeature", e.target.value)}
+                        placeholder="e.g., Solar panels covered large portions of the rear west slope and the main south slope."
+                      />
                     </div>
                       </>
                     ),
@@ -10548,8 +10792,8 @@ const loadPdfJs = () => {
 
                   {showSub("roof") && renderReportBubble({
                     tone: "roof",
-                    title: "Roof Information",
-                    subtitle: "Geometry, covering type, shingle measurements, slopes, gutters, and appurtenances.",
+                    title: "Roof",
+                    subtitle: "Geometry, covering, slopes, shingle measurements, gutters, EagleView, and aerial figure.",
                     status: groupStatus(roofFields),
                     sectionKey: "description.roof",
                     children: (
@@ -10563,75 +10807,46 @@ const loadPdfJs = () => {
                         </select>
                       </div>
                       <div>
-                        <div className="lbl">Roof Covering</div>
+                        <div className="lbl">Roof Covering <span className="lblHint">auto-populated from diagram, editable</span></div>
                         <input className="inp" value={reportData.description.roofCovering} onChange={(e)=>updateReportSection("description", "roofCovering", e.target.value)} />
                       </div>
-                      <div>
-                        <div className="lbl">Shingle Manufacturer</div>
-                        <input className="inp" value={reportData.description.shingleManufacturer || ""} onChange={(e)=>updateReportSection("description", "shingleManufacturer", e.target.value)} placeholder="e.g., GAF / Owens Corning / CertainTeed" />
-                      </div>
-                      <div>
-                        <div className="lbl">Shingle Product / Model</div>
-                        <input className="inp" value={reportData.description.shingleProduct || ""} onChange={(e)=>updateReportSection("description", "shingleProduct", e.target.value)} placeholder="e.g., Timberline HDZ" />
-                      </div>
-                      <div>
-                        <div className="lbl">Shingle Type</div>
-                        <select className="inp" value={reportData.description.shingleClass || ""} onChange={(e)=>updateReportSection("description", "shingleClass", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Laminated">Laminated (architectural)</option>
-                          <option value="3-Tab">3-Tab</option>
-                          <option value="Architectural">Architectural (non-laminated)</option>
-                          <option value="Designer">Designer / Specialty</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Shingle Mat</div>
-                        <select className="inp" value={reportData.description.shingleMat || ""} onChange={(e)=>updateReportSection("description", "shingleMat", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Fiberglass">Fiberglass</option>
-                          <option value="Organic">Organic</option>
-                          <option value="Unknown">Unknown</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Granule Color</div>
-                        <input className="inp" value={reportData.description.granuleColor || ""} onChange={(e)=>updateReportSection("description", "granuleColor", e.target.value)} placeholder="e.g., charcoal, weathered wood" />
-                      </div>
-                      <div>
-                        <div className="lbl">Estimated Roof Age</div>
-                        <input className="inp" value={reportData.description.roofAge || ""} onChange={(e)=>updateReportSection("description", "roofAge", e.target.value)} placeholder="e.g., approximately 8 years" />
-                      </div>
-                      <div>
-                        <div className="lbl">Number of Roof Layers</div>
-                        <select className="inp" value={reportData.description.roofLayers || ""} onChange={(e)=>updateReportSection("description", "roofLayers", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="1">1 (single layer)</option>
-                          <option value="2">2 (overlay)</option>
-                          <option value="3+">3 or more</option>
-                          <option value="Unknown">Unknown</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Underlayment (if visible)</div>
-                        <input className="inp" value={reportData.description.underlayment || ""} onChange={(e)=>updateReportSection("description", "underlayment", e.target.value)} placeholder="e.g., felt, synthetic, ice & water shield" />
-                      </div>
-                      <div>
-                        <div className="lbl">Shingle Length</div>
-                        <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">Shingle Exposure</div>
-                        <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} />
-                      </div>
-                      <div>
-                        <div className="lbl">Ridge Shingle Width</div>
-                        <input className="inp" value={reportData.description.ridgeWidth} onChange={(e)=>updateReportSection("description", "ridgeWidth", e.target.value)} placeholder="e.g., 12 inch" />
-                      </div>
-                      <div>
-                        <div className="lbl">Ridge Shingle Exposure</div>
-                        <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inch" />
-                      </div>
+                      {isAsphaltShingleRoof(reportData.description.roofCovering) && (
+                        <>
+                          <div>
+                            <div className="lbl">Shingle Class</div>
+                            <div className="storyChipRow" role="radiogroup" aria-label="Shingle class">
+                              {["Laminated","3-Tab"].map(opt => (
+                                <button
+                                  key={opt}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={reportData.description.shingleClass === opt}
+                                  className={"storyChip" + (reportData.description.shingleClass === opt ? " active" : "")}
+                                  onClick={() => updateReportSection("description", "shingleClass", opt)}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="lbl">Shingle Length <span className="lblHint">auto from diagram</span></div>
+                            <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} placeholder="e.g., 39 inches" />
+                          </div>
+                          <div>
+                            <div className="lbl">Shingle Exposure <span className="lblHint">auto from diagram</span></div>
+                            <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} placeholder="e.g., 5.5 inches" />
+                          </div>
+                          <div>
+                            <div className="lbl">Granule Color</div>
+                            <input className="inp" value={reportData.description.granuleColor || ""} onChange={(e)=>updateReportSection("description", "granuleColor", e.target.value)} placeholder="e.g., gray and tan" />
+                          </div>
+                          <div>
+                            <div className="lbl">Ridge Shingle Exposure</div>
+                            <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inches" />
+                          </div>
+                        </>
+                      )}
                       <div>
                         <div className="lbl">Primary Roof Slope</div>
                         <select className="inp" value={reportData.description.primarySlope} onChange={(e)=>updateReportSection("description", "primarySlope", e.target.value)}>
@@ -10655,81 +10870,81 @@ const loadPdfJs = () => {
                       </div>
                       <div>
                         <div className="lbl">Gutters Present</div>
-                        <select className="inp" value={reportData.description.guttersPresent} onChange={(e)=>updateReportSection("description", "guttersPresent", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Mixed">Mixed</option>
-                        </select>
+                        <div className="storyChipRow" role="radiogroup" aria-label="Gutters present">
+                          {["Yes","No"].map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.guttersPresent === opt}
+                              className={"storyChip" + (reportData.description.guttersPresent === opt ? " active" : "")}
+                              onClick={() => updateReportSection("description", "guttersPresent", opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <div className="lbl">Gutter Scope <span className="lblHint">used in narrative when gutters present</span></div>
-                        <select className="inp" value={reportData.description.gutterScope || ""} onChange={(e)=>updateReportSection("description", "gutterScope", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="along eaves">Along eaves</option>
-                          <option value="on some roof eaves">On some roof eaves</option>
-                          <option value="on the eave by the front entry">On the eave by the front entry</option>
-                          <option value="along the backyard perimeter">Along the backyard perimeter</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Downspouts Present</div>
-                        <select className="inp" value={reportData.description.downspoutsPresent} onChange={(e)=>updateReportSection("description", "downspoutsPresent", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                          <option value="Mixed">Mixed</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Roof Appurtenances</div>
-                      <div className="chipList">
-                        {ROOF_APPURTENANCES.map(option => (
-                          <div
-                            key={option}
-                            className={"chip " + (reportData.description.roofAppurtenances.includes(option) ? "active" : "")}
-                            onClick={() => toggleReportList("description", "roofAppurtenances", option)}
-                          >
-                            {option}
-                          </div>
-                        ))}
-                      </div>
+                      {String(reportData.description.guttersPresent).toLowerCase() === "yes" && (
+                        <div>
+                          <div className="lbl">Gutter Scope</div>
+                          <select className="inp" value={reportData.description.gutterScope || ""} onChange={(e)=>updateReportSection("description", "gutterScope", e.target.value)}>
+                            <option value="">Select</option>
+                            <option value="along eaves">Along eaves</option>
+                            <option value="on some roof eaves">On some roof eaves</option>
+                            <option value="on the eave by the front entry">On the eave by the front entry</option>
+                            <option value="along the backyard perimeter">Along the backyard perimeter</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div className="reportGrid" style={{marginTop:12}}>
                       <div>
                         <div className="lbl">EagleView Obtained</div>
-                        <select className="inp" value={reportData.description.eagleView} onChange={(e)=>updateReportSection("description", "eagleView", e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Yes">Yes</option>
-                          <option value="No">No</option>
-                        </select>
+                        <div className="storyChipRow" role="radiogroup" aria-label="EagleView obtained">
+                          {["Yes","No"].map(opt => (
+                            <button
+                              key={opt}
+                              type="button"
+                              role="radio"
+                              aria-checked={reportData.description.eagleView === opt}
+                              className={"storyChip" + (reportData.description.eagleView === opt ? " active" : "")}
+                              onClick={() => updateReportSection("description", "eagleView", opt)}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {reportData.description.eagleView === "Yes" && (
+                        <>
+                          <div>
+                            <div className="lbl">Roof Area (square feet)</div>
+                            <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 3,564" />
+                          </div>
+                          <div>
+                            <div className="lbl">Attachment Letter</div>
+                            <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
+                          </div>
+                          <div>
+                            <div className="lbl">Roof Area Includes <span className="lblHint">free-text qualifier appended after the roof area</span></div>
+                            <input className="inp" value={reportData.description.roofAreaIncludes || ""} onChange={(e)=>updateReportSection("description", "roofAreaIncludes", e.target.value)} placeholder="e.g., which included the house, breezeway, and garage" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="reportGrid" style={{marginTop:12}}>
+                      <div>
+                        <div className="lbl">Aerial Figure Date <span className="lblHint">e.g., August 31, 2023</span></div>
+                        <input className="inp" value={reportData.description.aerialFigureDate || ""} onChange={(e)=>updateReportSection("description", "aerialFigureDate", e.target.value)} placeholder="Month DD, YYYY" />
                       </div>
                       <div>
-                        <div className="lbl">Roof Area (square feet)</div>
-                        <input className="inp" value={reportData.description.roofArea} onChange={(e)=>updateReportSection("description", "roofArea", e.target.value)} placeholder="e.g., 4,200 square feet" />
+                        <div className="lbl">Aerial Figure Source</div>
+                        <input className="inp" value={reportData.description.aerialFigureSource || ""} onChange={(e)=>updateReportSection("description", "aerialFigureSource", e.target.value)} placeholder="Google Earth" />
                       </div>
-                      <div>
-                        <div className="lbl">Attachment Letter</div>
-                        <input className="inp" value={reportData.description.attachmentLetter} onChange={(e)=>updateReportSection("description", "attachmentLetter", e.target.value)} placeholder="A, B, C..." />
-                      </div>
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Roof Area Includes <span className="lblHint">free-text qualifier appended after the roof area</span></div>
-                      <input className="inp" value={reportData.description.roofAreaIncludes || ""} onChange={(e)=>updateReportSection("description", "roofAreaIncludes", e.target.value)} placeholder="e.g., which included the house, breezeway, and garage" />
-                    </div>
-                    <div style={{marginTop:12}}>
-                      <div className="lbl">Notable Feature <span className="lblHint">optional sentence appended to paragraph 1 verbatim</span></div>
-                      <textarea
-                        className="inp"
-                        rows={2}
-                        value={reportData.description.notableFeature || ""}
-                        onChange={(e)=>updateReportSection("description", "notableFeature", e.target.value)}
-                        placeholder="e.g., Solar panels covered large portions of the rear west slope and the main south slope."
-                      />
                     </div>
                     <div className="sectionHint">
-                      Diagram fields like roof covering, shingle length, and exposure prefill from the diagram editor.
+                      Roof appurtenances are derived from APT markers placed on the diagram. Use the diagram editor to add plumbing stacks, vents, chimneys, and skylights.
                     </div>
                       </>
                     ),
@@ -10901,6 +11116,30 @@ const loadPdfJs = () => {
                                 {option}
                               </div>
                             ))}
+                          </div>
+                        </div>
+                        <div className="reportGrid" style={{marginTop:12}}>
+                          <div>
+                            <div className="lbl">Shingle Manufacturer</div>
+                            <input className="inp" value={reportData.description.shingleManufacturer || ""} onChange={(e)=>updateReportSection("description", "shingleManufacturer", e.target.value)} placeholder="e.g., GAF / Owens Corning / CertainTeed" />
+                          </div>
+                          <div>
+                            <div className="lbl">Shingle Product / Model</div>
+                            <input className="inp" value={reportData.description.shingleProduct || ""} onChange={(e)=>updateReportSection("description", "shingleProduct", e.target.value)} placeholder="e.g., Timberline HDZ" />
+                          </div>
+                          <div>
+                            <div className="lbl">Estimated Roof Age</div>
+                            <input className="inp" value={reportData.description.roofAge || ""} onChange={(e)=>updateReportSection("description", "roofAge", e.target.value)} placeholder="e.g., approximately 8 years" />
+                          </div>
+                          <div>
+                            <div className="lbl">Number of Roof Layers</div>
+                            <select className="inp" value={reportData.description.roofLayers || ""} onChange={(e)=>updateReportSection("description", "roofLayers", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="1">1 (single layer)</option>
+                              <option value="2">2 (overlay)</option>
+                              <option value="3+">3 or more</option>
+                              <option value="Unknown">Unknown</option>
+                            </select>
                           </div>
                         </div>
                         <div style={{marginTop:12}}>
@@ -11093,6 +11332,70 @@ const loadPdfJs = () => {
                       </>
                     ),
                   })}
+                  {renderReportBubble({
+                    tone: "weather",
+                    title: "Tropical / Named Storm (optional)",
+                    subtitle: "Used when the loss is from a named tropical system. Populating storm name routes the Weather paragraph to the ASOS / NWS landfall format.",
+                    status: has(w.stormName) ? "ready" : "empty",
+                    sectionKey: "weather.tropical",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Storm Name</div>
+                            <input className="inp" value={w.stormName || ""} onChange={(e)=>setWeather("stormName", e.target.value)} placeholder="e.g., Beryl" />
+                          </div>
+                          <div>
+                            <div className="lbl">Classification</div>
+                            <select className="inp" value={w.stormClassification || ""} onChange={(e)=>setWeather("stormClassification", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="tropical storm">Tropical storm</option>
+                              <option value="hurricane">Hurricane</option>
+                              <option value="derecho">Derecho</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Landfall Location</div>
+                            <input className="inp" value={w.landfallLocation || ""} onChange={(e)=>setWeather("landfallLocation", e.target.value)} placeholder="e.g., Matagorda, Texas" />
+                          </div>
+                          <div>
+                            <div className="lbl">Landfall Distance from Property</div>
+                            <input className="inp" value={w.landfallDistance || ""} onChange={(e)=>setWeather("landfallDistance", e.target.value)} placeholder="e.g., 90 miles southwest" />
+                          </div>
+                        </div>
+                        <div className="reportGrid" style={{marginTop:12}}>
+                          <div>
+                            <div className="lbl">ASOS Station</div>
+                            <input className="inp" value={w.asosStation || ""} onChange={(e)=>setWeather("asosStation", e.target.value)} placeholder="e.g., Bush Intercontinental Airport" />
+                          </div>
+                          <div>
+                            <div className="lbl">ASOS Distance</div>
+                            <input className="inp" value={w.asosDistance || ""} onChange={(e)=>setWeather("asosDistance", e.target.value)} placeholder="e.g., 10 miles" />
+                          </div>
+                          <div>
+                            <div className="lbl">ASOS Direction</div>
+                            <input className="inp" value={w.asosDirection || ""} onChange={(e)=>setWeather("asosDirection", e.target.value)} placeholder="e.g., northeast" />
+                          </div>
+                          <div>
+                            <div className="lbl">Peak Gust</div>
+                            <input className="inp" value={w.asosPeakGust || ""} onChange={(e)=>setWeather("asosPeakGust", e.target.value)} placeholder="e.g., 83 mph" />
+                          </div>
+                          <div>
+                            <div className="lbl">Maximum Sustained Wind</div>
+                            <input className="inp" value={w.asosSustainedWind || ""} onChange={(e)=>setWeather("asosSustainedWind", e.target.value)} placeholder="e.g., 62 mph" />
+                          </div>
+                          <div>
+                            <div className="lbl">Wind Direction</div>
+                            <input className="inp" value={w.asosWindDirection || ""} onChange={(e)=>setWeather("asosWindDirection", e.target.value)} placeholder="e.g., southeasterly (130 degrees)" />
+                          </div>
+                          <div>
+                            <div className="lbl">Rainfall</div>
+                            <input className="inp" value={w.asosRainfall || ""} onChange={(e)=>setWeather("asosRainfall", e.target.value)} placeholder="e.g., 4.72 inches" />
+                          </div>
+                        </div>
+                      </>
+                    ),
+                  })}
                 </>
                 );
               })()}
@@ -11204,6 +11507,201 @@ const loadPdfJs = () => {
                             placeholder="e.g., Fresh spatter ~3/4&quot; on north-side HVAC condenser fins; dried oxide spatter on west downspout."
                           />
                         </div>
+                        <div className="reportGrid" style={{marginTop:12}}>
+                          <div>
+                            <div className="lbl">Max Spatter Size</div>
+                            <select className="inp" value={insp.maxSpatterSize || ""} onChange={(e)=>setInspectionField("maxSpatterSize", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="1/8-inch">1/8-inch</option>
+                              <option value="1/4-inch">1/4-inch</option>
+                              <option value="3/8-inch">3/8-inch</option>
+                              <option value="1/2-inch">1/2-inch</option>
+                              <option value="3/4-inch">3/4-inch</option>
+                              <option value="1-inch">1-inch</option>
+                              <option value="1-1/4-inch">1-1/4-inch</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Roof Condition</div>
+                            <select className="inp" value={insp.roofCondition || ""} onChange={(e)=>setInspectionField("roofCondition", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="good">Good</option>
+                              <option value="fair">Fair</option>
+                              <option value="poor">Poor</option>
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    ),
+                  })}
+                  {renderReportBubble({
+                    tone: "inspection",
+                    title: "Interior, Attic, & Other Findings",
+                    subtitle: "Focused inputs that drive the Inspection narrative paragraphs (interior rooms, attic, granule loss, prior inspection damage).",
+                    status: (insp.interiorInspected || insp.atticInspected || insp.granuleLossObserved || insp.priorInspectionDamage) ? "ready" : "empty",
+                    sectionKey: "inspection.findings",
+                    children: (
+                      <>
+                        <div className="reportGrid">
+                          <div>
+                            <div className="lbl">Interior Inspected</div>
+                            <select className="inp" value={insp.interiorInspected || ""} onChange={(e)=>setInspectionField("interiorInspected", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Attic Inspected</div>
+                            <select className="inp" value={insp.atticInspected || ""} onChange={(e)=>setInspectionField("atticInspected", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                        </div>
+                        {insp.interiorInspected === "yes" && (
+                          <div style={{marginTop:12}}>
+                            <div className="lbl">Interior Rooms with Findings</div>
+                            <div style={{display:"flex", flexDirection:"column", gap:8}}>
+                              {(insp.interiorRooms || []).map((room: any, idx: number) => (
+                                <div key={idx} className="reportGrid">
+                                  <input
+                                    className="inp"
+                                    placeholder="Room (e.g., master bedroom)"
+                                    value={room.room || ""}
+                                    onChange={(e) => {
+                                      setReportData((prev: any) => {
+                                        const list = [...(prev.inspection.interiorRooms || [])];
+                                        list[idx] = { ...list[idx], room: e.target.value };
+                                        return { ...prev, inspection: { ...prev.inspection, interiorRooms: list } };
+                                      });
+                                    }}
+                                  />
+                                  <input
+                                    className="inp"
+                                    placeholder="Conditions (e.g., multiple-ringed stains)"
+                                    value={room.conditions || ""}
+                                    onChange={(e) => {
+                                      setReportData((prev: any) => {
+                                        const list = [...(prev.inspection.interiorRooms || [])];
+                                        list[idx] = { ...list[idx], conditions: e.target.value };
+                                        return { ...prev, inspection: { ...prev.inspection, interiorRooms: list } };
+                                      });
+                                    }}
+                                  />
+                                  <input
+                                    className="inp"
+                                    placeholder="Location (e.g., near the middle of the room)"
+                                    value={room.location || ""}
+                                    onChange={(e) => {
+                                      setReportData((prev: any) => {
+                                        const list = [...(prev.inspection.interiorRooms || [])];
+                                        list[idx] = { ...list[idx], location: e.target.value };
+                                        return { ...prev, inspection: { ...prev.inspection, interiorRooms: list } };
+                                      });
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btnGhost"
+                                    onClick={() => {
+                                      setReportData((prev: any) => {
+                                        const list = (prev.inspection.interiorRooms || []).filter((_: any, i: number) => i !== idx);
+                                        return { ...prev, inspection: { ...prev.inspection, interiorRooms: list } };
+                                      });
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              ))}
+                              <button
+                                type="button"
+                                className="btn btnGhost"
+                                onClick={() => {
+                                  setReportData((prev: any) => {
+                                    const list = [...(prev.inspection.interiorRooms || []), { room: "", conditions: "", location: "" }];
+                                    return { ...prev, inspection: { ...prev.inspection, interiorRooms: list } };
+                                  });
+                                }}
+                              >
+                                + Add room
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {insp.atticInspected === "yes" && (
+                          <>
+                            <div className="reportGrid" style={{marginTop:12}}>
+                              <div>
+                                <div className="lbl">Decking Type</div>
+                                <select className="inp" value={insp.deckingType || ""} onChange={(e)=>setInspectionField("deckingType", e.target.value)}>
+                                  <option value="">Select</option>
+                                  <option value="plywood">Plywood</option>
+                                  <option value="OSB">OSB</option>
+                                  <option value="spaced">Spaced</option>
+                                </select>
+                              </div>
+                              <div>
+                                <div className="lbl">Decking Condition</div>
+                                <input className="inp" value={insp.deckingCondition || ""} onChange={(e)=>setInspectionField("deckingCondition", e.target.value)} placeholder="e.g., dry, no staining" />
+                              </div>
+                            </div>
+                            <div style={{marginTop:12}}>
+                              <div className="lbl">Attic Findings</div>
+                              <textarea
+                                className="inp"
+                                rows={2}
+                                value={insp.atticFindings || ""}
+                                onChange={(e)=>setInspectionField("atticFindings", e.target.value)}
+                                placeholder="e.g., a displaced HVAC condensate trap above the family room ceiling stain"
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="reportGrid" style={{marginTop:12}}>
+                          <div>
+                            <div className="lbl">Granule Loss Observed</div>
+                            <select className="inp" value={insp.granuleLossObserved || ""} onChange={(e)=>setInspectionField("granuleLossObserved", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                          <div>
+                            <div className="lbl">Prior Inspection Damage</div>
+                            <select className="inp" value={insp.priorInspectionDamage || ""} onChange={(e)=>setInspectionField("priorInspectionDamage", e.target.value)}>
+                              <option value="">Select</option>
+                              <option value="yes">Yes</option>
+                              <option value="no">No</option>
+                            </select>
+                          </div>
+                        </div>
+                        {insp.granuleLossObserved === "yes" && (
+                          <div style={{marginTop:12}}>
+                            <div className="lbl">Granule Loss Notes</div>
+                            <textarea
+                              className="inp"
+                              rows={2}
+                              value={insp.granuleLossNotes || ""}
+                              onChange={(e)=>setInspectionField("granuleLossNotes", e.target.value)}
+                              placeholder="e.g., distribution and appearance consistent with age-related weathering"
+                            />
+                          </div>
+                        )}
+                        {insp.priorInspectionDamage === "yes" && (
+                          <div style={{marginTop:12}}>
+                            <div className="lbl">Prior Inspection Notes</div>
+                            <textarea
+                              className="inp"
+                              rows={2}
+                              value={insp.priorInspectionNotes || ""}
+                              onChange={(e)=>setInspectionField("priorInspectionNotes", e.target.value)}
+                              placeholder="e.g., a previous inspector covered the roof with tarps fastened by nail guns; the owner later removed the tarps"
+                            />
+                          </div>
+                        )}
                       </>
                     ),
                   })}
@@ -11641,48 +12139,38 @@ const loadPdfJs = () => {
               <div className="printSection">
                 <h3>Description</h3>
                 <div className="printKeyValue">
-                  <div className="lbl">Occupancy</div>
-                  <div>{valueOrDash(reportData.description.occupancy)}</div>
                   <div className="lbl">Stories</div>
                   <div>{valueOrDash(reportData.description.stories)}</div>
                   <div className="lbl">Framing</div>
                   <div>{valueOrDash(reportData.description.framing)}</div>
                   <div className="lbl">Foundation</div>
                   <div>{valueOrDash(reportData.description.foundation)}</div>
-                  <div className="lbl">Exterior Finishes by Elevation</div>
-                  <div>{formatDirectionalExteriorFinishes(reportData.description.exteriorFinishByElevation) || joinList(reportData.description.exteriorFinishes)}</div>
-                  <div className="lbl">Trim Components</div>
-                  <div>{joinList(reportData.description.trimComponents)}</div>
-                  <div className="lbl">Window Type</div>
-                  <div>{valueOrDash(reportData.description.windowType)}</div>
+                  <div className="lbl">Exterior Finishes</div>
+                  <div>{joinList(reportData.description.exteriorFinishes)}</div>
                   <div className="lbl">Window Material</div>
                   <div>{valueOrDash(reportData.description.windowMaterial)}</div>
                   <div className="lbl">Screens</div>
                   <div>{valueOrDash(reportData.description.windowScreens)}</div>
+                  <div className="lbl">Fence Type</div>
+                  <div>{valueOrDash(reportData.description.fenceType)}</div>
                   <div className="lbl">Garage</div>
                   <div>{valueOrDash(reportData.description.garagePresent)}</div>
                   <div className="lbl">Garage Bays</div>
                   <div>{valueOrDash(reportData.description.garageBays)}</div>
-                  <div className="lbl">Garage Doors</div>
-                  <div>{valueOrDash(reportData.description.garageDoors)}</div>
-                  <div className="lbl">Garage Material</div>
-                  <div>{valueOrDash(reportData.description.garageDoorMaterial)}</div>
                   <div className="lbl">Garage Opens Toward</div>
                   <div>{valueOrDash(reportData.description.garageElevation)}</div>
-                  <div className="lbl">Terrain</div>
-                  <div>{valueOrDash(reportData.description.terrain)}</div>
-                  <div className="lbl">Vegetation</div>
-                  <div>{valueOrDash(reportData.description.vegetation)}</div>
                   <div className="lbl">Roof Geometry</div>
                   <div>{valueOrDash(reportData.description.roofGeometry)}</div>
                   <div className="lbl">Roof Covering</div>
                   <div>{valueOrDash(reportData.description.roofCovering)}</div>
+                  <div className="lbl">Shingle Class</div>
+                  <div>{valueOrDash(reportData.description.shingleClass)}</div>
                   <div className="lbl">Shingle Length</div>
                   <div>{valueOrDash(reportData.description.shingleLength)}</div>
                   <div className="lbl">Shingle Exposure</div>
                   <div>{valueOrDash(reportData.description.shingleExposure)}</div>
-                  <div className="lbl">Ridge Width</div>
-                  <div>{valueOrDash(reportData.description.ridgeWidth)}</div>
+                  <div className="lbl">Granule Color</div>
+                  <div>{valueOrDash(reportData.description.granuleColor)}</div>
                   <div className="lbl">Ridge Exposure</div>
                   <div>{valueOrDash(reportData.description.ridgeExposure)}</div>
                   <div className="lbl">Primary Roof Slope</div>
@@ -11691,16 +12179,18 @@ const loadPdfJs = () => {
                   <div>{joinList(reportData.description.additionalSlopes)}</div>
                   <div className="lbl">Gutters</div>
                   <div>{valueOrDash(reportData.description.guttersPresent)}</div>
-                  <div className="lbl">Downspouts</div>
-                  <div>{valueOrDash(reportData.description.downspoutsPresent)}</div>
-                  <div className="lbl">Roof Appurtenances</div>
-                  <div>{joinList(reportData.description.roofAppurtenances)}</div>
+                  <div className="lbl">Gutter Scope</div>
+                  <div>{valueOrDash(reportData.description.gutterScope)}</div>
                   <div className="lbl">EagleView</div>
                   <div>{valueOrDash(reportData.description.eagleView)}</div>
                   <div className="lbl">Roof Area (square feet)</div>
                   <div>{valueOrDash(reportData.description.roofArea)}</div>
                   <div className="lbl">Attachment Letter</div>
                   <div>{valueOrDash(reportData.description.attachmentLetter)}</div>
+                  <div className="lbl">Aerial Figure Date</div>
+                  <div>{valueOrDash(reportData.description.aerialFigureDate)}</div>
+                  <div className="lbl">Aerial Figure Source</div>
+                  <div>{valueOrDash(reportData.description.aerialFigureSource)}</div>
                 </div>
               </div>
             </div>
