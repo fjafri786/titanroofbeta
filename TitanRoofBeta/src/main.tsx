@@ -789,6 +789,9 @@ const loadPdfJs = () => {
         company: person?.company || "",
         contact: person?.contact || "",
         notes: person?.notes || "",
+        yearOfConstruction: person?.yearOfConstruction || "",
+        yearOfPurchase: person?.yearOfPurchase || "",
+        dateOfConcern: person?.dateOfConcern || "",
         excludeFromNarrative: Boolean(person?.excludeFromNarrative)
       }));
       const normalizeReportData = (reportData) => {
@@ -1677,6 +1680,8 @@ const loadPdfJs = () => {
         const [reportTab, setReportTab] = useState("preview");
         const [previewEditing, setPreviewEditing] = useState(null);
         const [previewDraft, setPreviewDraft] = useState("");
+        const [weatherPdfStatus, setWeatherPdfStatus] = useState<"idle" | "parsing" | "done" | "error">("idle");
+        const [weatherPdfError, setWeatherPdfError] = useState<string>("");
         // Per-section expand/collapse state for the Live Report Preview.
         // Preview bubbles clamp their body to ~10 lines by default; this
         // tracks which sections the user has expanded to see the full text.
@@ -1871,7 +1876,7 @@ const loadPdfJs = () => {
               ...prev.project,
               parties: [
                 ...prev.project.parties,
-                { id: uid(), name: "", role: "", company: "", contact: "", notes: "", excludeFromNarrative: false }
+                { id: uid(), name: "", role: "", company: "", contact: "", notes: "", yearOfConstruction: "", yearOfPurchase: "", dateOfConcern: "", excludeFromNarrative: false }
               ]
             }
           }));
@@ -6367,6 +6372,18 @@ const loadPdfJs = () => {
           const sentences = [];
           const partiesSentence = formatPartiesSentence(reportData.project.parties);
           if(partiesSentence) sentences.push(partiesSentence);
+          (reportData.project.parties || [])
+            .filter((p: any) => p?.role === "Homeowner")
+            .forEach((p: any) => {
+              const homeownerLabel = p.name?.trim() ? `${p.name.trim()} (homeowner)` : "The homeowner";
+              const bits: string[] = [];
+              if(p.yearOfConstruction?.trim()) bits.push(`the residence was constructed in ${p.yearOfConstruction.trim()}`);
+              if(p.yearOfPurchase?.trim()) bits.push(`purchased the property in ${p.yearOfPurchase.trim()}`);
+              if(bits.length) sentences.push(`${homeownerLabel} reported that ${bits.join(" and ")}.`);
+              if(p.dateOfConcern?.trim()){
+                sentences.push(`${homeownerLabel} provided a date of concern of ${p.dateOfConcern.trim()}.`);
+              }
+            });
           if(reportData.background.dateOfLoss){
             const source = reportData.background.source?.trim();
             const sourceClause = source ? `, as reported by the ${source.toLowerCase()}` : "";
@@ -11820,20 +11837,10 @@ const loadPdfJs = () => {
               {reportTab === "background" && (() => {
                 // Status logic per section:
                 //  • Parties: Ready if any party has name + role.
-                //  • Background: Ready if date-of-loss AND (concerns or notes).
-                //  • Access: Ready if access-obtained has a value.
                 const hasVal = (v: unknown) => v != null && String(v).trim() !== "";
-                const bg = reportData.background;
                 const partiesStatus: "ready" | "partial" | "empty" =
                   !reportData.project.parties.length ? "empty" :
                   reportData.project.parties.some(x => hasVal(x.name) && hasVal(x.role)) ? "ready" : "partial";
-                const backgroundReady = hasVal(bg.dateOfLoss) && (bg.concerns.length > 0 || hasVal(bg.notes));
-                const backgroundHasAny = hasVal(bg.dateOfLoss) || bg.concerns.length > 0 || hasVal(bg.notes) || hasVal(bg.source);
-                const backgroundStatus: "ready" | "partial" | "empty" =
-                  backgroundReady ? "ready" : backgroundHasAny ? "partial" : "empty";
-                const accessStatus: "ready" | "partial" | "empty" =
-                  hasVal(bg.accessObtained) ? "ready" :
-                  (bg.limitations.length > 0 || hasVal(bg.limitationsOther)) ? "partial" : "empty";
                 return (
                 <>
                   {renderReportBubble({
@@ -11887,6 +11894,22 @@ const loadPdfJs = () => {
                                   <input className="inp" value={person.contact} onChange={(e)=>updateParty(person.id, "contact", e.target.value)} placeholder="Phone / email" />
                                 </div>
                               </div>
+                              {person.role === "Homeowner" && (
+                                <div className="partyGrid" style={{marginTop:10}}>
+                                  <div>
+                                    <div className="lbl">Year of Construction</div>
+                                    <input className="inp" value={person.yearOfConstruction || ""} onChange={(e)=>updateParty(person.id, "yearOfConstruction", e.target.value)} placeholder="e.g., 1998" />
+                                  </div>
+                                  <div>
+                                    <div className="lbl">Year of Purchase</div>
+                                    <input className="inp" value={person.yearOfPurchase || ""} onChange={(e)=>updateParty(person.id, "yearOfPurchase", e.target.value)} placeholder="e.g., 2015" />
+                                  </div>
+                                  <div>
+                                    <div className="lbl">Date of Concern <span className="lblHint">provided date</span></div>
+                                    <input className="inp" type="date" value={person.dateOfConcern || ""} onChange={(e)=>updateParty(person.id, "dateOfConcern", e.target.value)} />
+                                  </div>
+                                </div>
+                              )}
                               <div style={{marginTop:10}}>
                                 <div className="lbl">Statements / Notes for this person <span className="lblHint">captured verbatim so you can attribute them in the report</span></div>
                                 <textarea
@@ -11914,348 +11937,209 @@ const loadPdfJs = () => {
                       </>
                     ),
                   })}
-                  {renderReportBubble({
-                    tone: "background",
-                    title: "Reported Background",
-                    subtitle: "Claim identifiers, date of loss, reported concerns, prior claims, and documents reviewed.",
-                    status: backgroundStatus,
-                    sectionKey: "background.reported",
-                    children: (
-                      <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Claim Number <span className="lblHint">insurance carrier's number</span></div>
-                            <input className="inp" value={reportData.background.claimNumber || ""} onChange={(e)=>updateReportSection("background", "claimNumber", e.target.value)} placeholder="Carrier claim #" />
-                          </div>
-                          <div>
-                            <div className="lbl">Insurance Carrier</div>
-                            <input className="inp" value={reportData.background.carrier || ""} onChange={(e)=>updateReportSection("background", "carrier", e.target.value)} placeholder="e.g., State Farm" />
-                          </div>
-                          <div>
-                            <div className="lbl">Policy Type <span className="lblHint">if known</span></div>
-                            <input className="inp" value={reportData.background.policyType || ""} onChange={(e)=>updateReportSection("background", "policyType", e.target.value)} placeholder="HO-3, HO-5, Dwelling…" />
-                          </div>
-                          <div>
-                            <div className="lbl">Reported Date of Loss</div>
-                            <input className="inp" type="date" value={reportData.background.dateOfLoss} onChange={(e)=>updateReportSection("background", "dateOfLoss", e.target.value)} />
-                          </div>
-                          <div>
-                            <div className="lbl">Information Source</div>
-                            <input className="inp" value={reportData.background.source} onChange={(e)=>updateReportSection("background", "source", e.target.value)} placeholder="Insured, contractor, claim file..." />
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Reported Concerns</div>
-                          <div className="chipList">
-                            {BACKGROUND_CONCERNS.map(option => (
-                              <div
-                                key={option}
-                                className={"chip " + (reportData.background.concerns.includes(option) ? "active" : "")}
-                                onClick={() => toggleReportList("background", "concerns", option)}
-                              >
-                                {option}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Prior Claims / Prior Repairs <span className="lblHint">as reported by the insured</span></div>
-                          <textarea
-                            className="inp"
-                            rows={2}
-                            value={reportData.background.priorClaims || ""}
-                            onChange={(e)=>updateReportSection("background", "priorClaims", e.target.value)}
-                            placeholder="e.g., Roof replaced in 2019 following hail claim; no claims since."
-                          />
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Documents Reviewed</div>
-                          <div className="chipList">
-                            {["Claim file", "Prior inspection report", "Contractor estimate", "Photographs", "EagleView report", "Weather report", "Policy documents"].map(option => (
-                              <div
-                                key={option}
-                                className={"chip " + ((reportData.background.documentsReviewed || []).includes(option) ? "active" : "")}
-                                onClick={() => toggleReportList("background", "documentsReviewed", option)}
-                              >
-                                {option}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="reportGrid" style={{marginTop:12}}>
-                          <div>
-                            <div className="lbl">Shingle Manufacturer</div>
-                            <input className="inp" value={reportData.description.shingleManufacturer || ""} onChange={(e)=>updateReportSection("description", "shingleManufacturer", e.target.value)} placeholder="e.g., GAF / Owens Corning / CertainTeed" />
-                          </div>
-                          <div>
-                            <div className="lbl">Shingle Product / Model</div>
-                            <input className="inp" value={reportData.description.shingleProduct || ""} onChange={(e)=>updateReportSection("description", "shingleProduct", e.target.value)} placeholder="e.g., Timberline HDZ" />
-                          </div>
-                          <div>
-                            <div className="lbl">Estimated Roof Age</div>
-                            <input className="inp" value={reportData.description.roofAge || ""} onChange={(e)=>updateReportSection("description", "roofAge", e.target.value)} placeholder="e.g., approximately 8 years" />
-                          </div>
-                          <div>
-                            <div className="lbl">Number of Roof Layers</div>
-                            <select className="inp" value={reportData.description.roofLayers || ""} onChange={(e)=>updateReportSection("description", "roofLayers", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="1">1 (single layer)</option>
-                              <option value="2">2 (overlay)</option>
-                              <option value="3+">3 or more</option>
-                              <option value="Unknown">Unknown</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Background Notes</div>
-                          <textarea className="inp" value={reportData.background.notes} onChange={(e)=>updateReportSection("background", "notes", e.target.value)} placeholder="Short factual notes only..." />
-                        </div>
-                      </>
-                    ),
-                  })}
-                  {renderReportBubble({
-                    tone: "access",
-                    title: "Access & Limitations",
-                    subtitle: "Whether the roof and interior were accessible, and the reasons for any limitations.",
-                    status: accessStatus,
-                    sectionKey: "background.access",
-                    children: (
-                      <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Roof Access Obtained</div>
-                            <select className="inp" value={reportData.background.accessObtained} onChange={(e)=>updateReportSection("background", "accessObtained", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                              <option value="Partial">Partial</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Reason(s) for Limited / No Access</div>
-                          <div className="chipList">
-                            {ACCESS_LIMITATION_REASONS.map(option => (
-                              <div
-                                key={option}
-                                className={"chip " + (reportData.background.limitations.includes(option) ? "active" : "")}
-                                onClick={() => toggleReportList("background", "limitations", option)}
-                              >
-                                {option}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Other / Notes on Limitation</div>
-                          <textarea
-                            className="inp"
-                            value={reportData.background.limitationsOther}
-                            onChange={(e)=>updateReportSection("background", "limitationsOther", e.target.value)}
-                            placeholder="Describe anything else — red tape, attorney involvement, construction in progress, hazardous conditions, safety tie-off limits, etc."
-                          />
-                        </div>
-                        <div className="sectionHint">Tap chips for common reasons. Use the notes area for anything a chip doesn't cover.</div>
-                      </>
-                    ),
-                  })}
                 </>
                 );
               })()}
 
 
               {reportTab === "weather" && (() => {
-                // Weather tab captures NCEI Storm Events / SPC search
-                // results on-site so the Weather Data paragraph can be
-                // generated without a follow-up desk visit. Status is
-                // Ready when all of: search radius, start+end dates, and
-                // at least one report count are filled.
+                // Weather tab accepts a PDF (NCEI Storm Events export,
+                // SPC report, or named-storm summary). TitanRoof extracts
+                // the text via pdf.js and pattern-matches the fields used
+                // by the Weather Data paragraph.
                 const w: any = (reportData as any).weather || {};
                 const has = (v: unknown) => v != null && String(v).trim() !== "";
-                const readyKeys = [
-                  has(w.searchRadius),
-                  has(w.searchStart),
-                  has(w.searchEnd),
-                  has(w.hailReportCount) || has(w.windReportCount),
-                ];
-                const filled = readyKeys.filter(Boolean).length;
+                const anyExtracted = [
+                  w.searchRadius, w.searchStart, w.searchEnd,
+                  w.hailReportCount, w.windReportCount, w.weatherStation,
+                  w.nearestHailSize, w.nearestHailDate, w.nearestHailDistance, w.nearestHailDirection,
+                  w.nearestWindSpeed, w.nearestWindDate, w.nearestWindDistance, w.nearestWindDirection,
+                  w.stormName, w.asosStation, w.asosPeakGust, w.asosSustainedWind, w.asosRainfall,
+                ].some(has);
                 const weatherStatus: "ready" | "partial" | "empty" =
-                  filled === readyKeys.length ? "ready" :
-                  filled > 0 ? "partial" : "empty";
-                const setWeather = (key: string, value: string) => {
+                  has(w.pdfName) && anyExtracted ? "ready" :
+                  has(w.pdfName) || anyExtracted ? "partial" : "empty";
+                const setWeatherFields = (patch: Record<string, string>) => {
                   setReportData((prev: any) => ({
                     ...prev,
-                    weather: { ...((prev as any).weather || {}), [key]: value }
+                    weather: { ...((prev as any).weather || {}), ...patch }
                   }));
                 };
+                const extractFromText = (raw: string) => {
+                  const text = raw.replace(/\s+/g, " ").trim();
+                  const out: Record<string, string> = {};
+                  const find = (re: RegExp): string => {
+                    const m = text.match(re);
+                    return m ? (m[1] || "").trim() : "";
+                  };
+                  const radius = find(/(?:search\s*radius|within)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:mi|miles?)/i);
+                  if(radius) out.searchRadius = radius;
+                  const dateRe = /(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|[A-Z][a-z]+\s+\d{1,2},\s*\d{4})/;
+                  const toIso = (s: string): string => {
+                    if(!s) return "";
+                    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+                    const d = new Date(s);
+                    if(isNaN(d.getTime())) return "";
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, "0");
+                    const dd = String(d.getDate()).padStart(2, "0");
+                    return `${yyyy}-${mm}-${dd}`;
+                  };
+                  const start = find(new RegExp(`(?:search\\s*start|start\\s*date|from)\\s*[:\\-]?\\s*${dateRe.source}`, "i"));
+                  const end = find(new RegExp(`(?:search\\s*end|end\\s*date|to|through)\\s*[:\\-]?\\s*${dateRe.source}`, "i"));
+                  if(start) out.searchStart = toIso(start) || start;
+                  if(end) out.searchEnd = toIso(end) || end;
+                  const hailCount = find(/(\d+)\s*hail\s*(?:reports?|events?)/i);
+                  if(hailCount) out.hailReportCount = hailCount;
+                  const windCount = find(/(\d+)\s*(?:thunderstorm\s*)?wind\s*(?:reports?|events?)/i);
+                  if(windCount) out.windReportCount = windCount;
+                  const station = find(/(?:weather\s*station|asos\s*station|station)\s*[:\-]?\s*([A-Z][A-Za-z .'\-]+(?:Airport|Field|Station|Intl|International)?)/);
+                  if(station) out.weatherStation = station;
+                  const hailSize = find(/hail\s*size\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:in|inches|")/i)
+                    || find(/(\d+(?:\.\d+)?)\s*(?:in|inches|")\s*hail/i);
+                  if(hailSize) out.nearestHailSize = hailSize;
+                  const hailDist = find(/hail[^.]{0,40}?(\d+(?:\.\d+)?)\s*(?:mi|miles?)/i);
+                  if(hailDist) out.nearestHailDistance = hailDist;
+                  const hailDir = find(/hail[^.]{0,40}?\b(N|S|E|W|NE|NW|SE|SW|NNE|NNW|SSE|SSW|ENE|ESE|WNW|WSW)\b/);
+                  if(hailDir) out.nearestHailDirection = hailDir;
+                  const hailDate = find(new RegExp(`hail[^.]{0,80}?${dateRe.source}`, "i"));
+                  if(hailDate) out.nearestHailDate = toIso(hailDate) || hailDate;
+                  const windSpeed = find(/(?:wind|gust|peak\s*gust)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:mph|kt|knots)/i);
+                  if(windSpeed) out.nearestWindSpeed = windSpeed;
+                  const windDist = find(/(?:wind|gust)[^.]{0,40}?(\d+(?:\.\d+)?)\s*(?:mi|miles?)/i);
+                  if(windDist) out.nearestWindDistance = windDist;
+                  const windDir = find(/(?:wind|gust)[^.]{0,40}?\b(N|S|E|W|NE|NW|SE|SW|NNE|NNW|SSE|SSW|ENE|ESE|WNW|WSW)\b/);
+                  if(windDir) out.nearestWindDirection = windDir;
+                  const windDate = find(new RegExp(`(?:wind|gust)[^.]{0,80}?${dateRe.source}`, "i"));
+                  if(windDate) out.nearestWindDate = toIso(windDate) || windDate;
+                  const stormName = find(/(?:Hurricane|Tropical\s*Storm|Storm)\s+([A-Z][a-z]+)/);
+                  if(stormName) out.stormName = stormName;
+                  const peakGust = find(/peak\s*gust\s*[:\-]?\s*(\d+(?:\.\d+)?\s*(?:mph|kt|knots))/i);
+                  if(peakGust) out.asosPeakGust = peakGust;
+                  const sustained = find(/(?:maximum\s*)?sustained\s*wind\s*[:\-]?\s*(\d+(?:\.\d+)?\s*(?:mph|kt|knots))/i);
+                  if(sustained) out.asosSustainedWind = sustained;
+                  const rainfall = find(/rainfall\s*[:\-]?\s*(\d+(?:\.\d+)?\s*(?:in|inches|"))/i);
+                  if(rainfall) out.asosRainfall = rainfall;
+                  return out;
+                };
+                const handlePdfUpload = async (file: File | null) => {
+                  if(!file) return;
+                  setWeatherPdfStatus("parsing");
+                  setWeatherPdfError("");
+                  try {
+                    const pdfjsLib = await loadPdfJs();
+                    if(!pdfjsLib?.getDocument) throw new Error("PDF.js is not available.");
+                    const buffer = await file.arrayBuffer();
+                    const doc = await pdfjsLib.getDocument({ data: buffer }).promise;
+                    let fullText = "";
+                    for(let p = 1; p <= doc.numPages; p++){
+                      const page = await doc.getPage(p);
+                      const content = await page.getTextContent();
+                      fullText += content.items.map((it: any) => it.str).join(" ") + "\n";
+                    }
+                    if(doc?.cleanup) doc.cleanup();
+                    if(doc?.destroy) doc.destroy();
+                    const extracted = extractFromText(fullText);
+                    const patch: Record<string, string> = {
+                      pdfName: file.name,
+                      pdfText: fullText.slice(0, 20000),
+                      ...extracted,
+                    };
+                    setWeatherFields(patch);
+                    setWeatherPdfStatus("done");
+                  } catch (err: any) {
+                    console.warn("Weather PDF parse failed", err);
+                    setWeatherPdfError(err?.message || "Failed to read PDF.");
+                    setWeatherPdfStatus("error");
+                  }
+                };
+                const clearPdf = () => {
+                  setWeatherFields({
+                    pdfName: "", pdfText: "",
+                    searchRadius: "", searchStart: "", searchEnd: "",
+                    hailReportCount: "", windReportCount: "", weatherStation: "",
+                    nearestHailSize: "", nearestHailDate: "", nearestHailDistance: "", nearestHailDirection: "",
+                    nearestWindSpeed: "", nearestWindDate: "", nearestWindDistance: "", nearestWindDirection: "",
+                    stormName: "", asosStation: "", asosPeakGust: "", asosSustainedWind: "", asosRainfall: "",
+                  });
+                  setWeatherPdfStatus("idle");
+                  setWeatherPdfError("");
+                };
+                const extractedRows: Array<[string, string]> = [
+                  ["Search radius (mi)", w.searchRadius || ""],
+                  ["Search start", w.searchStart || ""],
+                  ["Search end", w.searchEnd || ""],
+                  ["Hail reports", w.hailReportCount || ""],
+                  ["Wind reports", w.windReportCount || ""],
+                  ["Weather / ASOS station", w.weatherStation || w.asosStation || ""],
+                  ["Nearest hail size", w.nearestHailSize || ""],
+                  ["Nearest hail date", w.nearestHailDate || ""],
+                  ["Nearest hail distance / dir", [w.nearestHailDistance, w.nearestHailDirection].filter(Boolean).join(" / ")],
+                  ["Nearest wind speed", w.nearestWindSpeed || ""],
+                  ["Nearest wind date", w.nearestWindDate || ""],
+                  ["Nearest wind distance / dir", [w.nearestWindDistance, w.nearestWindDirection].filter(Boolean).join(" / ")],
+                  ["Storm name", w.stormName || ""],
+                  ["Peak gust", w.asosPeakGust || ""],
+                  ["Sustained wind", w.asosSustainedWind || ""],
+                  ["Rainfall", w.asosRainfall || ""],
+                ].filter(([, v]) => has(v));
                 return (
                 <>
                   {renderReportBubble({
                     tone: "weather",
-                    title: "Weather Data",
-                    subtitle: "NCEI Storm Events / SPC search results for the property. Feeds the Weather Data paragraph in the final report.",
+                    title: "Weather Report Upload",
+                    subtitle: "Upload an NCEI Storm Events / SPC / NWS PDF. TitanRoof reads the text and fills in the weather data used by the report.",
                     status: weatherStatus,
-                    sectionKey: "weather.search",
+                    sectionKey: "weather.upload",
                     children: (
                       <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Search Radius (miles)</div>
-                            <input className="inp" value={w.searchRadius || ""} onChange={(e)=>setWeather("searchRadius", e.target.value)} placeholder="e.g., 5" />
-                          </div>
-                          <div>
-                            <div className="lbl">Search Start Date</div>
-                            <input className="inp" type="date" value={w.searchStart || ""} onChange={(e)=>setWeather("searchStart", e.target.value)} />
-                          </div>
-                          <div>
-                            <div className="lbl">Search End Date</div>
-                            <input className="inp" type="date" value={w.searchEnd || ""} onChange={(e)=>setWeather("searchEnd", e.target.value)} />
-                          </div>
-                          <div>
-                            <div className="lbl">Hail Reports Found</div>
-                            <input className="inp" value={w.hailReportCount || ""} onChange={(e)=>setWeather("hailReportCount", e.target.value)} placeholder="# of hail reports" />
-                          </div>
-                          <div>
-                            <div className="lbl">Thunderstorm Wind Reports Found</div>
-                            <input className="inp" value={w.windReportCount || ""} onChange={(e)=>setWeather("windReportCount", e.target.value)} placeholder="# of wind reports" />
-                          </div>
-                          <div>
-                            <div className="lbl">Weather Station (LCD)</div>
-                            <input className="inp" value={w.weatherStation || ""} onChange={(e)=>setWeather("weatherStation", e.target.value)} placeholder="Nearest NWS station" />
-                          </div>
+                        <div style={{display:"flex", flexWrap:"wrap", alignItems:"center", gap:12}}>
+                          <label className="btn btnPrimary" style={{cursor:"pointer"}}>
+                            {has(w.pdfName) ? "Replace PDF" : "Upload PDF"}
+                            <input
+                              type="file"
+                              accept="application/pdf,.pdf,.PDF"
+                              style={{display:"none"}}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                handlePdfUpload(file);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                          {has(w.pdfName) && (
+                            <>
+                              <span className="tiny" style={{color:"#475569"}}>{w.pdfName}</span>
+                              <button type="button" className="btn btnGhostDanger" onClick={clearPdf}>Remove</button>
+                            </>
+                          )}
                         </div>
-                        <div className="sectionHint">
-                          These fields come from the <b>NCEI Storm Events Database</b> and the <b>SPC Storm Reports</b>. Record them here while on-site so the Weather paragraph generates correctly.
-                        </div>
-                      </>
-                    ),
-                  })}
-                  {renderReportBubble({
-                    tone: "weather",
-                    title: "Nearest Hail Report",
-                    subtitle: "Closest hail event to the property within the search window.",
-                    status: (has(w.nearestHailSize) || has(w.nearestHailDate)) ? "ready" : "empty",
-                    sectionKey: "weather.hail",
-                    children: (
-                      <div className="reportGrid">
-                        <div>
-                          <div className="lbl">Distance (miles)</div>
-                          <input className="inp" value={w.nearestHailDistance || ""} onChange={(e)=>setWeather("nearestHailDistance", e.target.value)} placeholder="e.g., 1.2" />
-                        </div>
-                        <div>
-                          <div className="lbl">Direction from Property</div>
-                          <input className="inp" value={w.nearestHailDirection || ""} onChange={(e)=>setWeather("nearestHailDirection", e.target.value)} placeholder="e.g., NNW" />
-                        </div>
-                        <div>
-                          <div className="lbl">Hail Size (inches)</div>
-                          <input className="inp" value={w.nearestHailSize || ""} onChange={(e)=>setWeather("nearestHailSize", e.target.value)} placeholder="e.g., 1.25" />
-                        </div>
-                        <div>
-                          <div className="lbl">Report Date</div>
-                          <input className="inp" type="date" value={w.nearestHailDate || ""} onChange={(e)=>setWeather("nearestHailDate", e.target.value)} />
-                        </div>
-                      </div>
-                    ),
-                  })}
-                  {renderReportBubble({
-                    tone: "weather",
-                    title: "Nearest Thunderstorm Wind Report",
-                    subtitle: "Closest recorded wind gust event within the search window.",
-                    status: (has(w.nearestWindSpeed) || has(w.nearestWindDate)) ? "ready" : "empty",
-                    sectionKey: "weather.wind",
-                    children: (
-                      <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Distance (miles)</div>
-                            <input className="inp" value={w.nearestWindDistance || ""} onChange={(e)=>setWeather("nearestWindDistance", e.target.value)} placeholder="e.g., 2.4" />
+                        {weatherPdfStatus === "parsing" && (
+                          <div className="tiny" style={{marginTop:10, color:"#475569"}}>Reading PDF and extracting weather data…</div>
+                        )}
+                        {weatherPdfStatus === "error" && (
+                          <div className="tiny" style={{marginTop:10, color:"#a40000"}}>{weatherPdfError || "Failed to read PDF."}</div>
+                        )}
+                        {weatherPdfStatus === "done" && extractedRows.length === 0 && (
+                          <div className="tiny" style={{marginTop:10, color:"#a64a00"}}>
+                            PDF read, but no recognizable weather fields were found. The report will still reference the uploaded document.
                           </div>
-                          <div>
-                            <div className="lbl">Direction from Property</div>
-                            <input className="inp" value={w.nearestWindDirection || ""} onChange={(e)=>setWeather("nearestWindDirection", e.target.value)} placeholder="e.g., E" />
+                        )}
+                        {extractedRows.length > 0 && (
+                          <div style={{marginTop:14}}>
+                            <div className="lbl">Extracted from PDF</div>
+                            <div style={{display:"grid", gridTemplateColumns:"max-content 1fr", gap:"4px 14px", fontSize:13, marginTop:6}}>
+                              {extractedRows.map(([k, v]) => (
+                                <React.Fragment key={k}>
+                                  <div style={{color:"#475569"}}>{k}</div>
+                                  <div><strong>{v}</strong></div>
+                                </React.Fragment>
+                              ))}
+                            </div>
                           </div>
-                          <div>
-                            <div className="lbl">Wind Speed (mph / kt)</div>
-                            <input className="inp" value={w.nearestWindSpeed || ""} onChange={(e)=>setWeather("nearestWindSpeed", e.target.value)} placeholder="e.g., 62 mph" />
-                          </div>
-                          <div>
-                            <div className="lbl">Report Date</div>
-                            <input className="inp" type="date" value={w.nearestWindDate || ""} onChange={(e)=>setWeather("nearestWindDate", e.target.value)} />
-                          </div>
-                        </div>
-                        <div style={{marginTop:12}}>
-                          <div className="lbl">Additional Weather Notes</div>
-                          <textarea
-                            className="inp"
-                            rows={2}
-                            value={w.notes || ""}
-                            onChange={(e)=>setWeather("notes", e.target.value)}
-                            placeholder="Extra context — pattern of events, adjacent LCD station notes, radar imagery interpretation, etc."
-                          />
-                        </div>
-                      </>
-                    ),
-                  })}
-                  {renderReportBubble({
-                    tone: "weather",
-                    title: "Tropical / Named Storm (optional)",
-                    subtitle: "Used when the loss is from a named tropical system. Populating storm name routes the Weather paragraph to the ASOS / NWS landfall format.",
-                    status: has(w.stormName) ? "ready" : "empty",
-                    sectionKey: "weather.tropical",
-                    children: (
-                      <>
-                        <div className="reportGrid">
-                          <div>
-                            <div className="lbl">Storm Name</div>
-                            <input className="inp" value={w.stormName || ""} onChange={(e)=>setWeather("stormName", e.target.value)} placeholder="e.g., Beryl" />
-                          </div>
-                          <div>
-                            <div className="lbl">Classification</div>
-                            <select className="inp" value={w.stormClassification || ""} onChange={(e)=>setWeather("stormClassification", e.target.value)}>
-                              <option value="">Select</option>
-                              <option value="tropical storm">Tropical storm</option>
-                              <option value="hurricane">Hurricane</option>
-                              <option value="derecho">Derecho</option>
-                            </select>
-                          </div>
-                          <div>
-                            <div className="lbl">Landfall Location</div>
-                            <input className="inp" value={w.landfallLocation || ""} onChange={(e)=>setWeather("landfallLocation", e.target.value)} placeholder="e.g., Matagorda, Texas" />
-                          </div>
-                          <div>
-                            <div className="lbl">Landfall Distance from Property</div>
-                            <input className="inp" value={w.landfallDistance || ""} onChange={(e)=>setWeather("landfallDistance", e.target.value)} placeholder="e.g., 90 miles southwest" />
-                          </div>
-                        </div>
-                        <div className="reportGrid" style={{marginTop:12}}>
-                          <div>
-                            <div className="lbl">ASOS Station</div>
-                            <input className="inp" value={w.asosStation || ""} onChange={(e)=>setWeather("asosStation", e.target.value)} placeholder="e.g., Bush Intercontinental Airport" />
-                          </div>
-                          <div>
-                            <div className="lbl">ASOS Distance</div>
-                            <input className="inp" value={w.asosDistance || ""} onChange={(e)=>setWeather("asosDistance", e.target.value)} placeholder="e.g., 10 miles" />
-                          </div>
-                          <div>
-                            <div className="lbl">ASOS Direction</div>
-                            <input className="inp" value={w.asosDirection || ""} onChange={(e)=>setWeather("asosDirection", e.target.value)} placeholder="e.g., northeast" />
-                          </div>
-                          <div>
-                            <div className="lbl">Peak Gust</div>
-                            <input className="inp" value={w.asosPeakGust || ""} onChange={(e)=>setWeather("asosPeakGust", e.target.value)} placeholder="e.g., 83 mph" />
-                          </div>
-                          <div>
-                            <div className="lbl">Maximum Sustained Wind</div>
-                            <input className="inp" value={w.asosSustainedWind || ""} onChange={(e)=>setWeather("asosSustainedWind", e.target.value)} placeholder="e.g., 62 mph" />
-                          </div>
-                          <div>
-                            <div className="lbl">Wind Direction</div>
-                            <input className="inp" value={w.asosWindDirection || ""} onChange={(e)=>setWeather("asosWindDirection", e.target.value)} placeholder="e.g., southeasterly (130 degrees)" />
-                          </div>
-                          <div>
-                            <div className="lbl">Rainfall</div>
-                            <input className="inp" value={w.asosRainfall || ""} onChange={(e)=>setWeather("asosRainfall", e.target.value)} placeholder="e.g., 4.72 inches" />
-                          </div>
+                        )}
+                        <div className="sectionHint" style={{marginTop:12}}>
+                          Upload a PDF from the NCEI Storm Events Database, SPC Storm Reports, or NWS LCD summary. TitanRoof extracts dates, distances, hail size, wind speed, and storm name automatically.
                         </div>
                       </>
                     ),
@@ -12809,77 +12693,6 @@ const loadPdfJs = () => {
                       ),
                     });
                   })()}
-                  {renderReportBubble({
-                    tone: "inspection",
-                    title: "Inspection Narrative",
-                    subtitle: "Paragraphs below feed the Haag-style narrative output. Toggle sections off to exclude them from the final report.",
-                    status: inspectionStatus,
-                    sectionKey: "inspection.narrative",
-                    children: (
-                      <div className="inspectionParagraphList">
-                        {inspectionGeneratedSections.map(group => (
-                          <details className="inspectionParagraphCard" key={group.key} open>
-                            <summary>
-                              <span>{group.label}</span>
-                            </summary>
-                            <div className="inspectionParagraphList" style={{marginTop:10}}>
-                              {group.sections.map(section => {
-                                const paragraphSettings = reportData.inspection.paragraphs?.[section.key] || { include: true, text: "" };
-                                return (
-                                  <details className="inspectionParagraphCard" key={section.key}>
-                                    <summary>
-                                      <span>{section.title}</span>
-                                      <label className="inspectionIncludeToggle" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                          type="checkbox"
-                                          checked={paragraphSettings.include ?? true}
-                                          onChange={(e) => updateInspectionParagraph(section.key, "include", e.target.checked)}
-                                        />
-                                        Include
-                                      </label>
-                                    </summary>
-                                    <div className="inspectionNarrativeText">{section.text}</div>
-                                    {section.key === "roofGeneral" && (
-                                      <div className="inspectionInlineControls">
-                                        <div className="lbl">Roof General Condition</div>
-                                        <div className="radioGrid compact">
-                                          {["good", "fair", "poor"].map(condition => (
-                                            <div
-                                              key={condition}
-                                              className={"radio " + ((reportData.inspection.roofCondition || "fair") === condition ? "active" : "")}
-                                              onClick={() => updateReportSection("inspection", "roofCondition", condition)}
-                                            >
-                                              {condition.charAt(0).toUpperCase() + condition.slice(1)}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {section.key === "exteriorWind" && (
-                                      <div className="inspectionInlineControls">
-                                        <div className="lbl">Exterior Components Inspected</div>
-                                        <div className="chipList compact">
-                                          {INSPECTION_COMPONENTS.map(component => (
-                                            <div
-                                              key={component.key}
-                                              className={"chip " + (reportData.inspection.components?.[component.key]?.none ? "active" : "")}
-                                              onClick={() => updateInspection(component.key, "none", !(reportData.inspection.components?.[component.key]?.none))}
-                                            >
-                                              {component.label}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </details>
-                                );
-                              })}
-                            </div>
-                          </details>
-                        ))}
-                      </div>
-                    ),
-                  })}
                 </>
                 );
               })()}
