@@ -7,7 +7,12 @@
 export type DescriptionInputs = {
   description: Record<string, any>;
   project: Record<string, any>;
-  aptMarkers?: Array<{ type: string; subtype?: string }>;
+  // aptMarkers carry an optional `location` so the appurtenance
+  // sentence can append a "positioned along the ..." qualifier when
+  // the engineer captured it on the diagram. The "otherPrefix" flag
+  // switches the sentence opener to "Other roof appurtenances..." for
+  // reports that already mentioned a ridge vent earlier.
+  aptMarkers?: Array<{ type: string; subtype?: string; location?: string }>;
 };
 
 const trim = (value: any): string => (value == null ? "" : String(value).trim());
@@ -79,6 +84,24 @@ const normalizeOrientation = (raw: string): string => {
   return v;
 };
 
+// Master plan §2.2.2: cardinal directions render directly ("north"),
+// intercardinal / approximate directions get an "approximately" prefix
+// ("approximately southeast", "approximately south").
+const CARDINAL_WORDS = new Set(["north", "south", "east", "west"]);
+const CARDINAL_LETTER_TO_WORD: Record<string, string> = {
+  n: "north", s: "south", e: "east", w: "west",
+  ne: "northeast", nw: "northwest", se: "southeast", sw: "southwest",
+  nne: "north-northeast", ene: "east-northeast", ese: "east-southeast", sse: "south-southeast",
+  ssw: "south-southwest", wsw: "west-southwest", wnw: "west-northwest", nnw: "north-northwest"
+};
+const formatFacingDirection = (raw: string): string => {
+  const cleaned = trim(raw).toLowerCase().replace(/^(faced|facing)\s+/, "").replace(/\.$/, "").trim();
+  if (!cleaned) return "";
+  const mapped = CARDINAL_LETTER_TO_WORD[cleaned] || cleaned;
+  if (CARDINAL_WORDS.has(mapped)) return mapped;
+  return `approximately ${mapped}`;
+};
+
 // Roof area value is rendered as "{number} square feet". Strip any
 // suffix the user typed (e.g. "3,200 SF"), then re-comma-format
 // numerics. Non-numeric input passes through.
@@ -94,26 +117,33 @@ const formatRoofArea = (raw: string): string => {
   return stripped;
 };
 
-// "blend" -> "a blend of colored granules"
-// "gray"  -> "gray-colored granules"
-// "gray and tan" -> "gray- and tan-colored granules"
-// "gray, brown, and tan" or "gray brown and tan" ->
-//   "gray-, brown-, and tan-colored granules"
+// Master plan §2.3.4 granule phrase variants:
+//   "blend"             -> "a blend of colored granules"
+//   "blend of X and Y"  -> "a blend of X- and Y-colored granules"
+//   "gray"              -> "gray-colored granules"
+//   "gray and tan"      -> "gray- and tan-colored granules"
+//   "gray, brown, tan"  -> "gray-, brown-, and tan-colored granules"
 const formatGranulePhrase = (raw: string): string => {
   const value = trim(raw);
   if (!value) return "colored granules";
   if (/^blend$/i.test(value)) return "a blend of colored granules";
-  const normalized = value
+  // Detect explicit "blend of X and Y" prefix so we can preserve it.
+  const blendMatch = value.match(/^blend\s+of\s+(.+)$/i);
+  const inner = blendMatch ? blendMatch[1] : value;
+  const normalized = inner
     .replace(/\s*,?\s*and\s+/gi, ",")
     .replace(/[\s,]+/g, ",");
   const tokens = normalized.split(",").map(t => t.trim()).filter(Boolean);
   if (tokens.length === 0) return "colored granules";
   const lower = tokens.map(t => t.toLowerCase());
-  if (lower.length === 1) return `${lower[0]}-colored granules`;
-  if (lower.length === 2) return `${lower[0]}- and ${lower[1]}-colored granules`;
-  const front = lower.slice(0, -1).map(t => `${t}-`).join(", ");
-  const last = lower[lower.length - 1];
-  return `${front}, and ${last}-colored granules`;
+  const buildList = () => {
+    if (lower.length === 1) return `${lower[0]}-colored granules`;
+    if (lower.length === 2) return `${lower[0]}- and ${lower[1]}-colored granules`;
+    const front = lower.slice(0, -1).map(t => `${t}-`).join(", ");
+    const last = lower[lower.length - 1];
+    return `${front}, and ${last}-colored granules`;
+  };
+  return blendMatch ? `a blend of ${buildList()}` : buildList();
 };
 
 // Roof appurtenances: keep acronyms uppercase, lowercase everything
@@ -157,21 +187,35 @@ const APT_TO_PHRASE: Record<string, string> = {
   SAT: "a satellite dish",
 };
 
+// Master plan §2.3.7: when an APT marker carries a `location`, append
+// "positioned along the ..." after the phrase. When the same code
+// appears multiple times with different locations we only use the
+// first location captured (keeps the sentence concise).
 const buildAppurtenancesFromDiagram = (
-  aptMarkers: Array<{ type: string; subtype?: string }>
+  aptMarkers: Array<{ type: string; subtype?: string; location?: string }>,
+  options: { otherPrefix?: boolean } = {}
 ): string => {
   if (!aptMarkers?.length) return "";
-  const seen = new Set<string>();
-  const phrases: string[] = [];
+  const seen = new Map<string, string>();
+  const order: string[] = [];
   aptMarkers.forEach(marker => {
     const code = (marker.type || "").toUpperCase();
-    if (!seen.has(code) && APT_TO_PHRASE[code]) {
-      seen.add(code);
-      phrases.push(APT_TO_PHRASE[code]);
+    if (!APT_TO_PHRASE[code]) return;
+    if (!seen.has(code)) {
+      seen.set(code, trim(marker.location));
+      order.push(code);
+    } else if (!seen.get(code) && trim(marker.location)) {
+      seen.set(code, trim(marker.location));
     }
   });
-  if (!phrases.length) return "";
-  return `Roof appurtenances included ${oxfordJoin(phrases)}.`;
+  if (!order.length) return "";
+  const phrases = order.map(code => {
+    const loc = seen.get(code) || "";
+    const base = APT_TO_PHRASE[code];
+    return loc ? `${base} positioned along the ${loc.toLowerCase()}` : base;
+  });
+  const prefix = options.otherPrefix ? "Other roof appurtenances" : "Roof appurtenances";
+  return `${prefix} included ${oxfordJoin(phrases)}.`;
 };
 
 const buildAerialFigure = (d: any): string => {
@@ -186,32 +230,74 @@ const buildAerialFigure = (d: any): string => {
 
 // --- Paragraph 1 sentences ---------------------------------------------
 
+// Master plan §2.2.1 stories mapping. Numeric or word inputs map to
+// the canonical phrasing; 1.5 expands to the half-second-story clause.
+const formatStoriesPhrase = (raw: string): { storyClause: string; halfStorySuffix: string } => {
+  const v = trim(raw).toLowerCase();
+  if (!v) return { storyClause: "", halfStorySuffix: "" };
+  if (v === "1.5" || v === "one-and-a-half" || v === "one and a half") {
+    return { storyClause: "one-story", halfStorySuffix: " with a small second-story area" };
+  }
+  const wordMap: Record<string, string> = { "1": "one", "2": "two", "3": "three", "4": "four" };
+  const word = wordMap[v] || v;
+  return { storyClause: `${word}-story`, halfStorySuffix: "" };
+};
+
 const buildOpener = (d: any, p: any): string => {
   const stories = trim(d.stories);
   const framing = normalizeFraming(d.framing);
   const foundation = normalizeFoundation(d.foundation);
   if (!stories && !framing && !foundation) return "";
 
+  // Master plan special variant: elevated structure overrides the
+  // standard opener entirely.
+  if (d.elevated === true || trim(d.elevated) === "true") {
+    return "The inspected structure was a two-story, wood-framed residence with the first level elevated a few feet above the ground.";
+  }
+
+  // Master plan combined opener: when the garage is "connected" by
+  // breezeway and the facing direction is known, merge the structure
+  // opener and the garage clause into a single sentence per §2.2.1.
+  const attachmentRaw = trim(d.garageAttachment).toLowerCase();
+  const garagePresent = trim(d.garagePresent) === "Yes";
+  const orientation = formatFacingDirection(p.orientation);
+  if (garagePresent && attachmentRaw === "connected" && orientation) {
+    const { storyClause } = formatStoriesPhrase(stories);
+    const elev = (trim(d.garageElevation).toLowerCase() || "rear").replace(/\s*corner\s*$/, "").trim();
+    const storyBit = storyClause ? `${storyClause}, ` : "";
+    return `The inspected house was a ${storyBit}wood-framed, ${orientation}-facing dwelling with a garage connected at the ${elev} corner by a covered breezeway.`;
+  }
+
+  const ownerLastName = trim((d as any).ownerLastName || (p as any).ownerLastName);
   const projectName = trim(p.projectName);
-  const subject = projectName
-    ? `The ${projectName} residence`
-    : "The inspected residence";
+  const subject = ownerLastName
+    ? `The ${ownerLastName} residence`
+    : projectName
+      ? `The ${projectName} residence`
+      : "The inspected residence";
+
+  const { storyClause, halfStorySuffix } = formatStoriesPhrase(stories);
 
   const descriptorParts: string[] = [];
-  if (stories) descriptorParts.push(`${stories.toLowerCase()}-story`);
+  if (storyClause) descriptorParts.push(storyClause);
   if (framing) descriptorParts.push(framing);
   const descriptor = descriptorParts.length
-    ? `${descriptorParts.join(", ")} structure`
-    : "structure";
+    ? `${descriptorParts.join(", ")} structure${halfStorySuffix}`
+    : `structure${halfStorySuffix}`;
 
   if (foundation) {
+    // Master plan §2.2.1 foundation suffixes: basement uses "with a"
+    // rather than "erected on a".
+    if (/basement/i.test(foundation)) {
+      return `${subject} was a ${descriptor} with a ${foundation} foundation.`;
+    }
     return `${subject} was a ${descriptor} erected on a ${foundation} foundation.`;
   }
   return `${subject} was a ${descriptor}.`;
 };
 
 const buildOrientationAndGarage = (d: any, p: any): string => {
-  const orientation = normalizeOrientation(p.orientation);
+  const orientation = formatFacingDirection(p.orientation);
   const garagePresent = trim(d.garagePresent) === "Yes";
   if (!orientation && !garagePresent) return "";
   if (!garagePresent) {
@@ -230,11 +316,26 @@ const buildOrientationAndGarage = (d: any, p: any): string => {
     : attachmentRaw === "connected" ? "connected"
     : "attached";
   const orientationPrefix = orientation ? `The front faced ${orientation}, and ` : "";
+  // Master plan §2.2.2: "connected" garages render a breezeway sentence.
   if (attachment === "connected") {
-    return `${orientationPrefix}a ${bayPhrase}garage was connected to the ${elevation} of the house.`;
+    return `${orientationPrefix}a ${bayPhrase}garage was connected to the ${elevation} corner of the house by a covered breezeway.`;
   }
+  // Master plan §2.2.2: detached garages are positioned on the property
+  // (not "at the front").
   if (attachment === "detached") {
-    return `${orientationPrefix}a ${bayPhrase}garage was detached at the ${elevation}.`;
+    return orientation
+      ? `The front faced ${orientation}. A ${bayPhrase}detached garage was positioned at the ${elevation} of the property.`
+      : `A ${bayPhrase}detached garage was positioned at the ${elevation} of the property.`;
+  }
+  // Attached: master plan §2.2.2 has variants for front / corner / side.
+  // "Corner" wording uses "featured an attached garage at the X corner"
+  // when elevation is a compass corner like "northeast".
+  const isCorner = /corner/.test(elevation) || /(north|south)(east|west)/.test(elevation);
+  if (isCorner) {
+    const cornerElev = elevation.replace(/\s*corner\s*$/, "").trim();
+    return orientation
+      ? `The front faced ${orientation} and featured an attached garage at the ${cornerElev} corner.`
+      : `The house featured an attached garage at the ${cornerElev} corner.`;
   }
   return `${orientationPrefix}a ${bayPhrase}garage was attached at the ${elevation}.`;
 };
@@ -299,10 +400,70 @@ const buildWindows = (d: any): string => {
   return `${cap} windows were installed.`;
 };
 
+// Master plan §2.2.5 fence-coverage variants. Defaults to "surrounded
+// the backyard" when no coverage hint is supplied.
 const buildFences = (d: any): string => {
   const fence = trim(d.fenceType);
   if (!fence) return "";
-  return `${sentenceCase(fence.toLowerCase())} fences surrounded the backyard.`;
+  // Treat explicit "none" as no-fence (omit the sentence entirely).
+  if (/^none$/i.test(fence)) return "";
+  const cleaned = fence.toLowerCase();
+  const fenceLabel = cleaned === "chain link" || cleaned === "chain-link"
+    ? "Chain-link"
+    : sentenceCase(cleaned);
+  const coverage = trim(d.fenceCoverage).toLowerCase();
+  switch (coverage) {
+    case "most":
+      return `${fenceLabel} fences surrounded most of the backyard.`;
+    case "perimeter":
+      return `${fenceLabel} fences were installed along the backyard perimeter.`;
+    case "portions":
+      return `${fenceLabel} fences surrounded portions of the backyard.`;
+    case "full":
+    default:
+      return `${fenceLabel} fences surrounded the backyard.`;
+  }
+};
+
+// Master plan §2.2.7 vegetation sentence. Predefined enum values map
+// to canonical sentences; a free-text custom string is used verbatim.
+const VEGETATION_MAP: Record<string, string> = {
+  large_trees_front_rear: "Large trees grew near the front and rear of the house.",
+  large_trees_front: "Large trees grew near the front of the house.",
+  large_trees_rear: "Large trees grew near the rear of the house.",
+  large_trees_all: "Large trees grew near the house on all sides.",
+  moderate_landscaping: "Moderate landscaping surrounded the house.",
+  minimal: "Landscaping was minimal."
+};
+const buildVegetationSentence = (d: any): string => {
+  const v = trim(d.vegetation);
+  if (!v) return "";
+  if (VEGETATION_MAP[v]) return VEGETATION_MAP[v];
+  // Treat known compass-direction labels as no-op so legacy values
+  // ("N", "north") don't render a nonsensical sentence.
+  if (/^(n|s|e|w|north|south|east|west)$/i.test(v)) return "";
+  // Custom string: render verbatim, ensuring a terminating period.
+  return /[.!?]$/.test(v) ? v : `${v}.`;
+};
+
+// Master plan §2.2.8 slope sentence. Enum values map to canonical
+// sentences; custom strings pass through verbatim.
+const SLOPE_MAP: Record<string, string> = {
+  downward_east: "The lot sloped downward to the east.",
+  downward_west: "The lot sloped downward to the west.",
+  downward_north: "The lot sloped downward to the north.",
+  downward_south: "The lot sloped downward to the south.",
+  level: "The lot was generally level."
+};
+const buildSlopeSentence = (d: any): string => {
+  const v = trim(d.slope || d.terrain);
+  if (!v) return "";
+  const norm = v.toLowerCase().replace(/[\s-]+/g, "_");
+  if (SLOPE_MAP[norm]) return SLOPE_MAP[norm];
+  if (/^(flat|level)$/i.test(v)) return "The lot was generally level.";
+  if (/^sloped$/i.test(v)) return "The lot was sloped.";
+  if (/^mixed$/i.test(v)) return "Lot grade varied across the property.";
+  return /[.!?]$/.test(v) ? v : `${v}.`;
 };
 
 // --- Paragraph 2 sentences ---------------------------------------------
@@ -323,10 +484,13 @@ const buildSlope = (d: any): string => {
 const buildEagleView = (d: any): string => {
   const area = formatRoofArea(d.roofArea);
   if (!area) return "";
-  const includes = trim(d.roofAreaIncludes);
+  const rawIncludes = trim(d.roofAreaIncludes);
+  // Strip a leading "which included" so the generator owns the
+  // phrasing regardless of how the engineer typed the value.
+  const includes = rawIncludes.replace(/^which\s+included\s+/i, "");
   const attachment = trim(d.attachmentLetter);
   let sentence = `According to measurements provided in an EagleView Technologies report we reviewed, the total roof area was approximately ${area} square feet`;
-  if (includes) sentence += `, ${includes}`;
+  if (includes) sentence += `, which included the ${includes.replace(/^the\s+/i, "")}`;
   if (attachment) sentence += ` (refer to Attachment ${attachment})`;
   sentence += ".";
   return sentence;
@@ -352,6 +516,11 @@ const buildInstallation = (): string =>
   "Shingles were nailed to the roof decking, and factory-applied adhesive strips sealed shingles together in overlapping courses.";
 
 const buildRidge = (d: any): string => {
+  // Master plan §2.3.6: plastic vent strip variant skips exposure.
+  const ventType = trim(d.ridgeVentType).toLowerCase();
+  if (ventType === "plastic_strip" || ventType === "plastic strip") {
+    return "Ridges had plastic vent strips covered with individual shingle tabs.";
+  }
   const exposure = trim(d.ridgeExposure);
   if (!exposure) return "";
   const geometry = normalizeRoofGeometry(d.roofGeometry);
@@ -372,22 +541,120 @@ const buildAppurtenancesLegacy = (d: any): string => {
   return `Roof appurtenances included ${oxfordJoin(formatted)}.`;
 };
 
-// Notable features — one sentence per entry. Generates phrasing in
-// Paul Williams' voice: "A metal-clad storage building with a separate
-// gable roof was located in the backyard."
+// Master plan §2.2.6 — notable features render with material and
+// construction detail rather than the generic "A {type} was located in
+// the {location}". Features sharing the same location are combined
+// into a single sentence using ", and" conjunctions.
+type NotableFeature = {
+  id?: string;
+  type?: string;
+  location?: string;
+  description?: string;
+  material?: string;
+  claddingType?: string;
+  roofType?: string;
+  designNote?: string;
+  entryLocation?: string;
+  side?: string;
+};
+const featurePhrase = (f: NotableFeature): { lead: string; tail: string } => {
+  // Returns { lead, tail } so the combiner can emit one location-aware
+  // lead sentence followed by ", and ..." tails.
+  const type = trim(f.type).toLowerCase();
+  const location = trim(f.location).toLowerCase().replace(/^the\s+/, "") || "backyard";
+  const material = trim(f.material).toLowerCase();
+  const cladding = trim(f.claddingType).toLowerCase();
+  const roofType = trim(f.roofType).toLowerCase();
+  const designNote = trim(f.designNote);
+  const entryLocation = trim(f.entryLocation).toLowerCase();
+  const side = trim(f.side).toLowerCase();
+  const description = trim(f.description);
+
+  if (/shed|storage\s*building|utility\s*shed/.test(type)) {
+    if (roofType) {
+      return {
+        lead: `A small utility building in the ${location} had a ${roofType}-style roof surfaced with laminated shingles.`,
+        tail: `a small utility building in the ${location} had a ${roofType}-style roof surfaced with laminated shingles`
+      };
+    }
+    const materialPart = material ? `${material}-framed ` : "";
+    const claddingPart = cladding ? ` clad with ${cladding} wall and roof panels` : "";
+    return {
+      lead: `The ${location} had a ${materialPart}utility shed${claddingPart}.`,
+      tail: `a ${materialPart}utility shed${claddingPart}`
+    };
+  }
+  if (/gazebo/.test(type)) {
+    const materialPart = material ? `${material}-framed ` : "";
+    const note = designNote ? `, ${designNote}` : "";
+    return {
+      lead: `Also in the ${location}, there was a ${materialPart}gazebo${note}.`,
+      tail: `a ${materialPart}gazebo${note}`
+    };
+  }
+  if (/awning/.test(type)) {
+    const entry = entryLocation || location;
+    const materialPart = material ? `${material} ` : "";
+    return {
+      lead: `A ${materialPart}awning was installed by the ${entry} entry.`,
+      tail: `a ${materialPart}awning by the ${entry} entry`
+    };
+  }
+  if (/pergola/.test(type)) {
+    const materialPart = material ? `${material} ` : "";
+    return {
+      lead: `A ${materialPart}pergola was installed in the ${location}.`,
+      tail: `a ${materialPart}pergola in the ${location}`
+    };
+  }
+  if (/pool|swimming/.test(type)) {
+    return {
+      lead: `A swimming pool was located in the ${location}.`,
+      tail: `a swimming pool in the ${location}`
+    };
+  }
+  if (/patio/.test(type)) {
+    const materialPart = material ? `${material} ` : "";
+    const sidePart = side || location;
+    return {
+      lead: `A ${materialPart}patio extended from the ${sidePart} of the house.`,
+      tail: `a ${materialPart}patio extending from the ${sidePart}`
+    };
+  }
+  // Fallback to the legacy generic pattern, preserving the description
+  // adjective when one was captured.
+  const adjective = description ? `${description} ` : "";
+  const article = /^[aeiou]/i.test(adjective || type) ? "An" : "A";
+  const where = location ? ` in the ${location}` : "";
+  return {
+    lead: `${article} ${adjective}${type} was located${where}.`,
+    tail: `${adjective}${type}${where}`
+  };
+};
 const buildNotableFeatures = (d: any): string[] => {
-  const list = (d.notableFeatures || []) as Array<any>;
-  return list
-    .filter(f => trim(f?.type))
-    .map(f => {
-      const type = trim(f.type).toLowerCase();
-      const location = trim(f.location).toLowerCase();
-      const description = trim(f.description);
-      const adjective = description ? `${description} ` : "";
-      const article = /^[aeiou]/i.test(adjective || type) ? "An" : "A";
-      const where = location ? ` in the ${location.replace(/^the\s+/, "")}` : "";
-      return `${article} ${adjective}${type} was located${where}.`;
-    });
+  const list = ((d.notableFeatures || []) as NotableFeature[]).filter(f => trim(f?.type));
+  if (!list.length) return [];
+  // Group features by canonical location so same-location features
+  // combine via ", and ..." per the master plan combination rule.
+  const groups: Map<string, NotableFeature[]> = new Map();
+  list.forEach(f => {
+    const key = trim(f.location).toLowerCase().replace(/^the\s+/, "") || "_";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  });
+  const sentences: string[] = [];
+  groups.forEach(features => {
+    if (features.length === 1) {
+      sentences.push(featurePhrase(features[0]).lead);
+      return;
+    }
+    const lead = featurePhrase(features[0]).lead;
+    const tails = features.slice(1).map(f => featurePhrase(f).tail);
+    // Drop the trailing period from the lead, append ", and ..." tails.
+    const leadStripped = lead.replace(/\.$/, "");
+    sentences.push(`${leadStripped}, and ${tails.join(", and ")}.`);
+  });
+  return sentences;
 };
 
 // Additional coverings — emits one sentence per entry. Mirrors the
@@ -442,18 +709,33 @@ export function generateDescriptionParagraphs(
 
   const para1: string[] = [];
   const opener = buildOpener(d, p); if (opener) para1.push(opener);
-  const orient = buildOrientationAndGarage(d, p); if (orient) para1.push(orient);
+  // Master plan §2.2.1: when the opener already mentions a connected
+  // breezeway garage, the orientation+garage sentence is suppressed so
+  // the combined opener stands alone.
+  const orientationCoveredByOpener =
+    trim(d.garagePresent) === "Yes" &&
+    trim(d.garageAttachment).toLowerCase() === "connected" &&
+    !!formatFacingDirection(p.orientation);
+  if (!orientationCoveredByOpener) {
+    const orient = buildOrientationAndGarage(d, p); if (orient) para1.push(orient);
+  }
   const roofOpen = buildRoofOpener(d); if (roofOpen) para1.push(roofOpen);
   const cladding = buildCladding(d); if (cladding) para1.push(cladding);
   const windows = buildWindows(d); if (windows) para1.push(windows);
   const fences = buildFences(d); if (fences) para1.push(fences);
-  // Structured notable features take precedence; the legacy
-  // single-string field is retained as a tail fallback.
+  // Master plan §2.2.6 — material-aware notable features. Falls back
+  // to the legacy single-string field when no structured entries.
   const features = buildNotableFeatures(d);
   if (features.length) {
     features.forEach(s => para1.push(s));
   } else {
     const notable = trim(d.notableFeature); if (notable) para1.push(notable);
+  }
+  // Master plan §2.2.7 / §2.2.8 / §2.2.9.
+  const vegSentence = buildVegetationSentence(d); if (vegSentence) para1.push(vegSentence);
+  const slopeSentence = buildSlopeSentence(d); if (slopeSentence) para1.push(slopeSentence);
+  if (d.interiorCladding === true || trim((d as any).interiorCladding) === "true") {
+    para1.push("Interior walls and ceilings were clad with textured and painted gypsum panels.");
   }
 
   const para2: string[] = [];
@@ -474,7 +756,14 @@ export function generateDescriptionParagraphs(
   const ridge = buildRidge(d); if (ridge) para2.push(ridge);
   const additionalCoverings = buildAdditionalCoverings(d);
   additionalCoverings.forEach(s => para2.push(s));
-  const fromDiagram = buildAppurtenancesFromDiagram(aptMarkers);
+  // Master plan §2.3.7: switch to "Other roof appurtenances included..."
+  // when the ridge sentence already mentioned ridge vents (plastic
+  // strip variant) or when the inspected ridge venting itself is a
+  // marker subtype "RV" that we'd otherwise list twice.
+  const ridgeMentioned = /plastic vent strip/i.test(ridge) ||
+    aptMarkers.some(m => (m.type || "").toUpperCase() === "RV");
+  const otherPrefix = ridgeMentioned && aptMarkers.length > 1;
+  const fromDiagram = buildAppurtenancesFromDiagram(aptMarkers, { otherPrefix });
   const apps = fromDiagram || buildAppurtenancesLegacy(d);
   if (apps) para2.push(apps);
   const aerial = buildAerialFigure(d);

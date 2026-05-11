@@ -504,7 +504,14 @@ const loadPdfJs = () => {
           zip: "",
           inspectionDate: "",
           orientation: "",
-          parties: []
+          parties: [],
+          // Master plan additions: peril, additional scope items, and
+          // the property representative phrase used by the cover-letter
+          // procedures sentence.
+          perilType: "",            // "hail" | "wind" | "hailwind" | "tree" | "structural" | "other"
+          perilDescription: "",     // verbatim text when perilType === "other"
+          additionalScope: [],      // ["interior_leaks" | "repairability" | "foundation_shift"]
+          propertyRep: ""           // "homeowner" | "property representative" | "insured"
         },
         description: {
           // Structure
@@ -516,6 +523,11 @@ const loadPdfJs = () => {
           windowMaterial: "",
           windowScreens: "",
           fenceType: "",
+          // Master plan additions
+          fenceCoverage: "",       // "full" | "most" | "portions" | "perimeter"
+          vegetation: "",          // e.g., "large_trees_front_rear" or custom sentence
+          slope: "",               // e.g., "downward_east" / "level" or custom sentence
+          interiorCladding: false, // when true emits standard interior cladding sentence
           notableFeature: "",
           // Garage
           garagePresent: "",
@@ -533,6 +545,10 @@ const loadPdfJs = () => {
           additionalSlopes: [],
           guttersPresent: "",
           gutterScope: "",
+          // Master plan addition: enables the "plastic vent strip"
+          // ridge sentence variant when the inspected ridge venting is
+          // a continuous strip rather than discrete vents.
+          ridgeVentType: "",          // "" | "plastic_strip" | "standard"
           eagleView: "",
           roofArea: "",
           attachmentLetter: "",
@@ -639,7 +655,15 @@ const loadPdfJs = () => {
           narrative: "",
           description: "",
           background: "",
-          inspection: ""
+          inspection: "",
+          // Master plan additions: report style + engineer attribution
+          // drive the cover-letter opener and procedures sentence.
+          reportStyle: "",            // "litigation" | "standard"
+          engineerName: "",           // e.g., "Paul Reed Williams, P.E."
+          engineerShortName: "",      // e.g., "Mr. Williams"
+          engineerCredentials: "",    // e.g., "P.E."
+          assistantName: "",          // e.g., "Faran Jafri, EIT"
+          inspectionVerb: ""          // "conducted" (default) | "performed"
         },
         inspection: {
           performed: "",
@@ -680,7 +704,26 @@ const loadPdfJs = () => {
           granuleLossNotes: "",
           priorInspectionDamage: "",    // "yes" | "no"
           priorInspectionNotes: "",
-          maxSpatterSize: ""            // "1/8-inch" | "1/4-inch"
+          maxSpatterSize: "",           // "1/8-inch" | "1/4-inch"
+          // Master plan additions used by the 10-paragraph inspection
+          // narrative. Granule-loss severity, missing-shingle and
+          // prior-repair flags, and the soft-metal mechanical-damage
+          // toggle let the generator pick the right sentence variants.
+          granuleLoss: "none",          // "none" | "minor" | "moderate" | "severe" | "moderate_to_severe"
+          missingShingles: false,
+          missingShinglesCount: "",
+          missingShinglesDirection: "",
+          priorRepairs: false,
+          priorRepairsNotes: "",
+          mechanicalDamage: false,
+          // Detailed hail finding flags used by Paragraph 7. The
+          // existing spatterMarksObserved/Surfaces fields capture the
+          // "found" path; these add severity detail.
+          spatterSize: "",              // e.g., "3/4 inch"
+          dentsOnMetals: false,
+          shingleBruises: false,
+          shingleBruisesCount: "",
+          shingleBruisesDirection: ""
         },
         overrides: {
           coverLetter: "",
@@ -709,7 +752,8 @@ const loadPdfJs = () => {
           project: {
             ...defaults.project,
             ...(source.project || {}),
-            parties: normalizeParties(source.project?.parties)
+            parties: normalizeParties(source.project?.parties),
+            additionalScope: normalizeList(source.project?.additionalScope)
           },
           description: {
             ...defaults.description,
@@ -3280,16 +3324,24 @@ const loadPdfJs = () => {
           ];
         }, [pageItems, reportData.inspection, reportData.description, reportData.project.projectName, residenceName]);
 
-        // Continuous-prose Inspection generator (Paul Williams pattern).
-        // Produces 8–10 flowing paragraphs, no titled sub-headers,
-        // anchored on diagram markers and the focused inspection-form
-        // fields (interior rooms, attic, granule loss, prior inspection,
-        // max spatter size). Supersedes the titled-block output for the
-        // exported report; the legacy `inspectionGeneratedSections`
-        // memo is retained so the existing per-paragraph toggle UI on
-        // the Inspection tab continues to work without rewrite.
+        // Continuous-prose Inspection generator implementing the master
+        // plan's 10-paragraph Paul Williams structure.
+        //   1. Scope / procedures
+        //   2. Exterior hail (component-by-component)
+        //   3. Exterior wind (component-by-component)
+        //   4. Interior (conditional)
+        //   5. Roof general condition (4–6 sentences)
+        //   6. Bond / wind evaluation
+        //   7. Hail evaluation (with one-time spatter-mark definition)
+        //   8. Test square findings
+        //   9. Soft-metals / mechanical damage (conditional)
+        //  10. Conclusions transition
+        // Hail-only or wind-only perils trim the corresponding peril
+        // paragraphs per §7.3 edge cases.
         const inspectionContinuousProseParagraphs = useMemo(() => {
           const insp: any = reportData.inspection || {};
+          const desc: any = reportData.description || {};
+          const proj: any = reportData.project || {};
           const localJoinReadableList = (list: string[]) => {
             const xs = (list || []).filter(Boolean);
             if(!xs.length) return "";
@@ -3298,190 +3350,384 @@ const loadPdfJs = () => {
             return `${xs.slice(0, -1).join(", ")}, and ${xs[xs.length - 1]}`;
           };
           const localDirLabel = (dir = "") => ({ N: "north", S: "south", E: "east", W: "west" } as Record<string, string>)[dir] || String(dir || "").toLowerCase();
-          const localComponentLabel = (item: any) => {
-            if(item.type === "apt"){
-              return (APT_TYPES.find((entry: any) => entry.code === item.data?.type)?.label || "appurtenance").toLowerCase();
-            }
-            if(item.type === "ds") return "downspout";
-            if(item.type === "eapt"){
-              return (EAPT_TYPES.find((entry: any) => entry.code === item.data?.type)?.label || "exterior component").toLowerCase();
-            }
-            return "component";
-          };
+
+          // ---- Peril gating (§7.3 edge cases) ----
+          const perilType = (proj.perilType || "").toLowerCase();
+          const hailRelevant = !perilType || perilType === "hail" || perilType === "hailwind" || perilType === "storm" || perilType === "other";
+          const windRelevant = !perilType || perilType === "wind" || perilType === "hailwind" || perilType === "storm" || perilType === "other";
+
+          // ---- Diagram-derived counts ----
           const tsItems = pageItems.filter(item => item.type === "ts");
           const tsBruiseTotal = tsItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
           const windItems = pageItems.filter(item => item.type === "wind");
-          const creasedTotal = windItems.reduce((sum, w) => sum + (w.data?.creasedCount || 0), 0);
-          const tornTotal = windItems.reduce((sum, w) => sum + (w.data?.tornMissingCount || 0), 0);
-          const cardinalCovered = ["N","S","E","W"].filter(dir => tsItems.some(ts => ts.data?.dir === dir));
-          const tsSlopePhrase = cardinalCovered.length === 4
-            ? "the north-, south-, east-, and west-facing roof slopes"
-            : cardinalCovered.length
-              ? `the ${localJoinReadableList(cardinalCovered.map(localDirLabel))}-facing roof slope${cardinalCovered.length === 1 ? "" : "s"}`
-              : "accessible roof slopes";
+          const creasedByDir: Record<string, number> = { N: 0, S: 0, E: 0, W: 0 };
+          const tornByDir: Record<string, number> = { N: 0, S: 0, E: 0, W: 0 };
+          windItems.forEach(w => {
+            const dir = w.data?.dir || "N";
+            if(creasedByDir[dir] != null) creasedByDir[dir] += (w.data?.creasedCount || 0);
+            if(tornByDir[dir] != null) tornByDir[dir] += (w.data?.tornMissingCount || 0);
+          });
+          const creasedTotal = Object.values(creasedByDir).reduce((a, b) => a + b, 0);
+          const tornTotal = Object.values(tornByDir).reduce((a, b) => a + b, 0);
+
+          const obsInteriorMarkers = pageItems.filter(it => it.type === "obs" && it.data?.area === "int");
+          const interiorRooms = (insp.interiorRooms || []).filter((r: any) =>
+            (r?.room || "").trim() || (r?.conditions || "").trim()
+          );
+          const hasInteriorFindings = obsInteriorMarkers.length > 0 || interiorRooms.length > 0;
+
+          // ---- Number spelling for one through nine (§5.2.1) ----
+          const NUMBER_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine"];
+          const spellSmallNumber = (n: number): string => (n >= 0 && n < NUMBER_WORDS.length) ? NUMBER_WORDS[n] : String(n);
+
+          // Track whether the spatter-mark definition has been emitted
+          // so it never appears twice (§3.8 / §7.2).
+          const SPATTER_DEFINITION = "(A spatter mark is a spot where the surface is cleaned of grime or corrosion when impacted by a hailstone. The marks fade over time, and usually last two years or more depending on surface type, hail characteristics, and exposure.)";
+          let spatterDefinitionEmitted = false;
+          const consumeSpatterDefinition = (): string => {
+            if(spatterDefinitionEmitted) return "";
+            spatterDefinitionEmitted = true;
+            return ` ${SPATTER_DEFINITION}`;
+          };
 
           const paragraphs: string[] = [];
 
-          // Paragraph 1 — scope of inspection
+          // ===== Paragraph 1: scope & procedures =====
           {
-            const areas: string[] = [];
-            if(insp.interiorInspected === "yes") areas.push("interior");
-            if(insp.atticInspected === "yes") areas.push("attic");
-            areas.push("exterior");
-            areas.push("roof");
+            const includedScope: string[] = [];
+            const hasRoofScope = pageItems.some(it => ["ts","wind","apt","ds","obs"].includes(it.type));
+            const hasExteriorScope = pageItems.some(it => it.type === "eapt") || hasRoofScope;
+            if(hasInteriorFindings || insp.interiorInspected === "yes") includedScope.push("interior");
+            if(hasExteriorScope) includedScope.push("exterior");
+            if(hasRoofScope || !includedScope.length) includedScope.push("roof");
+            // Default to the full triad when nothing was captured yet
+            const scopeList = includedScope.length === 3
+              ? "interior, exterior, and roof"
+              : localJoinReadableList(includedScope);
             paragraphs.push(
-              `We inspected the ${localJoinReadableList(areas)}.  Our observations were documented with field notes and photographs.  Representative photographs are attached to this report.  (Refer to those photographs for details of our specific observations.)`
+              `We inspected the ${scopeList}. Our observations were documented with field notes and photographs. Representative photographs are attached to this report. (Refer to those photographs for details of our specific observations.)`
             );
           }
 
-          // Paragraph 2 — exterior hail observations
-          {
-            const spatter = insp.spatterMarksObserved;
-            const maxSize = (insp.maxSpatterSize || "").trim();
-            const surfaces = (insp.spatterMarksSurfaces || []).map((s: string) => s.toLowerCase());
-            if(spatter === "no"){
-              paragraphs.push(
-                "During ground-level exterior inspection, we did not find any spatter marks or hail-caused dents.  Window screens were intact.  Gutters and downspouts did not display hail-caused dents.  There was no evidence of hail impact on the garage doors."
-              );
-            } else if(spatter === "yes"){
-              const surfaceText = surfaces.length ? localJoinReadableList(surfaces) : "exterior soft-metal surfaces";
-              const sizePhrase = maxSize ? `up to ${maxSize} wide ` : "";
-              paragraphs.push(
-                `During ground-level exterior inspection, we found spatter marks ${sizePhrase}on ${surfaceText}.`
-              );
-            } else {
-              paragraphs.push(
-                "During ground-level exterior inspection, we examined exterior components and soft metals for spatter marks and hail-caused dents."
-              );
-            }
-          }
+          // ===== Component lookup helpers (§3.3 / §3.4) =====
+          const components = (insp.components || {}) as Record<string, any>;
+          const componentNoDamage = (key: string): boolean => {
+            const entry = components[key];
+            if(!entry) return false;
+            // "none" flag indicates the engineer marked the component as
+            // present but undamaged. Empty conditions array also means
+            // no damage captured.
+            return !!entry.none || (!entry.conditions?.length && !entry.notes);
+          };
+          const componentExists = (key: string): boolean => !!components[key];
 
-          // Paragraph 3 — exterior wind observations
-          {
-            const desc: any = reportData.description;
-            const fenceClause = (desc.fenceType || "").trim()
-              ? `  The ${desc.fenceType.trim().toLowerCase()} fences had not been shifted or broken by wind.`
-              : "";
-            paragraphs.push(
-              `The exterior masonry and trim did not display any scrapes or gouges caused by windborne debris impact.  Roof corners and edges were intact when viewed from grade.${fenceClause}`
-            );
-          }
-
-          // Paragraph 4 — interior observations (when applicable)
-          const rooms = (insp.interiorRooms || []).filter((r: any) => (r?.room || "").trim() || (r?.conditions || "").trim());
-          if(insp.interiorInspected === "yes" && rooms.length){
-            const sentences = rooms.map((r: any) => {
-              const room = (r.room || "interior area").trim();
-              const cond = (r.conditions || "stains").trim();
-              const loc = (r.location || "").trim();
-              const where = loc ? ` ${loc}` : "";
-              return `The ${room} ceiling had ${cond}${where}.`;
-            });
-            sentences.push("We located the stains on a diagram for use during roof and attic inspections.");
-            paragraphs.push(sentences.join("  "));
-          }
-
-          // Paragraph 5 — attic observations (when applicable)
-          if(insp.atticInspected === "yes" && (insp.atticFindings || "").trim()){
-            const decking: string[] = [];
-            if((insp.deckingType || "").trim()) decking.push(`The roof decking was ${insp.deckingType.trim().toLowerCase()}.`);
-            if((insp.deckingCondition || "").trim()) decking.push(insp.deckingCondition.trim());
-            const parts: string[] = [];
-            parts.push(`In the attic, we observed ${insp.atticFindings.trim()}`);
-            if(decking.length) parts.push(decking.join("  "));
-            paragraphs.push(parts.join("  "));
-          }
-
-          // Paragraph 6 — roof general condition + wind findings
-          {
-            const condition = (insp.roofCondition || "fair").toLowerCase();
+          // ===== Paragraph 2: exterior hail findings (when hail relevant) =====
+          if(hailRelevant){
             const sentences: string[] = [];
-            sentences.push(`Overall, the roof shingles were in ${condition} condition with respect to weathering.  Scuffs and surface marring commonly found on asphalt shingles were generally observed along ridges, hips, and easily accessible areas.`);
-            if(creasedTotal > 0 || tornTotal > 0){
-              const bits: string[] = [];
-              if(creasedTotal) bits.push(`${creasedTotal} creased`);
-              if(tornTotal) bits.push(`${tornTotal} torn or missing`);
-              const totalShingles = creasedTotal + tornTotal;
-              sentences.push(`We noted ${bits.join(" and ")} shingle${totalShingles === 1 ? "" : "s"} spread across the roof.  Affected shingles exhibited sharp fold lines and fractured reinforcement mats consistent with wind uplift.`);
-            }
-            if(insp.priorInspectionDamage === "yes" && (insp.priorInspectionNotes || "").trim()){
-              sentences.push(insp.priorInspectionNotes.trim());
-            }
-            paragraphs.push(sentences.join("  "));
-          }
-
-          // Paragraph 7 — test square findings
-          if(tsItems.length){
-            const sentences: string[] = [];
-            sentences.push(`We examined 100-square-foot test areas on ${tsSlopePhrase}.  Each shingle within the test areas was examined using visual and tactile methods for bruises (fractured reinforcements) and punctures characteristic of hailstone impact.`);
-            if(tsBruiseTotal > 0){
-              sentences.push(`Within the test areas, we noted ${tsBruiseTotal} bruise${tsBruiseTotal === 1 ? "" : "s"} characteristic of hailstone impact.`);
+            sentences.push("We inspected exterior building components for evidence of hail impact.");
+            // Spatter marks (always include first, defines the parenthetical)
+            const spatter = (insp.spatterMarksObserved || "").toLowerCase();
+            if(spatter === "yes"){
+              const surfaces = (insp.spatterMarksSurfaces || []).map((s: string) => s.toLowerCase());
+              const surfaceList = surfaces.length ? localJoinReadableList(surfaces) : "exterior soft-metal surfaces";
+              sentences.push(`We found spatter marks on ${surfaceList}.${consumeSpatterDefinition()}`);
             } else {
-              sentences.push("We did not find any hail-caused bruises or punctured shingles in our test areas.  We also inspected ridges, hips, rakes, and eaves and found no hail-caused bruises or punctures.");
+              sentences.push(`We did not find any spatter marks on any building or surrounding surfaces.${consumeSpatterDefinition()}`);
             }
-            paragraphs.push(sentences.join("  "));
+            // Window screens
+            if(componentExists("windowsScreens")){
+              sentences.push(componentNoDamage("windowsScreens")
+                ? "Window screens were not torn or dented by hail impact."
+                : "Window screens displayed dents consistent with hail impact.");
+            }
+            // Siding / cladding
+            const claddingPresent = (desc.exteriorFinishes || []).length > 0;
+            if(claddingPresent){
+              sentences.push("Siding was intact and did not display scrapes, gouges, or punctures from windborne debris impact.");
+            }
+            // Roof edges and gutters
+            const guttersPresent = (desc.guttersPresent || "").toLowerCase() === "yes";
+            if(guttersPresent || componentExists("guttersDownspouts")){
+              sentences.push(componentNoDamage("guttersDownspouts")
+                ? "Roof corners and edges were intact when viewed from ground level, and gutters were intact."
+                : "Roof corners and edges were intact when viewed from ground level, but gutters displayed dents.");
+              // Downspouts (DS markers or component entry)
+              const dsMarkers = pageItems.filter(it => it.type === "ds");
+              const dsHailEntries = dsMarkers.flatMap((m: any) => (m.data?.damageEntries || []).filter((e: any) => (e.mode || "").trim()));
+              sentences.push(dsHailEntries.length
+                ? "Downspouts displayed hail-caused dents."
+                : "We did not observe hail-caused dents on downspouts.");
+            }
+            // Fences
+            const fenceTypeRaw = (desc.fenceType || "").trim();
+            if(fenceTypeRaw && !/^none$/i.test(fenceTypeRaw)){
+              const fence = fenceTypeRaw.toLowerCase();
+              if(/iron/.test(fence)){
+                sentences.push(componentNoDamage("fence")
+                  ? "Iron fences did not have any hail-caused dents."
+                  : "Iron fences displayed hail-caused dents.");
+              } else {
+                sentences.push(componentNoDamage("fence")
+                  ? `${fence.charAt(0).toUpperCase()}${fence.slice(1)} fences did not have any hail-caused scuffs, and they had not been broken or displaced by wind.`
+                  : `${fence.charAt(0).toUpperCase()}${fence.slice(1)} fences displayed hail-caused scuffs.`);
+              }
+            }
+            // Garage door + light fixtures
+            const garagePresent = (desc.garagePresent || "").toLowerCase() === "yes";
+            if(garagePresent || componentExists("garageDoors")){
+              sentences.push(componentNoDamage("garageDoors")
+                ? "There was no evidence of hail impact on the garage door or the front light fixtures."
+                : "The garage door displayed dents from hail impact.");
+            }
+            paragraphs.push(sentences.join(" "));
           }
 
-          // Paragraph 8 — appurtenance hail examination
-          {
-            const aptItems = pageItems.filter(it => it.type === "apt" || it.type === "ds" || it.type === "eapt");
-            const aptHailEntries = aptItems.flatMap(item => (item.data?.damageEntries || [])
-              .filter((e: any) => (e.mode || "").trim())
-              .map((e: any) => ({ item, entry: e })));
-            const sentences: string[] = ["We examined roof appurtenances and soft metals, including vents, flue pipes, flashing, and other roof components, for evidence of hailstone impact."];
-            if(aptHailEntries.length){
-              const phrases = aptHailEntries.map(({ item, entry }: any) => {
-                const mode = entry.mode === "both" ? "spatter and dents" : `${entry.mode}s`;
-                const size = entry.size ? ` up to ${entry.size}\"` : "";
-                return `${mode}${size} on the ${localComponentLabel(item)}`;
+          // ===== Paragraph 3: exterior wind findings (when wind relevant) =====
+          if(windRelevant){
+            const sentences: string[] = [];
+            sentences.push("We inspected exterior building components for evidence of wind damage.");
+            const claddingPresent = (desc.exteriorFinishes || []).length > 0;
+            if(claddingPresent){
+              sentences.push("The exterior masonry and trim did not display any scrapes or gouges caused by windborne debris impact.");
+            }
+            sentences.push("Roof corners and edges were intact when viewed from grade.");
+            // Fences
+            const fenceTypeRaw = (desc.fenceType || "").trim();
+            if(fenceTypeRaw && !/^none$/i.test(fenceTypeRaw)){
+              const fence = fenceTypeRaw.toLowerCase();
+              if(/iron/.test(fence)){
+                sentences.push("Iron fences were not displaced by wind.");
+              } else {
+                sentences.push(`${fence.charAt(0).toUpperCase()}${fence.slice(1)} fences had not been shifted or broken by wind.`);
+              }
+            }
+            // Soffit panels
+            const soffit = components.otherExterior;
+            if(soffit && Array.isArray(soffit.conditions)){
+              const hasSoffitDamage = soffit.conditions.some((c: string) => /soffit/i.test(c));
+              if(hasSoffitDamage){
+                const loc = (soffit.directions || []).map(localDirLabel).filter(Boolean)[0] || "eave";
+                sentences.push(`Soffit panels were missing at the ${loc} eave.`);
+              }
+            }
+            // Wind markers on exterior scope
+            const exteriorWindMarkers = windItems.filter(w => w.data?.scope === "exterior");
+            if(exteriorWindMarkers.length){
+              const phrases = exteriorWindMarkers.map(w => {
+                const component = (w.data?.component || "component").toLowerCase();
+                const dir = localDirLabel(w.data?.dir);
+                return dir ? `${component} at the ${dir} elevation` : component;
               });
-              sentences.push(`We observed ${localJoinReadableList(phrases)}.`);
-            } else {
-              sentences.push("We found no tears, punctures, or fractures to the roof appurtenances inspected.");
+              sentences.push(`Wind had displaced ${localJoinReadableList(phrases)}.`);
             }
-            paragraphs.push(sentences.join("  "));
+            paragraphs.push(sentences.join(" "));
           }
 
-          // Paragraph 9 — granule loss interpretation
-          if(insp.granuleLossObserved === "yes"){
-            const note = (insp.granuleLossNotes || "").trim();
-            const sentences: string[] = ["Within our test areas and elsewhere, we observed areas of missing granules.  These areas varied in size and shape and exposed underlying asphalt or fiberglass mat reinforcement."];
-            if(note){
-              sentences.push(note);
-            } else {
-              sentences.push("Each area was inspected visually and tactilely, and no associated bruises, punctures, indentations, or impact features were identified.  The distribution and appearance of the granule loss were similar across roof slopes and consistent with age-related weathering rather than impact.");
-            }
-            paragraphs.push(sentences.join("  "));
+          // ===== Paragraph 4: interior findings (conditional) =====
+          if(hasInteriorFindings){
+            const propertyRep = (proj.propertyRep || "homeowner").trim();
+            const sentences: string[] = [];
+            sentences.push(`We observed interior conditions brought to our attention by the ${propertyRep}.`);
+            let allStains = true;
+            interiorRooms.forEach((r: any) => {
+              const cond = (r.conditions || "stains").trim();
+              const room = (r.room || "interior area").trim();
+              const side = (r.location || "").trim().replace(/^the\s+/i, "");
+              if(!/stain/i.test(cond)) allStains = false;
+              sentences.push(side
+                ? `We noted ${cond.toLowerCase()} on the ${side} side of the ${room}.`
+                : `We noted ${cond.toLowerCase()} in the ${room}.`);
+            });
+            obsInteriorMarkers.forEach((m: any) => {
+              const detail = (m.data?.detail || m.data?.condition || "an interior condition").toString().trim();
+              const room = (m.data?.room || m.data?.location || "interior").toString().trim();
+              if(!/stain/i.test(detail)) allStains = false;
+              sentences.push(`We noted ${detail.toLowerCase()} in the ${room}.`);
+            });
+            sentences.push(allStains
+              ? "We located the stains on a diagram for reference during roof and attic inspections."
+              : "We marked each condition we observed on a diagram for correlation to roof-level conditions.");
+            paragraphs.push(sentences.join(" "));
           }
 
-          // Paragraph 10 — standard phrases (threshold + bond + summary)
+          // ===== Paragraph 5: roof general condition (4–6 sentences) =====
           {
-            const desc: any = reportData.description;
-            const cls = (desc.shingleClass || "").toLowerCase();
-            const covering = (desc.roofCovering || "").toLowerCase();
-            const threshold = /metal|standing.seam|r.panel/i.test(covering)
-              ? "The threshold size for damage to standing-seam metal roof panels is a frozen-solid hailstone of approximately 2-1/2 inches impacting perpendicular to the roof surface."
-              : cls === "3-tab"
-                ? "The threshold size for damage to 3-tab composition shingles is a frozen-solid hailstone of approximately 1 inch impacting perpendicular to the roof surface."
-                : "The threshold size for damage to laminated composition shingles is a frozen-solid hailstone of approximately 1-1/4 inches impacting perpendicular to the roof surface.  The threshold for 3-tab shingles is approximately 1 inch.";
-            const bondLookup: Record<string, string> = {
-              good: "The adhesive bond of field shingles was intact and sealed in the locations sampled.",
-              fair: "The adhesive bond of field shingles was in fair condition; shingles resisted lifting in most sampled locations, with isolated weaker bonds consistent with age.",
-              poor: "The adhesive bond of field shingles was in poor condition; several shingles could be lifted by hand or with minimal effort, indicating weakened adhesive bonds."
+            const sentences: string[] = [];
+            const condition = (insp.roofCondition || "fair").toLowerCase();
+            sentences.push(`The roof was in ${condition} condition with regard to weathering.`);
+            // Granule loss
+            const granuleLoss = (insp.granuleLoss || "none").toLowerCase();
+            const granuleSentenceMap: Record<string, string> = {
+              minor: "Granule loss was minor and consistent with normal weathering.",
+              moderate: "Granule loss was moderate, but shingles remained pliable.",
+              severe: "Granule loss was severe, and some shingles were becoming brittle.",
+              moderate_to_severe: "Granule loss was moderate to severe, but shingles remained pliable."
             };
-            const bond = bondLookup[(insp.bondCondition || "").toString().toLowerCase()] || "";
-            const damage = (insp.damageFound || "").toLowerCase();
-            const summary = damage === "yes"
-              ? "Based on our inspection, we identified storm-caused conditions to the components listed on the diagram.  The affected components are individually repairable using standard industry methods."
-              : damage === "no"
-                ? "Based on our inspection, we found no evidence of hail- or wind-caused damage to the roof covering that would necessitate repair or replacement.  The observed conditions were consistent with normal aging and weathering of the roof materials."
-                : "";
-            const closing = [threshold, bond, summary].filter(Boolean).join("  ");
-            if(closing) paragraphs.push(closing);
+            if(granuleSentenceMap[granuleLoss]){
+              sentences.push(granuleSentenceMap[granuleLoss]);
+              // Wear pattern only when moderate or worse
+              if(granuleLoss !== "minor"){
+                sentences.push("Shingle wear varied throughout the roof, with some areas of nearly complete granule loss.");
+              }
+            }
+            // Scuffs / blemishes (always)
+            const shingleClass = (desc.shingleClass || "").toLowerCase();
+            const isLaminated = shingleClass === "laminated" || shingleClass === "architectural";
+            sentences.push(isLaminated
+              ? "There were a few old scrapes and blemishes typical of any laminated asphalt shingle roof."
+              : "There were a few old scrapes and blemishes typical of any asphalt composition shingle roof.");
+            // Prior repairs
+            if(insp.priorRepairs === true){
+              const notes = (insp.priorRepairsNotes || "").trim();
+              sentences.push(notes
+                ? `There were past shingle replacements ${notes.replace(/^,\s*/, "")}.`
+                : "There were several areas of past shingle replacements, primarily around vents.");
+            } else if(typeof insp.priorRepairs === "string" && insp.priorRepairs.trim()){
+              sentences.push(`There were past shingle replacements ${insp.priorRepairs.trim().replace(/^,\s*/, "")}.`);
+            }
+            // Missing shingles
+            if(insp.missingShingles === true){
+              const cnt = (insp.missingShinglesCount || "").toString().trim();
+              const dir = (insp.missingShinglesDirection || "").toString().trim().toLowerCase();
+              if(cnt && dir){
+                const cntWord = /^\d+$/.test(cnt) ? spellSmallNumber(parseInt(cnt, 10)) : cnt;
+                sentences.push(`There were ${cntWord} missing shingles on the ${dir}-facing slope.`);
+              } else {
+                sentences.push("There were missing shingles on the roof.");
+              }
+            } else {
+              sentences.push("There were no missing shingles, and none had been torn or creased by wind.");
+            }
+            paragraphs.push(sentences.join(" "));
           }
+
+          // ===== Paragraph 6: bond / wind evaluation =====
+          {
+            const sentences: string[] = [];
+            const bondCondition = (insp.bondCondition || "").toLowerCase();
+            // Treat "poor" or "fair" as evidence of unbonded shingles for
+            // the master plan three-sentence bond narrative.
+            const hasUnbonded = bondCondition === "poor" || bondCondition === "fair";
+            if(hasUnbonded){
+              sentences.push("Shingles lay flat and generally were well-sealed; however, we found a few shingles on slopes facing each direction where the bottom corners lacked bond to the underlying course.");
+              sentences.push("The condition typically occurred where a shingle was over a joint in the underlying course, and these shingles had not been creased by wind.");
+              sentences.push("Inspection under the unbonded corners revealed weathered surfaces and degraded sealant, which suggested the conditions had been present for a long period of time.");
+            } else {
+              sentences.push("Shingles lay flat and were well-sealed across all inspected slopes.");
+            }
+            // Wind counts
+            if(creasedTotal > 0 || tornTotal > 0){
+              const creasedDirs = ["N","S","E","W"].filter(d => creasedByDir[d] > 0).map(localDirLabel);
+              const tornDirs = ["N","S","E","W"].filter(d => tornByDir[d] > 0).map(localDirLabel);
+              const bits: string[] = [];
+              if(creasedTotal > 0){
+                const word = spellSmallNumber(creasedTotal);
+                const slopeWord = creasedDirs.length === 1 ? `${creasedDirs[0]}-facing slope` : `${localJoinReadableList(creasedDirs)}-facing slopes`;
+                const noun = creasedTotal === 1 ? "creased shingle" : "creased shingles";
+                bits.push(`${word} ${noun} on ${slopeWord}`);
+              }
+              if(tornTotal > 0){
+                const word = spellSmallNumber(tornTotal);
+                const slopeWord = tornDirs.length === 1 ? `${tornDirs[0]}-facing slope` : `${localJoinReadableList(tornDirs)}-facing slopes`;
+                const noun = tornTotal === 1 ? "torn shingle" : "torn shingles";
+                bits.push(`${word} ${noun} on the ${slopeWord}`);
+              }
+              sentences.push(`We noted ${localJoinReadableList(bits)}.`);
+            } else {
+              sentences.push("There were no missing or torn field shingles and no evidence of damage caused by strong wind forces.");
+            }
+            paragraphs.push(sentences.join(" "));
+          }
+
+          // ===== Paragraph 7: hail evaluation (hail-relevant only) =====
+          if(hailRelevant){
+            const sentences: string[] = [];
+            sentences.push("In addition to our overall roof inspection, we inspected shingles and roof appurtenances for evidence of hail impact, including spatter marks, dents, or shingle mat fractures.");
+            const spatterFound = (insp.spatterMarksObserved || "").toLowerCase() === "yes";
+            const bruisesFound = insp.shingleBruises === true || tsBruiseTotal > 0;
+            const dentsOnMetals = insp.dentsOnMetals === true;
+            if(spatterFound){
+              const size = (insp.spatterSize || "").trim();
+              const surfaces = (insp.spatterMarksSurfaces || []).map((s: string) => s.toLowerCase());
+              const surfaceList = surfaces.length ? localJoinReadableList(surfaces) : "metal vents and lead pipe boots";
+              sentences.push(`We found small spatter marks${size ? ` up to ${size} wide` : ""} on ${surfaceList}.${consumeSpatterDefinition()}`);
+              if(dentsOnMetals){
+                sentences.push("Chalking the vents revealed large-diameter, shallow dents that did not correspond to the small spatter marks.");
+                sentences.push("The dents generally were too minor to be observed without the chalk highlights, and vent function was unaffected by the condition.");
+              }
+              if(bruisesFound){
+                const cnt = (insp.shingleBruisesCount || tsBruiseTotal || "").toString();
+                const dir = (insp.shingleBruisesDirection || "").trim().toLowerCase();
+                const cntWord = /^\d+$/.test(cnt) ? spellSmallNumber(parseInt(cnt, 10)) : (cnt || "several");
+                sentences.push(dir
+                  ? `We found ${cntWord} shingle mat fractures (bruises) characteristic of hailstone impact on the ${dir}-facing slope.`
+                  : `We found ${cntWord} shingle mat fractures (bruises) characteristic of hailstone impact.`);
+              } else {
+                sentences.push("There were no spatter marks on shingles and no shingle fractures (bruises).");
+              }
+            } else if(bruisesFound){
+              const cnt = (insp.shingleBruisesCount || tsBruiseTotal || "").toString();
+              const dir = (insp.shingleBruisesDirection || "").trim().toLowerCase();
+              const cntWord = /^\d+$/.test(cnt) ? spellSmallNumber(parseInt(cnt, 10)) : (cnt || "several");
+              sentences.push(dir
+                ? `We found ${cntWord} shingle mat fractures (bruises) characteristic of hailstone impact on the ${dir}-facing slope.`
+                : `We found ${cntWord} shingle mat fractures (bruises) characteristic of hailstone impact.`);
+            } else {
+              sentences.push("Rooftop metals were not dented by hail. We found no spatter marks or evidence of hail impact on roof components.");
+              // Spatter definition may still be unused if Paragraph 2
+              // skipped it; ensure the parenthetical exists somewhere
+              // in the inspection section when hail is in scope.
+              if(!spatterDefinitionEmitted){
+                sentences[sentences.length - 1] = `${sentences[sentences.length - 1]}${consumeSpatterDefinition()}`;
+              }
+            }
+            paragraphs.push(sentences.join(" "));
+          }
+
+          // ===== Paragraph 8: test square findings (hail-relevant only) =====
+          if(hailRelevant && tsItems.length){
+            const sentences: string[] = [];
+            const tsDirs = ["N","S","E","W"].filter(dir => tsItems.some(ts => ts.data?.dir === dir));
+            const dirList = tsDirs.length === 4
+              ? "north, south, east, and west"
+              : localJoinReadableList(tsDirs.map(localDirLabel));
+            const tsSize = "100";
+            sentences.push(`We inspected test areas on slopes facing ${dirList}. Test areas measured ${tsSize} square feet each.`);
+            sentences.push("We closely inspected shingles in the test areas for evidence of hail-caused damage and other anomalies.");
+            sentences.push("Where practical, we felt the undersides of shingles where a spot was observed.");
+            sentences.push("Similar to our general roof examination, we found varied scuffs and blemishes that were not caused by hail.");
+            if(tsBruiseTotal > 0){
+              const cntWord = spellSmallNumber(tsBruiseTotal);
+              sentences.push(`Within the test areas, we noted ${cntWord} bruises characteristic of hailstone impact.`);
+              tsDirs.forEach(dir => {
+                const dirItems = tsItems.filter(ts => ts.data?.dir === dir);
+                const dirBruises = dirItems.reduce((sum, ts) => sum + ((ts.data?.bruises || []).length), 0);
+                if(dirBruises > 0){
+                  const dirWord = localDirLabel(dir);
+                  const cnt = spellSmallNumber(dirBruises);
+                  const size = dirItems.length * 100;
+                  sentences.push(`On the ${dirWord}-facing slope, we found ${cnt} bruises in ${size} square feet.`);
+                }
+              });
+            } else {
+              sentences.push("There were no spatter marks and no bruises (mat fractures) on any shingles.");
+              sentences.push("There was no hail damage to the roof covering in the test areas, and this was consistent with our general roof inspection.");
+            }
+            paragraphs.push(sentences.join(" "));
+          }
+
+          // ===== Paragraph 9: soft metals / mechanical damage (conditional) =====
+          if(insp.mechanicalDamage === true){
+            paragraphs.push(
+              "We observed dents and dings on soft metal components that were not caused by hail. These conditions were caused by foot traffic, tools, or other mechanical forces during installation or maintenance activities. The dents lacked the characteristics of hailstone impact (round shape, spatter marks, and corresponding damage to surrounding surfaces)."
+            );
+          }
+
+          // ===== Paragraph 10: conclusions transition (always last) =====
+          paragraphs.push("Based on our inspection and analysis, we have formed the following opinions and conclusions.");
 
           return paragraphs.filter(p => p && p.trim().length);
-        }, [pageItems, reportData.inspection, reportData.description]);
+        }, [pageItems, reportData.inspection, reportData.description, reportData.project]);
 
         const inspectionParagraphsForExport = useMemo(() => (
           inspectionContinuousProseParagraphs.map((text, idx) => ({
@@ -5990,7 +6236,14 @@ const loadPdfJs = () => {
           // src/report/descriptionGenerator.ts so it can be unit-tested.
           const aptMarkers = pageItems
             .filter(item => item.type === "apt" || item.type === "eapt")
-            .map(item => ({ type: (item.data?.type || "").toString(), subtype: item.data?.subtype }))
+            .map(item => ({
+              type: (item.data?.type || "").toString(),
+              subtype: item.data?.subtype,
+              // Master plan §2.3.7: surface marker location so the
+              // appurtenance sentence can append "positioned along the
+              // ..." when the engineer captured a placement note.
+              location: (item.data?.location || item.data?.dirLabel || "").toString()
+            }))
             .filter(m => m.type);
           return generateDescriptionParagraphs({
             description: reportData.description,
@@ -6275,84 +6528,126 @@ const loadPdfJs = () => {
           return sentences.join("  ");
         };
         const coverLetterParagraph = () => {
-          // Haag-standard cover letter:
-          //   1. Date (right-aligned spelled-out month) at the top.
-          //   2. Recipient block: letterhead lines.
-          //   3. Attention: line.
-          //   4. Re: block — insured / property / file numbers.
-          //   5. Opening paragraph — scope is derived from diagram
-          //      markers (TS = hail, WIND = wind, OBS interior =
-          //      interior moisture).
-          //   6. Limiting conditions paragraph (full Haag boilerplate).
-          const writer = reportData.writer;
-          const project = reportData.project;
-          const inspectionDate = project.inspectionDate?.trim();
-          const addressLine = formatAddressLine(project);
-          const letterhead = writer.letterhead?.trim();
-          const attention = writer.attention?.trim();
-          const reference = writer.reference?.trim();
-          const subject = writer.subject?.trim();
-          const clientFile = writer.clientFile?.trim();
-          const haagFile = writer.haagFile?.trim();
-          const scopeName = project.projectName?.trim() || residenceName?.trim() || "captioned residence";
+          // Master plan cover letter: exactly two paragraphs. The Word
+          // template provides the date, letterhead, attention line, and
+          // Re: block, so the generator emits only the body —
+          //   1. Opening paragraph (engineer/we + scope + procedures +
+          //      date + assistant).
+          //   2. Limiting-conditions boilerplate (verbatim).
+          // No date header, no letterhead, no attention line, no Re:
+          // line.
+          const writer: any = reportData.writer || {};
+          const project: any = reportData.project || {};
+          const inspectionDateRaw = (project.inspectionDate || "").trim();
+          const scopeName = (project.projectName || "").trim() || (residenceName || "").trim() || "captioned residence";
 
-          // ---- Date formatting ("June 20, 2025") ----
           const formatLetterDate = (raw: string): string => {
-            if(!raw) return new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-            // Accept "YYYY-MM-DD", "MM/DD/YYYY", or already-spelled-out.
+            if(!raw) return "";
             const tryDate = new Date(raw);
             if(!isNaN(tryDate.getTime())){
               return tryDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
             }
             return raw;
           };
-          const dateLine = formatLetterDate(inspectionDate || "");
 
-          // ---- Diagram-derived scope ----
+          const reportStyle = (writer.reportStyle || "").toLowerCase() === "litigation" ? "litigation" : "standard";
+          const engineerName = (writer.engineerName || "").trim();
+          const engineerShortName = (writer.engineerShortName || "").trim();
+          const assistantName = (writer.assistantName || "").trim();
+          const propertyRep = (project.propertyRep || "homeowner").trim();
+          const perilType = (project.perilType || "").toLowerCase().trim();
+          const perilDescription = (project.perilDescription || "").trim();
+          const additionalScope: string[] = Array.isArray(project.additionalScope) ? project.additionalScope : [];
+
+          // ---- Component 1: opening clause + engineer identification ----
+          let opener: string;
+          if(reportStyle === "litigation" && engineerName){
+            opener = `Complying with your request, ${engineerName}, inspected the ${scopeName}`;
+          } else {
+            opener = `Complying with your request, we inspected the ${scopeName}`;
+          }
+
+          // ---- Component 2: scope clause (peril + target) ----
           const tsItems = pageItems.filter(it => it.type === "ts");
           const windItems = pageItems.filter(it => it.type === "wind");
-          const obsInterior = pageItems.filter(it => it.type === "obs" && (it.data?.area === "int"));
-          const scopeBits: string[] = [];
-          if(tsItems.length > 0) scopeBits.push("hail");
-          if(windItems.length > 0) scopeBits.push("wind");
-          const perilClause = scopeBits.length === 0
-            ? "storm-related"
-            : scopeBits.length === 1
-              ? scopeBits[0]
-              : `${scopeBits[0]} and ${scopeBits[1]}`;
-          const interiorClause = obsInterior.length > 0
-            ? " We also evaluated reported interior moisture conditions."
-            : "";
-          const dateClause = inspectionDate ? ` Our inspection was conducted on ${formatLetterDate(inspectionDate)}.` : "";
+          const obsInteriorItems = pageItems.filter(it => it.type === "obs" && (it.data?.area === "int"));
+          const hasInterior = obsInteriorItems.length > 0;
+          const hasRoof = tsItems.length > 0 || windItems.length > 0 || pageItems.some(it => ["apt","ds","wind","ts","obs"].includes(it.type) && it.data?.area !== "ext");
+          const hasExterior = pageItems.some(it => it.type === "eapt") || (windItems.some(it => it.data?.scope === "exterior")) || true;
+          let scopeTarget: string;
+          if(hasRoof && hasExterior && hasInterior) scopeTarget = "the roof, interior, and exterior";
+          else if(hasRoof && hasExterior) scopeTarget = "the roof and exterior";
+          else if(hasRoof && hasInterior) scopeTarget = "the roof and interior";
+          else if(hasInterior && hasExterior) scopeTarget = "the interior and exterior";
+          else if(hasRoof) scopeTarget = "the roof";
+          else scopeTarget = "the roof and exterior";
 
-          // ---- Compose the letter ----
-          const lines: string[] = [];
-          // Date (the renderer right-aligns this when the cover letter
-          // is rendered in the preview; we mark it with a leading
-          // tab-like spacing for plain-text fallback.)
-          lines.push(dateLine);
-          lines.push("");
-          if(letterhead) lines.push(letterhead);
-          if(attention) lines.push(`Attention: ${attention}`);
-          // Re: block
-          const reBlock: string[] = [];
-          if(reference) reBlock.push(reference);
-          else if(scopeName) reBlock.push(scopeName);
-          if(subject) reBlock.push(subject);
-          if(addressLine && addressLine !== "—") reBlock.push(addressLine);
-          if(reBlock.length){
-            lines.push(`Re:  ${reBlock[0]}`);
-            for(let i = 1; i < reBlock.length; i++) lines.push(`     ${reBlock[i]}`);
+          let scopeClause: string;
+          if(perilType === "tree"){
+            scopeClause = "to determine the extent of structural damage caused by impact of a fallen tree.";
+          } else {
+            let perilClause: string;
+            if(perilType === "hail") perilClause = "hail";
+            else if(perilType === "wind") perilClause = "wind";
+            else if(perilType === "hailwind") perilClause = "hail and/or wind";
+            else if(perilType === "structural") perilClause = "structural";
+            else if(perilType === "storm") perilClause = "storm-caused";
+            else if(perilType === "other" && perilDescription) perilClause = perilDescription;
+            else {
+              const scopeBits: string[] = [];
+              if(tsItems.length > 0) scopeBits.push("hail");
+              if(windItems.length > 0) scopeBits.push("wind");
+              if(scopeBits.length === 0) perilClause = "storm-caused";
+              else if(scopeBits.length === 1) perilClause = scopeBits[0];
+              else perilClause = "hail and/or wind";
+            }
+            scopeClause = `to determine the extent of ${perilClause} damage to ${scopeTarget}.`;
           }
-          if(clientFile) lines.push(`Client File: ${clientFile}`);
-          if(haagFile) lines.push(`Haag File: ${haagFile}`);
-          lines.push("");
-          lines.push(`Complying with your request, we inspected the ${scopeName} to determine the extent of ${perilClause} damage to the roof and exterior. Our procedures included an on-site inspection, an interview with the property representative, and review of pertinent documents.${dateClause}${interiorClause}`);
-          lines.push("");
-          lines.push(
-            "This engineering report has been written for your sole use and purpose, and only you have the authority to distribute this report to any other person, firm, or corporation. The findings and conclusions presented herein are based upon the inspection described, the information available at the time of writing, and the application of generally accepted engineering principles. We do not have, and we disclaim, any contractual relationship with, or duty or obligation to, any party other than the addressee of this report."
-          );
-          return lines.join("\n");
+
+          // ---- Component 3: additional scope sentence ----
+          const additionalScopeMap: Record<string, string> = {
+            interior_leaks: "the extent of interior leaks related to storm-caused openings",
+            repairability: "repairability of the roof",
+            foundation_shift: "if wind forces shifted the foundation"
+          };
+          const addScopePieces = additionalScope
+            .map(key => additionalScopeMap[key])
+            .filter(Boolean);
+          let additionalScopeSentence = "";
+          if(addScopePieces.length){
+            const joined = addScopePieces.length === 1
+              ? addScopePieces[0]
+              : addScopePieces.length === 2
+                ? `${addScopePieces[0]} and ${addScopePieces[1]}`
+                : `${addScopePieces.slice(0,-1).join(", ")}, and ${addScopePieces[addScopePieces.length-1]}`;
+            additionalScopeSentence = ` We also were asked to determine ${joined}.`;
+          }
+
+          // ---- Component 4: procedures sentence (litigation only) ----
+          let proceduresSentence = "";
+          if(reportStyle === "litigation"){
+            proceduresSentence = ` Our procedures have included an on-site inspection, an interview with the ${propertyRep || "homeowner"}, and review of pertinent documents.`;
+          }
+
+          // ---- Component 5 + 6: date sentence (+ assistant clause) ----
+          const formattedDate = formatLetterDate(inspectionDateRaw);
+          const verb = (writer.inspectionVerb || "").toLowerCase() === "performed" ? "performed" : "conducted";
+          let dateSentence = "";
+          if(formattedDate){
+            const dateOpening = reportStyle === "litigation"
+              ? `The inspection was ${verb} on ${formattedDate}`
+              : `Our inspection was ${verb} on ${formattedDate}`;
+            const assistantTail = (assistantName && engineerShortName)
+              ? `, and ${engineerShortName} was assisted by ${assistantName}`
+              : "";
+            dateSentence = ` ${dateOpening}${assistantTail}.`;
+          }
+
+          const openingParagraph = `${opener} ${scopeClause}${additionalScopeSentence}${proceduresSentence}${dateSentence}`.replace(/\s+/g, " ").trim();
+
+          const limitingConditionsParagraph = "This engineering report has been written for your sole use and purpose, and only you have the authority to distribute this report to any other person, firm, or corporation. Haag Engineering Co. and its agents and employees do not have and do disclaim any contractual relationship with, or duty or obligation to, any party other than the addressee of this report and the principals for whom the addressee is acting. Only the engineer who signed this document has the authority to change its contents and then only in writing to you. This report addresses the results of work completed to date. Should additional information become available, we reserve the right to amend, as warranted, any of our conclusions.";
+
+          return `${openingParagraph}\n\n${limitingConditionsParagraph}`;
         };
         const conclusionsParagraph = () => {
           // ASTM E3176 §7.13.1: each numbered conclusion must be
