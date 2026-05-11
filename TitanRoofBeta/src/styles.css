@@ -4692,6 +4692,66 @@
         color:#fff;
         box-shadow: 0 8px 18px -12px rgba(14,165,233,0.7);
       }
+      .storyChipRow.compact{
+        gap:6px;
+      }
+      .storyChip.compact{
+        flex: 0 0 auto;
+        min-width: 40px;
+        min-height: 32px;
+        padding: 4px 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .toggleSwitch{
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        cursor:pointer;
+        user-select:none;
+        font-size:12px;
+        font-weight:600;
+        color: var(--sub);
+      }
+      .toggleSwitch input{
+        position:absolute;
+        opacity:0;
+        pointer-events:none;
+        width:0;
+        height:0;
+      }
+      .toggleSwitch .toggleTrack{
+        position:relative;
+        width:34px;
+        height:20px;
+        border-radius:999px;
+        background:#E2E8F0;
+        border:1px solid rgba(148,163,184,0.45);
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .toggleSwitch .toggleThumb{
+        position:absolute;
+        top:1px;
+        left:1px;
+        width:16px;
+        height:16px;
+        border-radius:50%;
+        background:#fff;
+        box-shadow: 0 1px 3px rgba(15,23,42,0.25);
+        transition: transform 0.15s ease;
+      }
+      .toggleSwitch input:checked + .toggleTrack{
+        background: linear-gradient(135deg, #0EA5E9, #3B82F6);
+        border-color: rgba(14,165,233,0.65);
+      }
+      .toggleSwitch input:checked + .toggleTrack .toggleThumb{
+        transform: translateX(14px);
+      }
+      .toggleSwitch.disabled{
+        opacity:0.5;
+        cursor:not-allowed;
+      }
       .personRow{
         display:grid;
         gap:10px;

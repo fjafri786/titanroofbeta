@@ -12,7 +12,17 @@ export type DescriptionInputs = {
   // the engineer captured it on the diagram. The "otherPrefix" flag
   // switches the sentence opener to "Other roof appurtenances..." for
   // reports that already mentioned a ridge vent earlier.
-  aptMarkers?: Array<{ type: string; subtype?: string; location?: string }>;
+  aptMarkers?: Array<{
+    type: string;
+    subtype?: string;
+    location?: string;
+    // Window-specific fields — populated when the marker is an EAPT
+    // Window placed on the diagram. Used by buildWindows to aggregate
+    // material + screen state across all windows on the page.
+    windowMaterial?: string;
+    screenPresent?: boolean;
+    screenTorn?: boolean;
+  }>;
 };
 
 const trim = (value: any): string => (value == null ? "" : String(value).trim());
@@ -390,19 +400,81 @@ const buildCladding = (d: any): string => {
   return `Exterior walls were clad with ${oxfordJoin(finishes)}.`;
 };
 
-const buildWindows = (d: any): string => {
-  const material = trim(d.windowMaterial);
+const buildWindows = (
+  d: any,
+  aptMarkers: Array<{
+    type: string;
+    windowMaterial?: string;
+    screenPresent?: boolean;
+    screenTorn?: boolean;
+  }> = []
+): string => {
+  // Diagram-sourced windows take precedence: aggregate material and
+  // screen presence across all WIN markers on the page so the report
+  // describes what the inspector actually annotated.
+  const windowMarkers = aptMarkers.filter(m => (m.type || "").toUpperCase() === "WIN");
+  let material = trim(d.windowMaterial);
+  let screensState: "all" | "none" | "mixed" | "unknown" = "unknown";
+  let anyTorn = false;
+  if (windowMarkers.length) {
+    const mats = Array.from(new Set(windowMarkers.map(m => trim(m.windowMaterial)).filter(Boolean)));
+    if (mats.length === 1) material = mats[0];
+    else if (mats.length > 1) material = mats.join(" and ");
+    const withScreens = windowMarkers.filter(m => m.screenPresent === true).length;
+    const withoutScreens = windowMarkers.filter(m => m.screenPresent === false).length;
+    if (withScreens && !withoutScreens) screensState = "all";
+    else if (!withScreens && withoutScreens) screensState = "none";
+    else if (withScreens && withoutScreens) screensState = "mixed";
+    anyTorn = windowMarkers.some(m => m.screenPresent && m.screenTorn);
+  } else {
+    // Legacy fallback to the form-level Yes/No/Mixed selection.
+    const screens = trim(d.windowScreens);
+    if (screens === "Yes") screensState = "all";
+    else if (screens === "No") screensState = "none";
+    else if (screens === "Mixed") screensState = "mixed";
+  }
   if (!material) return "";
   const cap = sentenceCase(material.toLowerCase());
-  const screens = trim(d.windowScreens);
-  if (screens === "Yes") return `${cap} windows were installed with screens.`;
-  if (screens === "Mixed") return `${cap} windows were installed, some with screens.`;
-  return `${cap} windows were installed.`;
+  let sentence: string;
+  if (screensState === "all") sentence = `${cap} windows were installed with screens.`;
+  else if (screensState === "mixed") sentence = `${cap} windows were installed, some with screens.`;
+  else if (screensState === "none") sentence = `${cap} windows were installed without screens.`;
+  else sentence = `${cap} windows were installed.`;
+  if (anyTorn) sentence += " Several window screens were torn.";
+  return sentence;
 };
 
 // Master plan §2.2.5 fence-coverage variants. Defaults to "surrounded
 // the backyard" when no coverage hint is supplied.
+//
+// Structured fence inputs (material + sides) take precedence: when the
+// inspector picks N/S/E/W chips, the sentence names those sides; when
+// all four are picked it falls back to "surrounded the property". The
+// legacy fenceType + fenceCoverage path is retained for older projects.
+const SIDE_LABEL: Record<string, string> = { N: "north", S: "south", E: "east", W: "west" };
 const buildFences = (d: any): string => {
+  const material = trim(d.fenceMaterial);
+  const sides = Array.isArray(d.fenceSides) ? (d.fenceSides as string[]) : [];
+  if (material) {
+    if (/^none$/i.test(material)) return "";
+    const cleanedMat = material.toLowerCase();
+    const fenceLabel = cleanedMat === "chain link" || cleanedMat === "chain-link"
+      ? "Chain-link"
+      : sentenceCase(cleanedMat);
+    if (!sides.length) {
+      return `${fenceLabel} fences surrounded the property.`;
+    }
+    if (sides.length === 4) {
+      return `${fenceLabel} fences surrounded the property.`;
+    }
+    const sideWords = sides
+      .map(s => SIDE_LABEL[s] || s.toLowerCase())
+      .filter(Boolean);
+    if (sides.length === 1) {
+      return `A ${fenceLabel.toLowerCase()} fence was installed along the ${sideWords[0]} side of the property.`;
+    }
+    return `${fenceLabel} fences were installed along the ${oxfordJoin(sideWords)} sides of the property.`;
+  }
   const fence = trim(d.fenceType);
   if (!fence) return "";
   // Treat explicit "none" as no-fence (omit the sentence entirely).
@@ -694,7 +766,7 @@ export function generateDescriptionParagraphs(
 ): string {
   let description: any;
   let project: any;
-  let aptMarkers: Array<{ type: string; subtype?: string }> = [];
+  let aptMarkers: NonNullable<DescriptionInputs["aptMarkers"]> = [];
   if (arg1 && typeof arg1 === "object" && "description" in arg1) {
     description = (arg1 as DescriptionInputs).description;
     project = (arg1 as DescriptionInputs).project;
@@ -721,7 +793,7 @@ export function generateDescriptionParagraphs(
   }
   const roofOpen = buildRoofOpener(d); if (roofOpen) para1.push(roofOpen);
   const cladding = buildCladding(d); if (cladding) para1.push(cladding);
-  const windows = buildWindows(d); if (windows) para1.push(windows);
+  const windows = buildWindows(d, aptMarkers); if (windows) para1.push(windows);
   const fences = buildFences(d); if (fences) para1.push(fences);
   // Master plan §2.2.6 — material-aware notable features. Falls back
   // to the legacy single-string field when no structured entries.
