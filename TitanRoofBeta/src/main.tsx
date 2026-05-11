@@ -103,6 +103,26 @@ const loadPdfJs = () => {
         { key: "dent", label: "Dent" },
         { key: "both", label: "Spatter + Dent" }
       ];
+      // Window-specific hail indicators — glass and screen materials don't
+      // dent the way metal does. Inspectors document scratches, chips,
+      // and fractured/cracked panes instead.
+      const WINDOW_HAIL_MODES = [
+        { key: "spatter", label: "Spatter" },
+        { key: "scratch", label: "Scratch" },
+        { key: "chip", label: "Chip" },
+        { key: "fractured", label: "Fractured glass" },
+        { key: "cracked", label: "Cracked glass" }
+      ];
+      // Window-specific wind indicators — replaces the generic
+      // displaced/detached/loose/bent/missing list with glass + screen
+      // failure modes the inspector actually sees on windows.
+      const WINDOW_WIND_CONDITIONS = [
+        { key: "torn_screen", label: "Torn screen" },
+        { key: "missing_screen", label: "Missing screen" },
+        { key: "cracked", label: "Cracked" },
+        { key: "shattered", label: "Shattered" },
+        { key: "frame_displaced", label: "Frame displaced" }
+      ];
 
       const APT_TYPES = [
         { code: "PS", label: "Plumbing Stack" },
@@ -466,6 +486,7 @@ const loadPdfJs = () => {
       const TRIM_COMPONENTS = ["Fascia", "Soffit", "Window Trim", "Door Trim", "Corner Trim", "Other"];
       const WINDOW_TYPES = ["Single-hung", "Double-hung", "Fixed", "Sliding", "Casement", "Other"];
       const WINDOW_MATERIALS = ["Vinyl", "Wood", "Aluminum", "Fiberglass", "Composite", "Other"];
+      const FENCE_MATERIALS = ["Wood", "Chain-link", "Painted steel", "Wrought iron", "Vinyl", "Masonry", "Composite", "Other"];
       const GARAGE_DOOR_MATERIALS = ["Steel", "Wood", "Aluminum", "Composite", "Other"];
       const GARAGE_BAY_OPTIONS = ["1", "2", "3", "4", "5+"];
       const GARAGE_OVERHEAD_DOOR_OPTIONS = ["1", "2", "3", "4", "5+"];
@@ -548,6 +569,10 @@ const loadPdfJs = () => {
           fenceType: "",
           // Master plan additions
           fenceCoverage: "",       // "full" | "most" | "portions" | "perimeter"
+          // Structured fence inputs (replace legacy fenceType write-in).
+          // Material is a fixed enum; sides is a subset of N/S/E/W.
+          fenceMaterial: "",
+          fenceSides: [],
           vegetation: "",          // e.g., "large_trees_front_rear" or custom sentence
           slope: "",               // e.g., "downward_east" / "level" or custom sentence
           interiorCladding: false, // when true emits standard interior cladding sentence
@@ -1555,6 +1580,7 @@ const loadPdfJs = () => {
         const [dsLastDir, setDsLastDir] = usePersistedState<string>("titanroof.tool.dsDir", "N");
         const [eaptLastType, setEaptLastType] = usePersistedState<string>("titanroof.tool.eaptType", "WIN");
         const [eaptLastDir, setEaptLastDir] = usePersistedState<string>("titanroof.tool.eaptDir", "N");
+        const [eaptLastWindowMaterial, setEaptLastWindowMaterial] = usePersistedState<string>("titanroof.tool.eaptWindowMaterial", "");
         const [garageLastFacing, setGarageLastFacing] = usePersistedState<string>("titanroof.tool.garageFacing", "S");
         const [scopeVisibility, setScopeVisibility] = usePersistedState<{ roof: boolean; exterior: boolean }>(
           "titanroof.view.scopeVisibility",
@@ -3980,6 +4006,12 @@ const loadPdfJs = () => {
               dimsEnabled: false,
               widthIn: "",
               heightIn: "",
+              // Window-specific fields — material, screen presence, and
+              // torn-screen flag. Defaults follow the last-used material
+              // so back-to-back windows inherit the previous selection.
+              windowMaterial: eaptLastWindowMaterial || "",
+              screenPresent: true,
+              screenTorn: false,
               caption: "",
               detailPhoto: null,
               overviewPhoto: null,
@@ -4106,6 +4138,7 @@ const loadPdfJs = () => {
           if(it.type === "eapt"){
             if(k === "type" && typeof v === "string") setEaptLastType(v);
             if(k === "dir" && typeof v === "string") setEaptLastDir(v);
+            if(k === "windowMaterial" && typeof v === "string") setEaptLastWindowMaterial(v);
           }
           if(it.type === "garage"){
             if(k === "facing" && typeof v === "string") setGarageLastFacing(v);
@@ -5837,14 +5870,14 @@ const loadPdfJs = () => {
         // the markup in one place so every exterior marker gets the same
         // "displaced / detached / loose" workflow next to its hail
         // entries, without having to duplicate the JSX three times.
-        const renderWindIndicatorSection = (item) => (
+        const renderWindIndicatorSection = (item, conditions = WIND_CONDITIONS) => (
           <div style={{marginBottom:10}}>
             <div className="row indicatorHeader" style={{marginBottom:8}}>
               <div className="lbl indicatorHeaderLabel">Wind ({(item.data.windEntries || []).length})</div>
               <button
                 type="button"
                 className="iconBtn indicatorAddBtn"
-                onClick={() => addWindEntry()}
+                onClick={() => addWindEntry(conditions[0]?.key || "displaced")}
                 title="Add wind indicator"
                 aria-label="Add wind indicator"
               >
@@ -5856,7 +5889,7 @@ const loadPdfJs = () => {
                 <div className="row entryRow">
                   <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                   <select className="inp" value={entry.condition} onChange={(e)=>updateWindEntry(entry.id, { condition: e.target.value })}>
-                    {WIND_CONDITIONS.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                    {conditions.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
                   </select>
                   <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateWindEntry(entry.id, { dir: e.target.value })}>
                     {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
@@ -6291,7 +6324,13 @@ const loadPdfJs = () => {
               // Master plan §2.3.7: surface marker location so the
               // appurtenance sentence can append "positioned along the
               // ..." when the engineer captured a placement note.
-              location: (item.data?.location || item.data?.dirLabel || "").toString()
+              location: (item.data?.location || item.data?.dirLabel || "").toString(),
+              // Window-specific fields — surfaced so the description
+              // generator can aggregate material + screen presence
+              // across all window markers on this page.
+              windowMaterial: item.data?.windowMaterial || "",
+              screenPresent: item.data?.screenPresent,
+              screenTorn: item.data?.screenTorn
             }))
             .filter(m => m.type);
           return generateDescriptionParagraphs({
@@ -10211,7 +10250,21 @@ const loadPdfJs = () => {
                         )}
 
                         {/* === EXTERIOR APPURTENANCE (window / HVAC / meter / fixture) === */}
-                        {activeItem.type === "eapt" && (
+                        {activeItem.type === "eapt" && (() => {
+                          const isWindow = activeItem.data.type === "WIN";
+                          const hailModes = isWindow ? WINDOW_HAIL_MODES : DAMAGE_MODES;
+                          const windConditions = isWindow ? WINDOW_WIND_CONDITIONS : WIND_CONDITIONS;
+                          const applyWindowMaterialToAll = () => {
+                            const material = activeItem.data.windowMaterial;
+                            if(!material) return;
+                            setItems(prev => prev.map(i =>
+                              i.type === "eapt" && i.data?.type === "WIN"
+                                ? { ...i, data: { ...i.data, windowMaterial: material } }
+                                : i
+                            ));
+                            setEaptLastWindowMaterial(material);
+                          };
+                          return (
                           <>
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Type</div>
@@ -10228,6 +10281,60 @@ const loadPdfJs = () => {
                                 ))}
                               </div>
                             </div>
+
+                            {isWindow && (
+                              <>
+                                <div style={{marginBottom:10}}>
+                                  <div className="row" style={{alignItems:"flex-end", gap:8}}>
+                                    <div style={{flex:1}}>
+                                      <div className="lbl">Material</div>
+                                      <select
+                                        className="inp"
+                                        value={activeItem.data.windowMaterial || ""}
+                                        onChange={(e)=>updateItemData("windowMaterial", e.target.value)}
+                                      >
+                                        <option value="">Select</option>
+                                        {WINDOW_MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
+                                      </select>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="btn"
+                                      style={{flex:"0 0 auto"}}
+                                      disabled={!activeItem.data.windowMaterial}
+                                      onClick={applyWindowMaterialToAll}
+                                      title="Apply this material to every window on this page"
+                                    >
+                                      Apply to all
+                                    </button>
+                                  </div>
+                                </div>
+                                <div style={{marginBottom:10}}>
+                                  <div className="row" style={{alignItems:"center", gap:16, flexWrap:"wrap"}}>
+                                    <label className="toggleSwitch">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!activeItem.data.screenPresent}
+                                        onChange={(e)=>updateItemData("screenPresent", e.target.checked)}
+                                      />
+                                      <span className="toggleTrack"><span className="toggleThumb" /></span>
+                                      <span>Screen present</span>
+                                    </label>
+                                    {activeItem.data.screenPresent && (
+                                      <label className="toggleSwitch">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!activeItem.data.screenTorn}
+                                          onChange={(e)=>updateItemData("screenTorn", e.target.checked)}
+                                        />
+                                        <span className="toggleTrack"><span className="toggleThumb" /></span>
+                                        <span>Torn screen</span>
+                                      </label>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            )}
 
                             {activeItem.data.type === "GAR" && (
                               <div style={{marginBottom:10}}>
@@ -10322,7 +10429,7 @@ const loadPdfJs = () => {
                                   <div className="row entryRow">
                                     <div style={{flex:"0 0 34px", textAlign:"right", fontWeight:800, color:"var(--sub)"}}>{idx+1}.</div>
                                     <select className="inp" value={entry.mode} onChange={(e)=>updateDamageEntry(entry.id, { mode: e.target.value })}>
-                                      {DAMAGE_MODES.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                                      {hailModes.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
                                     </select>
                                     <select className="inp" value={entry.dir || "N"} onChange={(e)=>updateDamageEntry(entry.id, { dir: e.target.value })}>
                                       {CARDINAL_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
@@ -10345,7 +10452,7 @@ const loadPdfJs = () => {
                               )}
                             </div>
 
-                            {renderWindIndicatorSection(activeItem)}
+                            {renderWindIndicatorSection(activeItem, windConditions)}
 
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Detail Photo</div>
@@ -10364,7 +10471,8 @@ const loadPdfJs = () => {
 
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Exterior Item</button>
                           </>
-                        )}
+                          );
+                        })()}
 
                         {/* === GARAGE === */}
                         {activeItem.type === "garage" && (
@@ -11124,13 +11232,16 @@ const loadPdfJs = () => {
                 // direction) are captured on the diagram instead.
                 const d = reportData.description;
                 const val = (v) => (v != null && String(v).trim() !== "");
-                const garageOn = String(d.garagePresent).toLowerCase() === "yes";
+                // Window material/screens and garage details now flow
+                // from the diagram (per-window EXT items and Garage
+                // markers respectively), so they no longer gate the
+                // Structure sub-section's completion status. Fence is
+                // structured: material + sides chips.
+                const fenceSides = ((d as any).fenceSides || []) as string[];
                 const structureFields = [
                   val(d.stories), val(d.framing), val(d.foundation),
                   d.exteriorFinishes?.length ? true : false,
-                  val(d.windowMaterial), val(d.windowScreens),
-                  val(d.garagePresent),
-                  ...(garageOn ? [val(d.garageBays), val(d.garageElevation)] : []),
+                  val((d as any).fenceMaterial) && fenceSides.length > 0,
                 ];
                 const roofFields = [
                   val(d.roofGeometry), val(d.roofCovering),
@@ -11184,14 +11295,14 @@ const loadPdfJs = () => {
                     <div className="reportGrid">
                       <div>
                         <div className="lbl">Number of Stories</div>
-                        <div className="storyChipRow" role="radiogroup" aria-label="Number of stories">
+                        <div className="storyChipRow compact" role="radiogroup" aria-label="Number of stories">
                           {["1","2","3"].map(val => (
                             <button
                               key={val}
                               type="button"
                               role="radio"
                               aria-checked={reportData.description.stories === val}
-                              className={"storyChip" + (reportData.description.stories === val ? " active" : "")}
+                              className={"storyChip compact" + (reportData.description.stories === val ? " active" : "")}
                               onClick={() => updateReportSection("description", "stories", val)}
                             >
                               {val}
@@ -11217,13 +11328,14 @@ const loadPdfJs = () => {
                     <div style={{marginTop:12}}>
                       <div className="row" style={{alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
                         <div className="lbl" style={{margin:0}}>Exterior finishes</div>
-                        <label className="tiny" style={{display:"flex", alignItems:"center", gap:6, cursor:"pointer"}}>
+                        <label className="toggleSwitch">
                           <input
                             type="checkbox"
                             checked={Boolean((reportData.description as any).useDirectionalFinishes)}
                             onChange={(e)=>updateReportSection("description", "useDirectionalFinishes", e.target.checked)}
                           />
-                          Specify by elevation
+                          <span className="toggleTrack"><span className="toggleThumb" /></span>
+                          <span>Specify by elevation</span>
                         </label>
                       </div>
                       {!((reportData.description as any).useDirectionalFinishes) && (
@@ -11282,107 +11394,49 @@ const loadPdfJs = () => {
                         </div>
                       )}
                     </div>
-                    <div className="reportGrid" style={{marginTop:12}}>
-                      <div>
-                        <div className="lbl">Window Material</div>
-                        <select className="inp" value={reportData.description.windowMaterial} onChange={(e)=>updateReportSection("description", "windowMaterial", e.target.value)}>
-                          <option value="">Select</option>
-                          {WINDOW_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <div className="lbl">Window Screens</div>
-                        <div className="storyChipRow" role="radiogroup" aria-label="Window screens">
-                          {["Yes","No","Mixed"].map(opt => (
-                            <button
-                              key={opt}
-                              type="button"
-                              role="radio"
-                              aria-checked={reportData.description.windowScreens === opt}
-                              className={"storyChip" + (reportData.description.windowScreens === opt ? " active" : "")}
-                              onClick={() => updateReportSection("description", "windowScreens", opt)}
-                            >
-                              {opt}
-                            </button>
-                          ))}
+                    <div style={{marginTop:12}}>
+                      <div className="lbl">Fence</div>
+                      <div className="row" style={{alignItems:"flex-start", gap:12, flexWrap:"wrap"}}>
+                        <div style={{flex:"1 1 200px"}}>
+                          <select
+                            className="inp"
+                            value={(reportData.description as any).fenceMaterial || ""}
+                            onChange={(e)=>updateReportSection("description", "fenceMaterial", e.target.value)}
+                          >
+                            <option value="">Select material</option>
+                            <option value="None">None</option>
+                            {FENCE_MATERIALS.map(option => <option key={option} value={option}>{option}</option>)}
+                          </select>
                         </div>
-                      </div>
-                      <div>
-                        <div className="lbl">Fence</div>
-                        <input className="inp" value={reportData.description.fenceType || ""} onChange={(e)=>updateReportSection("description", "fenceType", e.target.value)} placeholder="e.g., wood, chain link, painted steel" />
+                        <div style={{flex:"2 1 260px"}}>
+                          <div className="chipList">
+                            {CARDINAL_DIRS.map(side => {
+                              const sides = ((reportData.description as any).fenceSides || []) as string[];
+                              const active = sides.includes(side);
+                              const labelMap: Record<string,string> = { N:"North", S:"South", E:"East", W:"West" };
+                              return (
+                                <div
+                                  key={side}
+                                  className={"chip " + (active ? "active" : "")}
+                                  onClick={() => {
+                                    setReportData(prev => {
+                                      const cur = (((prev.description as any).fenceSides) || []) as string[];
+                                      const next = cur.includes(side) ? cur.filter(s => s !== side) : [...cur, side];
+                                      return { ...prev, description: { ...prev.description, fenceSides: next } as any };
+                                    });
+                                  }}
+                                >
+                                  {labelMap[side]}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    {(() => {
-                      const garageMarkers = pageItems.filter(it => it.type === "garage");
-                      const fromDiagram = garageMarkers.length > 0;
-                      return (
-                        <div className="reportGrid" style={{marginTop:12}}>
-                          <div>
-                            <div className="lbl">Garage {fromDiagram ? "(from diagram)" : "Present"}</div>
-                            <div className="storyChipRow" role="radiogroup" aria-label="Garage present">
-                              {["Yes","No"].map(opt => (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={reportData.description.garagePresent === opt}
-                                  className={"storyChip" + (reportData.description.garagePresent === opt ? " active" : "")}
-                                  onClick={() => updateReportSection("description", "garagePresent", opt)}
-                                  disabled={fromDiagram}
-                                >
-                                  {opt}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {garageOn && (
-                            <>
-                              <div>
-                                <div className="lbl">Bays</div>
-                                <div className="storyChipRow" role="radiogroup" aria-label="Garage bays">
-                                  {GARAGE_BAYS.map(opt => (
-                                    <button
-                                      key={opt}
-                                      type="button"
-                                      role="radio"
-                                      aria-checked={reportData.description.garageBays === opt}
-                                      className={"storyChip" + (reportData.description.garageBays === opt ? " active" : "")}
-                                      onClick={() => updateReportSection("description", "garageBays", opt)}
-                                      disabled={fromDiagram}
-                                    >
-                                      {opt}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="lbl">Opens toward</div>
-                                <select
-                                  className="inp"
-                                  value={reportData.description.garageElevation}
-                                  onChange={(e)=>updateReportSection("description", "garageElevation", e.target.value)}
-                                  disabled={fromDiagram}
-                                >
-                                  <option value="">Select</option>
-                                  {GARAGE_ELEVATIONS.map(option => <option key={option} value={option}>{option}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <div className="lbl">Attachment</div>
-                                <select
-                                  className="inp"
-                                  value={(reportData.description as any).garageAttachment || "Attached"}
-                                  onChange={(e)=>updateReportSection("description", "garageAttachment", e.target.value)}
-                                  disabled={fromDiagram}
-                                >
-                                  {GARAGE_ATTACHMENTS.map(option => <option key={option} value={option}>{option}</option>)}
-                                </select>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    <div className="tiny" style={{marginTop:12, color:"var(--sub)"}}>
+                      Window material, screens, and per-window hail/wind indicators are captured in the diagram on each Window (EXT) item. Use “Apply to all” inside a window's properties to push its material to every window. Garage details (bays, opens toward, attachment, hail/wind) come from the Garage marker placed in the diagram.
+                    </div>
                     <div style={{marginTop:12}}>
                       <div className="lbl">Notable features</div>
                       <div className="tiny" style={{marginBottom:8}}>
