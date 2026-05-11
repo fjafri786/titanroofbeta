@@ -6,7 +6,7 @@ interface PropertiesBarProps {
   onViewModeChange: (mode: "diagram" | "report" | "photos") => void;
   residenceName: string;
   roofSummary: string;
-  frontFaces: string;
+  orientation: string;
   pages: { id: string; name: string }[];
   activePageId: string;
   onPageChange: (pageId: string) => void;
@@ -117,7 +117,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
   onViewModeChange,
   residenceName,
   roofSummary,
-  frontFaces,
+  orientation,
   pages,
   activePageId,
   onAddPage: _onAddPage,
@@ -173,7 +173,7 @@ const PropertiesBar: React.FC<PropertiesBarProps> = ({
               </button>
             )}
           </div>
-          <div className="propertiesSub">Roof: {roofSummary} • Front faces: {frontFaces}</div>
+          <div className="propertiesSub">Roof: {roofSummary} • Primary facing: {orientation || "—"}</div>
           {isMobile ? (
             <div className="propertiesMetaRow">
               <span className="propertiesPageSummary">

@@ -26,7 +26,7 @@ export interface UnifiedBarProps {
   // Identity / navigation
   residenceName: string;
   roofSummary: string;
-  frontFaces: string;
+  orientation: string;
 
   // Pages — summary is shown in the subtitle; full controls live in
   // the sidebar so the bar stays focused on mode/tool actions.
@@ -207,7 +207,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                 type="button"
                 className="ubTitleBtn"
                 onClick={props.onEditProjectProperties}
-                title={`${roofKind} · Front: ${props.frontFaces} — click to edit project properties`}
+                title={`${roofKind} · Primary facing: ${props.orientation || "—"} — click to edit project properties`}
               >
                 <span className="ubTitle">{props.residenceName || "Project"}</span>
                 <I.chevDown />

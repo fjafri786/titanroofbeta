@@ -1621,10 +1621,9 @@ const loadPdfJs = () => {
         const setFreeDrawWidth = setFreeDrawWidthPersisted;
         const [eraserMode, setEraserMode] = useState(false);
 
-        // Header data (Smith Residence / roof line / front faces)
+        // Header data (Smith Residence / roof line)
         const [hdrEditOpen, setHdrEditOpen] = useState(false);
         const [residenceName, setResidenceName] = useState("");
-        const [frontFaces, setFrontFaces] = useState("North"); // display "Primary facing direction: North"
         const [viewMode, setViewMode] = useState("diagram");
         const [reportTab, setReportTab] = useState("preview");
         const [previewEditing, setPreviewEditing] = useState(null);
@@ -2044,7 +2043,6 @@ const loadPdfJs = () => {
 
         const buildState = useCallback(() => ({
           residenceName,
-          frontFaces,
           roof,
           pages: pages.map(page => ({
             ...page,
@@ -2055,7 +2053,7 @@ const loadPdfJs = () => {
           counts: counts.current,
           reportData,
           exteriorPhotos: serializeExteriorPhotos(exteriorPhotos)
-        }), [residenceName, frontFaces, roof, pages, activePageId, items, reportData, exteriorPhotos]);
+        }), [residenceName, roof, pages, activePageId, items, reportData, exteriorPhotos]);
 
         // Always-current handle on the latest buildState. The autosave
         // loop and returnToDashboard call this through the registered
@@ -2073,7 +2071,6 @@ const loadPdfJs = () => {
           if(!parsed?.roof) return;
           const restoredProjectName = parsed.residenceName || parsed.reportData?.project?.projectName || "";
           setResidenceName(restoredProjectName);
-          setFrontFaces(parsed.frontFaces || "North");
           setRoof(prev => ({
             ...prev,
             ...parsed.roof
@@ -2098,7 +2095,19 @@ const loadPdfJs = () => {
           const fallbackPageId = parsed.activePageId || revivedPages[0]?.id;
           setActivePageId(fallbackPageId);
           if(parsed.reportData){
-            setReportData(normalizeReportData(parsed.reportData));
+            const normalized = normalizeReportData(parsed.reportData);
+            // Migrate legacy `frontFaces` (removed) into the unified
+            // orientation field when the saved report didn't already
+            // carry one.
+            if(parsed.frontFaces && !normalized.project?.orientation){
+              normalized.project.orientation = parsed.frontFaces;
+            }
+            setReportData(normalized);
+          } else if(parsed.frontFaces){
+            setReportData(prev => ({
+              ...prev,
+              project: { ...prev.project, orientation: prev.project.orientation || parsed.frontFaces }
+            }));
           }
           if(parsed.exteriorPhotos){
             setExteriorPhotos(reviveExteriorPhotos(parsed.exteriorPhotos));
@@ -2125,7 +2134,7 @@ const loadPdfJs = () => {
             }, { ts:1, apt:1, wind:1, obs:1, ds:1, free:1, eapt:1, garage:1 });
           }
           setLastSavedAt({ source, time: new Date().toLocaleTimeString() });
-        }, [setResidenceName, setFrontFaces, setRoof, setReportData, setItems]);
+        }, [setResidenceName, setRoof, setReportData, setItems]);
 
         const SAVE_NOTICE_MS = 180000;
         const saveNoticeTimeoutRef = useRef(null);
@@ -7556,7 +7565,7 @@ const loadPdfJs = () => {
             onViewModeChange={setViewMode}
             residenceName={residenceName}
             roofSummary={roofSummary}
-            frontFaces={frontFaces}
+            orientation={reportData.project.orientation}
             pages={pages.map(page => ({ id: page.id, name: page.name }))}
             activePageId={activePageId}
             onPageChange={setActivePageId}
@@ -7669,19 +7678,6 @@ const loadPdfJs = () => {
                 <div className="lbl">Residence / Property</div>
                 <input className="inp headerInput" value={residenceName} onChange={(e)=>updateProjectName(e.target.value)} placeholder="Enter project name" />
               </div>
-              <div style={{flex:1}}>
-                <div className="lbl">Primary Facing Direction</div>
-                <select className="inp" value={frontFaces} onChange={(e)=>setFrontFaces(e.target.value)}>
-                  <option value="North">North</option>
-                  <option value="South">South</option>
-                  <option value="East">East</option>
-                  <option value="West">West</option>
-                  <option value="Northeast">Northeast</option>
-                  <option value="Northwest">Northwest</option>
-                  <option value="Southeast">Southeast</option>
-                  <option value="Southwest">Southwest</option>
-                </select>
-              </div>
             </div>
 
             <div className="reportCard tone-project" style={{marginBottom:10}}>
@@ -7712,7 +7708,7 @@ const loadPdfJs = () => {
                   <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
                 </div>
                 <div>
-                  <div className="lbl">General Orientation</div>
+                  <div className="lbl">Primary Facing Direction</div>
                   <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
                     <option value="">Select</option>
                     {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
@@ -8431,7 +8427,7 @@ const loadPdfJs = () => {
             <UnifiedBar
               residenceName={residenceName}
               roofSummary={roofSummary}
-              frontFaces={frontFaces}
+              orientation={reportData.project.orientation}
               pages={pages.map(p => ({ id: p.id, name: p.name }))}
               activePageId={activePageId}
               viewMode={viewMode as "diagram" | "photos" | "report"}
@@ -11056,11 +11052,7 @@ const loadPdfJs = () => {
                           <input className="inp" type="date" value={reportData.project.inspectionDate} onChange={(e)=>updateReportSection("project", "inspectionDate", e.target.value)} />
                         </div>
                         <div>
-                          <div className="lbl">Primary Facing Direction (from diagram)</div>
-                          <div className="inlineTag">{frontFaces}</div>
-                        </div>
-                        <div>
-                          <div className="lbl">General Orientation</div>
+                          <div className="lbl">Primary Facing Direction</div>
                           <select className="inp" value={reportData.project.orientation} onChange={(e)=>updateReportSection("project", "orientation", e.target.value)}>
                             <option value="">Select</option>
                             {GENERAL_ORIENTATION_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
@@ -12979,7 +12971,7 @@ const loadPdfJs = () => {
                 <div className="printTitleHero">TitanRoof Beta • Field Capture Report</div>
                 <div className="printReportKind">Haag-Aligned Roof Inspection Field Report</div>
                 <h1 className="printTitle">{reportData.project.projectName || residenceName || "Untitled Project"}</h1>
-                <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
+                <div className="tiny">Roof: {roofSummary} • Primary facing direction: {valueOrDash(reportData.project.orientation)}</div>
                 <div className="printMetaGrid">
                   <div className="printMetaCard">
                     <div className="lbl">Property</div>
@@ -12989,7 +12981,7 @@ const loadPdfJs = () => {
                   <div className="printMetaCard">
                     <div className="lbl">Inspection</div>
                     <div className="printBlock">Date: {valueOrDash(reportData.project.inspectionDate)}</div>
-                    <div className="printBlock">Orientation: {valueOrDash(reportData.project.orientation)}</div>
+                    <div className="printBlock">Primary facing direction: {valueOrDash(reportData.project.orientation)}</div>
                   </div>
                   <div className="printMetaCard">
                     <div className="lbl">File References</div>
@@ -13029,8 +13021,6 @@ const loadPdfJs = () => {
                   <div className="lbl">Address</div>
                   <div>{formatAddressLine(reportData.project)}</div>
                   <div className="lbl">Primary Facing Direction</div>
-                  <div>{frontFaces}</div>
-                  <div className="lbl">Orientation</div>
                   <div>{valueOrDash(reportData.project.orientation)}</div>
                 </div>
                 <div className="printDivider" />
@@ -13137,7 +13127,7 @@ const loadPdfJs = () => {
               <div className="printHeader">
                 <div>
                   <div className="printTitle">{residenceName} • Roof Diagram Export</div>
-                  <div className="tiny">Roof: {roofSummary} • Primary facing direction: {frontFaces}</div>
+                  <div className="tiny">Roof: {roofSummary} • Primary facing direction: {valueOrDash(reportData.project.orientation)}</div>
                 </div>
               </div>
 
