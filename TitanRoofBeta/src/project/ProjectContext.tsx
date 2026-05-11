@@ -430,7 +430,6 @@ function alignLegacyStateName(state: unknown, name: string): unknown {
 function buildBlankLegacySeed(projectName: string): Record<string, unknown> {
   return {
     residenceName: projectName,
-    frontFaces: "North",
     roof: {
       covering: "SHINGLE",
       shingleKind: "LAM",
