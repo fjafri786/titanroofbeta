@@ -61,6 +61,29 @@ const loadPdfJs = () => {
         roof: ["Shingles", "Ridge Cap", "Hip Cap", "Valley", "Flashing", "Other Roof Component"],
         exterior: ["Siding", "Downspout", "Gutter", "Trim", "Fascia", "Soffit", "Window Screen", "Fence", "Other Exterior Component"]
       };
+      // Roof-feature components already encode their location; the matching
+      // direction chip would just repeat that, so we hide it.
+      const COMPONENT_IMPLIED_DIR: Record<string, string> = {
+        "Ridge Cap": "Ridge",
+        "Hip Cap": "Hip",
+        "Valley": "Valley"
+      };
+      const componentImpliesDir = (component?: string, dir?: string) => {
+        if(!component || !dir) return false;
+        return COMPONENT_IMPLIED_DIR[component] === dir;
+      };
+      const availableRoofWindDirs = (component?: string) => {
+        const implied = component ? COMPONENT_IMPLIED_DIR[component] : undefined;
+        return implied ? ROOF_WIND_DIRS.filter(d => d !== implied) : ROOF_WIND_DIRS;
+      };
+      const WIND_COMPONENT_NOUN: Record<string, string> = {
+        "Shingles": "shingles",
+        "Ridge Cap": "ridge caps",
+        "Hip Cap": "hip caps",
+        "Valley": "valleys",
+        "Flashing": "flashing",
+        "Other Roof Component": "roof components"
+      };
       // Per-component condition options for exterior-scope WIND markers.
       // Wording follows ASTM E3176 §7.5.3 / HCI methodology — "displaced",
       // "missing", "torn" rather than vague "damaged" or "broken".
@@ -2018,6 +2041,9 @@ const loadPdfJs = () => {
             if(data.scope === "exterior" && !EXTERIOR_WIND_DIRS.includes(data.dir)){
               data.dir = "N";
             }
+            if(data.scope !== "exterior" && componentImpliesDir(data.component, data.dir)){
+              data.dir = "N";
+            }
             delete data.cond;
             delete data.count;
             delete data.photo;
@@ -3135,7 +3161,11 @@ const loadPdfJs = () => {
             return direction ? `${direction} ${base}` : base;
           };
 
-          const byDir = { N: { creased: 0, torn: 0 }, S: { creased: 0, torn: 0 }, E: { creased: 0, torn: 0 }, W: { creased: 0, torn: 0 }, Ridge: { creased: 0, torn: 0 }, Hip: { creased: 0, torn: 0 }, Valley: { creased: 0, torn: 0 } };
+          const makeDirBucket = () => ({ creased: 0, torn: 0, components: new Set<string>() });
+          const byDir: Record<string, { creased: number; torn: number; components: Set<string> }> = {
+            N: makeDirBucket(), S: makeDirBucket(), E: makeDirBucket(), W: makeDirBucket(),
+            Ridge: makeDirBucket(), Hip: makeDirBucket(), Valley: makeDirBucket()
+          };
           const windByScope = { roof: [], exterior: [] };
           // EAPT hail rolls into the exterior bucket; APT hail is roof.
           // DS hail is exterior too (gutters). The report already used
@@ -3146,9 +3176,13 @@ const loadPdfJs = () => {
           pageItems.forEach(item => {
             if(item.type === "wind"){
               const dir = item.data.dir || "N";
+              const creased = item.data.creasedCount || 0;
+              const torn = item.data.tornMissingCount || 0;
               if(byDir[dir]){
-                byDir[dir].creased += item.data.creasedCount || 0;
-                byDir[dir].torn += item.data.tornMissingCount || 0;
+                byDir[dir].creased += creased;
+                byDir[dir].torn += torn;
+                const comp = (item.data.component || "").toString().trim();
+                if(comp && (creased || torn)) byDir[dir].components.add(comp);
               }
               windByScope[item.data.scope === "exterior" ? "exterior" : "roof"].push(item);
             }
@@ -3173,7 +3207,11 @@ const loadPdfJs = () => {
             if(d.creased) bits.push(`${d.creased} creased`);
             if(d.torn) bits.push(`${d.torn} torn or missing`);
             if(!bits.length) return "";
-            return `${bits.join(" and ")} shingles on ${dir.toLowerCase()}-facing slopes`;
+            const components = Array.from(d.components);
+            const noun = components.length === 1
+              ? (WIND_COMPONENT_NOUN[components[0]] || components[0].toLowerCase())
+              : "shingles";
+            return `${bits.join(" and ")} ${noun} on ${dir.toLowerCase()}-facing slopes`;
           }).filter(Boolean);
 
           const roofWindText = windByScope.roof.length
@@ -6009,12 +6047,14 @@ const loadPdfJs = () => {
           return direction ? `${direction} exterior elevation` : "exterior";
         };
         const windCaption = (kind, windData = {}) => {
-          const location = windLocationLabel(windData.dir, windData.scope);
           const component = (windData.component || (windData.scope === "exterior" ? "exterior component" : "shingles")).toLowerCase();
-          if(kind === "overview") return `Overview of ${component} at the ${location}`;
-          if(kind === "creased") return `Creased ${component} at the ${location}`;
-          if(kind === "torn") return `Torn, displaced, or missing ${component} at the ${location}`;
-          return `Wind observation of ${component} at the ${location}`;
+          const skipLocation = windData.scope !== "exterior" && componentImpliesDir(windData.component, windData.dir);
+          const location = skipLocation ? "" : windLocationLabel(windData.dir, windData.scope);
+          const suffix = location ? ` at the ${location}` : "";
+          if(kind === "overview") return `Overview of ${component}${suffix}`;
+          if(kind === "creased") return `Creased ${component}${suffix}`;
+          if(kind === "torn") return `Torn, displaced, or missing ${component}${suffix}`;
+          return `Wind observation of ${component}${suffix}`;
         };
         const observationLabel = (code, otherText) => {
           if(code === "OTHER") return otherText?.trim() || "Other observation";
@@ -10434,7 +10474,13 @@ const loadPdfJs = () => {
                               <select
                                 className="inp"
                                 value={activeItem.data.component || (activeItem.data.scope === "exterior" ? "Siding" : "Shingles")}
-                                onChange={(e)=>updateItemData("component", e.target.value)}
+                                onChange={(e)=>{
+                                  const nextComponent = e.target.value;
+                                  updateItemData("component", nextComponent);
+                                  if(activeItem.data.scope !== "exterior" && componentImpliesDir(nextComponent, activeItem.data.dir)){
+                                    updateItemData("dir", "N");
+                                  }
+                                }}
                               >
                                 {(WIND_COMPONENTS[activeItem.data.scope || "roof"] || WIND_COMPONENTS.roof).map(component => (
                                   <option key={component} value={component}>{component}</option>
@@ -10445,7 +10491,10 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Direction</div>
                               <div className="radioGrid wrap">
-                                {(activeItem.data.scope === "exterior" ? EXTERIOR_WIND_DIRS : ROOF_WIND_DIRS).map(d => (
+                                {(activeItem.data.scope === "exterior"
+                                  ? EXTERIOR_WIND_DIRS
+                                  : availableRoofWindDirs(activeItem.data.component)
+                                ).map(d => (
                                   <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
                                 ))}
                               </div>
