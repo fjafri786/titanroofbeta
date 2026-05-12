@@ -86,6 +86,15 @@ const normalizeExteriorFinish = (raw: string): string => {
   if (v === "brick") return "brick veneer";
   if (v === "stone") return "stone veneer";
   if (v === "wood") return "wood siding";
+  // "painted siding" is Paul's default when the dropdown value is
+  // "siding" without a wood/hardboard qualifier.
+  if (v === "siding") return "painted siding";
+  // "hardboard" -> "painted hardboard siding" (the painted variant is
+  // most common). When the engineer wants the unpainted phrasing they
+  // can pass "hardboard siding" verbatim — that bypasses normalization.
+  if (v === "hardboard") return "painted hardboard siding";
+  if (v === "painted wood") return "painted wood siding";
+  if (v === "painted hardboard") return "painted hardboard siding";
   return v;
 };
 
@@ -354,12 +363,29 @@ const buildRoofOpener = (d: any): string => {
   const geometry = normalizeRoofGeometry(d.roofGeometry);
   const covering = trim(d.roofCovering).toLowerCase();
   if (!geometry && !covering) return "";
+  // gutterPlacement === "merged" is the explicit opt-in for merging the
+  // gutter clause into the roof opener. Legacy reports without the
+  // placement field fall back to merging when guttersPresent + scope are
+  // both populated (matches v2 behavior).
+  const gutterPlacement = trim(d.gutterPlacement).toLowerCase();
   const guttersPresent = trim(d.guttersPresent) === "Yes";
   const gutterScope = trim(d.gutterScope).toLowerCase();
+  const shouldMergeGutters =
+    gutterPlacement === "merged" ||
+    (!gutterPlacement && guttersPresent && gutterScope);
   const baseGeometry = geometry || "framed";
   const coveringClause = covering ? ` surfaced with ${covering}` : "";
-  const main = `The house was covered by a ${baseGeometry} roof${coveringClause}`;
-  if (guttersPresent && gutterScope) {
+  // secondaryRoofNote captures dormers, porch additions, etc. Paul's
+  // sample 2 uses ", with two gable-framed dormers on the front slope."
+  // Engineers can pre-format the note with leading "," + lower-case
+  // wording, or supply just the descriptive phrase.
+  const secondary = trim(d.secondaryRoofNote);
+  let secondaryClause = "";
+  if (secondary) {
+    secondaryClause = /^[.,;]/.test(secondary) ? secondary : `, ${secondary}`;
+  }
+  const main = `The house was covered by a ${baseGeometry} roof${coveringClause}${secondaryClause}`;
+  if (shouldMergeGutters && guttersPresent && gutterScope) {
     return `${main}, and gutters were installed ${gutterScope}.`;
   }
   return `${main}.`;
@@ -452,26 +478,53 @@ const buildWindows = (
 // all four are picked it falls back to "surrounded the property". The
 // legacy fenceType + fenceCoverage path is retained for older projects.
 const SIDE_LABEL: Record<string, string> = { N: "north", S: "south", E: "east", W: "west" };
+// formatFenceMaterial keeps "chain-link" hyphenated regardless of input
+// casing and sentence-cases other materials. Used for both the primary
+// fence label and the secondary (mixed fence type) clause.
+const formatFenceMaterial = (raw: string): string => {
+  const cleaned = raw.toLowerCase();
+  if (cleaned === "chain link" || cleaned === "chain-link") return "chain-link";
+  return cleaned;
+};
 const buildFences = (d: any): string => {
   const material = trim(d.fenceMaterial);
   const sides = Array.isArray(d.fenceSides) ? (d.fenceSides as string[]) : [];
+  // Structured fence path (material + sides). Supports:
+  // - fenceCoverage "primarily" / "most" / "portions" with optional
+  //   fenceSecondary { material, side } for mixed-type fences.
+  // - explicit fenceScope free-text override ("backyard perimeter").
   if (material) {
     if (/^none$/i.test(material)) return "";
-    const cleanedMat = material.toLowerCase();
-    const fenceLabel = cleanedMat === "chain link" || cleanedMat === "chain-link"
-      ? "Chain-link"
-      : sentenceCase(cleanedMat);
-    if (!sides.length) {
-      return `${fenceLabel} fences surrounded the property.`;
+    const matLower = formatFenceMaterial(material);
+    const fenceLabel = sentenceCase(matLower);
+    const coverage = trim(d.fenceCoverage).toLowerCase();
+    const scopeRaw = trim(d.fenceScope);
+    const secondary = (d.fenceSecondary || {}) as { material?: string; side?: string };
+    const secondaryMat = trim(secondary.material);
+    const secondarySide = trim(secondary.side);
+    // Mixed fence type pattern: "primarily painted steel fencing, with
+    // some wood picket fencing on the south side."
+    if (coverage === "primarily" && secondaryMat) {
+      const secLower = formatFenceMaterial(secondaryMat);
+      const sideClause = secondarySide
+        ? ` on the ${secondarySide.toLowerCase()} side`
+        : "";
+      return `The yard was surrounded primarily by ${matLower} fencing, with some ${secLower} fencing${sideClause}.`;
     }
-    if (sides.length === 4) {
+    // fenceScope free-text override (e.g. "backyard perimeter",
+    // "some roof eaves", or a custom phrase).
+    if (scopeRaw) {
+      const scope = scopeRaw.toLowerCase();
+      return `${fenceLabel} fences were installed along the ${scope}.`;
+    }
+    if (!sides.length || sides.length === 4) {
       return `${fenceLabel} fences surrounded the property.`;
     }
     const sideWords = sides
       .map(s => SIDE_LABEL[s] || s.toLowerCase())
       .filter(Boolean);
     if (sides.length === 1) {
-      return `A ${fenceLabel.toLowerCase()} fence was installed along the ${sideWords[0]} side of the property.`;
+      return `A ${matLower} fence was installed along the ${sideWords[0]} side of the property.`;
     }
     return `${fenceLabel} fences were installed along the ${oxfordJoin(sideWords)} sides of the property.`;
   }
@@ -479,10 +532,8 @@ const buildFences = (d: any): string => {
   if (!fence) return "";
   // Treat explicit "none" as no-fence (omit the sentence entirely).
   if (/^none$/i.test(fence)) return "";
-  const cleaned = fence.toLowerCase();
-  const fenceLabel = cleaned === "chain link" || cleaned === "chain-link"
-    ? "Chain-link"
-    : sentenceCase(cleaned);
+  const matLower = formatFenceMaterial(fence);
+  const fenceLabel = sentenceCase(matLower);
   const coverage = trim(d.fenceCoverage).toLowerCase();
   switch (coverage) {
     case "most":
@@ -543,14 +594,27 @@ const buildSlopeSentence = (d: any): string => {
 const buildSlope = (d: any): string => {
   const primary = trim(d.primarySlope);
   if (!primary) return "";
+  // slopePrefix supports "House", "Main", etc. so the sentence opens
+  // "House roof slopes..." when secondary structures share the field.
+  const rawPrefix = trim(d.slopePrefix);
+  const prefix = rawPrefix ? `${rawPrefix} roof` : "Roof";
   const additional = (d.additionalSlopes || []).map((s: string) => trim(s)).filter(Boolean);
+  // slopeSecondary attaches a trailing clause for porch / addition
+  // slopes ("and the porch roof slopes were 1:12"). Engineers can
+  // supply the conjunction or skip it; we normalize the leading ", and".
+  const rawSecondary = trim(d.slopeSecondary);
+  const secondary = rawSecondary
+    ? (/^,/.test(rawSecondary) ? rawSecondary : `, ${rawSecondary.replace(/^and\s+/i, "and ")}`)
+    : "";
+  let body: string;
   if (additional.length === 0) {
-    return `Roof slopes were pitched approximately ${primary} (rise:run).`;
+    body = `${prefix} slopes were pitched approximately ${primary} (rise:run)`;
+  } else if (additional.length === 1) {
+    body = `${prefix} slopes were pitched from ${primary} (rise:run) to ${additional[0]}`;
+  } else {
+    body = `${prefix} slopes were pitched from ${primary} (rise:run) to ${oxfordJoin(additional)}`;
   }
-  if (additional.length === 1) {
-    return `Roof slopes were pitched from ${primary} (rise:run) to ${additional[0]}.`;
-  }
-  return `Roof slopes were pitched from ${primary} (rise:run) to ${oxfordJoin(additional)}.`;
+  return `${body}${secondary}.`;
 };
 
 const buildEagleView = (d: any): string => {
@@ -561,9 +625,32 @@ const buildEagleView = (d: any): string => {
   // phrasing regardless of how the engineer typed the value.
   const includes = rawIncludes.replace(/^which\s+included\s+/i, "");
   const attachment = trim(d.attachmentLetter);
-  let sentence = `According to measurements provided in an EagleView Technologies report we reviewed, the total roof area was approximately ${area} square feet`;
+  // eagleViewVendor: defaults to "EagleView Technologies" but Paul
+  // occasionally uses "EagleView Technologies, Inc.,".
+  const vendor = trim(d.eagleViewVendor) || "EagleView Technologies";
+  // areaScope: defaults to "total roof area" but foundation/multi-
+  // building reports use "house roof area".
+  const areaScope = trim(d.eagleViewAreaScope) || "total roof area";
+  // attachmentRef: "refer to" (default) vs "see" — Paul uses both.
+  const attachmentVerb = trim(d.attachmentRef) === "see" ? "see" : "refer to";
+  // attachmentPlacement: "end" (default) or "inline" — when inline the
+  // attachment reference appears after the vendor clause instead of at
+  // the end. Matches Custer (sample 8) wording.
+  const placement = trim(d.attachmentPlacement) === "inline" ? "inline" : "end";
+  // approximate: Paul's "approximately" qualifier is on by default but
+  // some reports state the area as a definite figure.
+  const approximate = d.eagleViewApproximate === false ? false : true;
+  const approxWord = approximate ? "approximately " : "";
+
+  let sentence = `According to measurements provided in an ${vendor} report we reviewed`;
+  if (attachment && placement === "inline") {
+    sentence += ` (${attachmentVerb} Attachment ${attachment})`;
+  }
+  sentence += `, the ${areaScope} was ${approxWord}${area} square feet`;
   if (includes) sentence += `, which included the ${includes.replace(/^the\s+/i, "")}`;
-  if (attachment) sentence += ` (refer to Attachment ${attachment})`;
+  if (attachment && placement === "end") {
+    sentence += ` (${attachmentVerb} Attachment ${attachment})`;
+  }
   sentence += ".";
   return sentence;
 };
@@ -573,10 +660,23 @@ const buildShingleMeasurement = (d: any): string => {
   const exposure = trim(d.shingleExposure);
   if (!length || !exposure) return "";
   const cls = trim(d.shingleClass);
+  // shingleException is the parenthetical "(An exception was the rear
+  // wing that covered a patio. It was surfaced with common three-tab
+  // shingles.)" that follows the main measurement. When present, the
+  // "Field" prefix distinguishes the main shingles from the exception;
+  // when absent, Paul often drops "Field" and just writes "Shingles
+  // were...".
+  const exception = trim(d.shingleException);
+  const exceptionSuffix = exception ? ` ${exception}` : "";
   if (cls === "3-Tab") {
-    return `Shingles were a three-tab variety that measured ${length} wide with ${exposure} exposed to the weather.`;
+    // threeTabCommon toggle adds the "common" qualifier ("common three-tab
+    // variety") that Paul uses on older properties.
+    const threeTabCommon = d.threeTabCommon === true || trim(d.threeTabCommon) === "true";
+    const variety = threeTabCommon ? "common three-tab" : "three-tab";
+    return `Shingles were a ${variety} variety that measured ${length} wide with ${exposure} exposed to the weather.${exceptionSuffix}`;
   }
-  return `Field shingles were a laminated variety that measured ${length} wide with ${exposure} exposed to the weather.`;
+  const subject = exception ? "Field shingles" : "Shingles";
+  return `${subject} were a laminated variety that measured ${length} wide with ${exposure} exposed to the weather.${exceptionSuffix}`;
 };
 
 const buildComposition = (d: any): string => {
@@ -788,26 +888,93 @@ export function generateDescriptionParagraphs(
     trim(d.garagePresent) === "Yes" &&
     trim(d.garageAttachment).toLowerCase() === "connected" &&
     !!formatFacingDirection(p.orientation);
-  if (!orientationCoveredByOpener) {
-    const orient = buildOrientationAndGarage(d, p); if (orient) para1.push(orient);
+
+  // No-garage merged S2+S3 variant: when there is no garage, Paul
+  // sometimes merges orientation directly into the roof opener:
+  // "The front faced east and it was covered by a hip and gable roof
+  // surfaced with asphalt composition shingles." Triggered by the
+  // mergeOrientationWithRoofOpener flag, only when garagePresent is
+  // not "Yes".
+  const garageNo = trim(d.garagePresent) !== "Yes";
+  const orientation = formatFacingDirection(p.orientation);
+  const mergeNoGarage =
+    garageNo &&
+    !!orientation &&
+    (d.mergeOrientationWithRoofOpener === true ||
+      trim(d.mergeOrientationWithRoofOpener) === "true");
+
+  if (mergeNoGarage) {
+    // Build a combined orientation+roof opener sentence and skip the
+    // standalone orientation + roof opener sentences below.
+    const geometry = normalizeRoofGeometry(d.roofGeometry) || "framed";
+    const covering = trim(d.roofCovering).toLowerCase();
+    const coveringClause = covering ? ` surfaced with ${covering}` : "";
+    const secondary = trim(d.secondaryRoofNote);
+    const secondaryClause = secondary
+      ? (/^[.,;]/.test(secondary) ? secondary : `, ${secondary}`)
+      : "";
+    para1.push(
+      `The front faced ${orientation} and it was covered by a ${geometry} roof${coveringClause}${secondaryClause}.`
+    );
+  } else {
+    if (!orientationCoveredByOpener) {
+      const orient = buildOrientationAndGarage(d, p); if (orient) para1.push(orient);
+    }
+    const roofOpen = buildRoofOpener(d); if (roofOpen) para1.push(roofOpen);
   }
-  const roofOpen = buildRoofOpener(d); if (roofOpen) para1.push(roofOpen);
   const cladding = buildCladding(d); if (cladding) para1.push(cladding);
   const windows = buildWindows(d, aptMarkers); if (windows) para1.push(windows);
-  const fences = buildFences(d); if (fences) para1.push(fences);
+
+  // Fence + first-feature merging: when mergeFirstFeatureWithFence is
+  // true (or the legacy fence material implies "backyard" and the first
+  // feature is in the backyard), combine via ", and ..." per Paul's
+  // pattern. See verification doc: samples 5 (Villafuerte) and 11
+  // (Archield).
+  const fences = buildFences(d);
+  const featuresList = ((d.notableFeatures || []) as NotableFeature[]).filter(f => trim(f?.type));
+  const wantMerge =
+    d.mergeFirstFeatureWithFence === true ||
+    trim(d.mergeFirstFeatureWithFence) === "true";
+  let firstFeatureMerged = false;
+  if (fences && wantMerge && featuresList.length) {
+    const tail = featurePhrase(featuresList[0]).tail;
+    const merged = `${fences.replace(/\.$/, "")}, and ${tail}.`;
+    para1.push(merged);
+    firstFeatureMerged = true;
+  } else if (fences) {
+    para1.push(fences);
+  }
+
   // Master plan §2.2.6 — material-aware notable features. Falls back
   // to the legacy single-string field when no structured entries.
-  const features = buildNotableFeatures(d);
+  // When the first feature was already merged into the fence sentence,
+  // emit only the remaining features.
+  const featuresInput = firstFeatureMerged
+    ? { ...d, notableFeatures: featuresList.slice(1) }
+    : d;
+  const features = buildNotableFeatures(featuresInput);
   if (features.length) {
     features.forEach(s => para1.push(s));
-  } else {
+  } else if (!firstFeatureMerged) {
     const notable = trim(d.notableFeature); if (notable) para1.push(notable);
   }
   // Master plan §2.2.7 / §2.2.8 / §2.2.9.
   const vegSentence = buildVegetationSentence(d); if (vegSentence) para1.push(vegSentence);
   const slopeSentence = buildSlopeSentence(d); if (slopeSentence) para1.push(slopeSentence);
-  if (d.interiorCladding === true || trim((d as any).interiorCladding) === "true") {
-    para1.push("Interior walls and ceilings were clad with textured and painted gypsum panels.");
+  // Interior cladding accepts either a boolean (defaults to "textured
+  // and painted gypsum panels") or a free-text string that names the
+  // specific finish ("textured and painted gypsum drywall", "Sheetrock",
+  // etc.). The string variant flows into the canonical sentence.
+  const interiorRaw = d.interiorCladding;
+  if (interiorRaw === true || trim(interiorRaw) === "true") {
+    const floorCov = trim(d.floorCovering);
+    const floorClause = floorCov ? `, and floors were covered with ${floorCov.toLowerCase()}` : "";
+    para1.push(`Interior walls and ceilings were clad with textured and painted gypsum panels${floorClause}.`);
+  } else if (typeof interiorRaw === "string" && trim(interiorRaw)) {
+    const finish = trim(interiorRaw).toLowerCase();
+    const floorCov = trim(d.floorCovering);
+    const floorClause = floorCov ? `, and floors were covered with ${floorCov.toLowerCase()}` : "";
+    para1.push(`Interior walls and ceilings were clad with ${finish}${floorClause}.`);
   }
 
   const para2: string[] = [];
@@ -838,10 +1005,25 @@ export function generateDescriptionParagraphs(
   const fromDiagram = buildAppurtenancesFromDiagram(aptMarkers, { otherPrefix });
   const apps = fromDiagram || buildAppurtenancesLegacy(d);
   if (apps) para2.push(apps);
+  // Solar panel sentence — verification doc sample 11 (Archield):
+  // "Solar panels covered large portions of the rear (west) slope and
+  // the main south slope." Free-text so we don't constrain the wording.
+  const solar = trim(d.solarPanelNote);
+  if (solar) {
+    para2.push(/[.!?]$/.test(solar) ? solar : `${solar}.`);
+  }
   const aerial = buildAerialFigure(d);
   if (aerial) para2.push(aerial);
 
-  return [para1.join(" "), para2.join(" ")]
+  // Optional third paragraph for secondary-structure detail (e.g.
+  // backyard R-panel patio in sample 4 Cadena). Free text passes through
+  // verbatim; the generator only ensures a terminating period.
+  const additional = trim(d.additionalParagraph);
+  const para3 = additional
+    ? (/[.!?]$/.test(additional) ? additional : `${additional}.`)
+    : "";
+
+  return [para1.join(" "), para2.join(" "), para3]
     .filter(s => s && s.length)
     .join("\n\n");
 }
