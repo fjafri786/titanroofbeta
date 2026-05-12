@@ -1004,17 +1004,21 @@ export function generateDescriptionParagraphs(
   if (trim(d.eagleView) === "Yes") {
     const ev = buildEagleView(d); if (ev) para2.push(ev);
   }
-  const shingleMeas = buildShingleMeasurement(d);
+  // Shingle measurement, composition, installation, and ridge sentences
+  // are asphalt-shingle specific. Guard the whole block so a stale
+  // shingleLength/shingleExposure/ridgeExposure value left over from a
+  // previous covering choice doesn't produce "Shingles were..." prose
+  // for a metal / tile / membrane roof.
+  const isShingleRoof = isAsphaltShingleRoof(d.roofCovering);
+  const shingleMeas = isShingleRoof ? buildShingleMeasurement(d) : "";
   const hasShingleMeas = !!shingleMeas;
   if (hasShingleMeas) para2.push(shingleMeas);
-  // Composition + installation are emitted alongside shingle measurements
-  // for asphalt shingle roofs. With no measurement data, paragraph 2 stays
-  // short (matches the minimum-input baseline test case).
-  if (hasShingleMeas && isAsphaltShingleRoof(d.roofCovering)) {
+  if (hasShingleMeas) {
     para2.push(buildComposition(d));
     para2.push(buildInstallation());
   }
-  const ridge = buildRidge(d); if (ridge) para2.push(ridge);
+  const ridge = isShingleRoof ? buildRidge(d) : "";
+  if (ridge) para2.push(ridge);
   const additionalCoverings = buildAdditionalCoverings(d);
   additionalCoverings.forEach(s => para2.push(s));
   // Master plan §2.3.7: switch to "Other roof appurtenances included..."
