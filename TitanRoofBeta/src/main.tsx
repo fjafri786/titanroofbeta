@@ -11,7 +11,7 @@ import { AutosaveProvider, useAutosave } from "./autosave/AutosaveContext";
 import { useProject } from "./project/ProjectContext";
 import AppShell from "./app/AppShell";
 import { registerPreLeaveFlush, registerEngineSnapshotGetter } from "./storage";
-import { generateDescriptionParagraphs, isAsphaltShingleRoof } from "./report/descriptionGenerator";
+import { generateDescriptionParagraphs, isAsphaltShingleRoof, getShingleClassFromCovering, effectiveShingleClass } from "./report/descriptionGenerator";
 import "./ui/tailwind.css";
 import "./styles.css";
 
@@ -343,6 +343,78 @@ const loadPdfJs = () => {
         "Built-up roof (BUR)",
         "Other",
       ];
+
+      // Material category derived from the roof covering selection. Drives
+      // which set of material-specific property dropdowns is rendered
+      // beneath the covering field.
+      const ROOF_MATERIAL_CATEGORY = {
+        asphalt: ["Laminated asphalt shingles", "3-tab asphalt shingles"],
+        metal: ["Metal panel", "Standing-seam metal", "R-panel metal", "Stone-coated steel"],
+        tile: ["Concrete tile", "Clay tile"],
+        slate: ["Slate"],
+        wood: ["Wood shake", "Wood shingle"],
+        membrane: ["TPO membrane", "PVC membrane", "EPDM membrane"],
+        bitumen: ["Modified bitumen", "Built-up roof (BUR)"],
+      } as const;
+      type RoofMaterialCategory = keyof typeof ROOF_MATERIAL_CATEGORY | "other";
+      const getRoofMaterialCategory = (covering: string): RoofMaterialCategory => {
+        const v = (covering || "").trim();
+        if (!v) return "other";
+        for (const key of Object.keys(ROOF_MATERIAL_CATEGORY) as Array<keyof typeof ROOF_MATERIAL_CATEGORY>) {
+          if ((ROOF_MATERIAL_CATEGORY[key] as readonly string[]).includes(v)) return key;
+        }
+        return "other";
+      };
+      // Curated dropdown options for material-specific properties. Each
+      // list ends with the literal "Other..." sentinel which reveals a
+      // free-text input so the inspector can capture anything not in the
+      // preset list.
+      const OTHER = "Other...";
+      const SHINGLE_LENGTH_OPTIONS = [
+        "36 inches", "36-1/4 inches", "39 inches", "39-3/8 inches", "40 inches", OTHER,
+      ];
+      const SHINGLE_EXPOSURE_OPTIONS = [
+        "5 inches", "5-1/8 inches", "5-1/4 inches", "5-3/8 inches", "5-1/2 inches",
+        "5-5/8 inches", "5-3/4 inches", "5-7/8 inches", "6 inches", OTHER,
+      ];
+      const GRANULE_COLOR_OPTIONS = [
+        "black", "charcoal", "gray", "gray and tan", "brown", "tan", "weathered wood",
+        "driftwood", "slate", "green", "red", OTHER,
+      ];
+      const RIDGE_EXPOSURE_OPTIONS = [
+        "5 inches", "5-1/2 inches", "6 inches", "6-1/2 inches", "7 inches", "8 inches", OTHER,
+      ];
+      const METAL_PANEL_WIDTH_OPTIONS = ["12 inches", "16 inches", "18 inches", "24 inches", "36 inches", OTHER];
+      const METAL_RIB_HEIGHT_OPTIONS = ["1 inch", "1-1/2 inches", "2 inches", "3 inches", OTHER];
+      const METAL_GAUGE_OPTIONS = ["22 gauge", "24 gauge", "26 gauge", "29 gauge", OTHER];
+      const METAL_FASTENER_OPTIONS = ["Concealed clip", "Exposed fastener", "Snap-lock", OTHER];
+      const METAL_FINISH_OPTIONS = [
+        "Galvalume / unpainted", "Galvanized / unpainted", "Painted (Kynar)", "Painted (polyester)",
+        "Copper", "Zinc", OTHER,
+      ];
+      const TILE_PROFILE_OPTIONS = [
+        "Flat / slate-look", "Low-profile S", "Medium-profile S", "High-profile / barrel",
+        "Two-piece mission (pan & cover)", OTHER,
+      ];
+      const TILE_ATTACHMENT_OPTIONS = ["Nailed", "Screwed", "Foam-adhered", "Wire-tied", "Mortar-set", OTHER];
+      const TILE_COLOR_OPTIONS = ["Terracotta", "Red", "Brown", "Gray", "Black", "Tan", "Multi-color blend", OTHER];
+      const TILE_EXPOSURE_OPTIONS = ["13 inches", "14 inches", "15 inches", "16 inches", OTHER];
+      const SLATE_THICKNESS_OPTIONS = ["1/4 inch", "3/8 inch", "1/2 inch", "3/4 inch", OTHER];
+      const SLATE_LENGTH_OPTIONS = ["12 inches", "14 inches", "16 inches", "18 inches", "20 inches", "22 inches", "24 inches", OTHER];
+      const SLATE_COLOR_OPTIONS = ["Black", "Gray", "Green", "Purple", "Red", "Multi-color", OTHER];
+      const WOOD_SPECIES_OPTIONS = ["Western red cedar", "White cedar", "Redwood", "Treated pine", OTHER];
+      const WOOD_LENGTH_OPTIONS = ["16 inches", "18 inches", "24 inches", OTHER];
+      const WOOD_GRADE_OPTIONS = ["Hand-split", "Tapersawn", "Number 1 (Blue Label)", "Number 2 (Red Label)", OTHER];
+      const WOOD_EXPOSURE_OPTIONS = ["5 inches", "5-1/2 inches", "7-1/2 inches", "10 inches", OTHER];
+      const MEMBRANE_THICKNESS_OPTIONS = ["45 mil", "60 mil", "80 mil", "90 mil", OTHER];
+      const MEMBRANE_COLOR_OPTIONS = ["White", "Gray", "Tan", "Black", OTHER];
+      const MEMBRANE_ATTACHMENT_OPTIONS = ["Fully adhered", "Mechanically attached", "Ballasted", "Induction welded", OTHER];
+      const MEMBRANE_SEAM_OPTIONS = ["Heat-welded", "Taped", "Glued / solvent-welded", OTHER];
+      const BITUMEN_SURFACING_OPTIONS = [
+        "Granulated cap sheet", "Smooth", "Gravel / aggregate", "Reflective coating", OTHER,
+      ];
+      const BITUMEN_PLIES_OPTIONS = ["1 ply", "2 ply", "3 ply", "4 ply", OTHER];
+      const BITUMEN_COLOR_OPTIONS = ["White", "Gray", "Tan", "Black", OTHER];
       const ROOF_COVERING_SCOPES = [
         "Main roof",
         "Bay window",
@@ -584,11 +656,44 @@ const loadPdfJs = () => {
           // Roof
           roofGeometry: "",
           roofCovering: "",
+          // shingleClass is no longer surfaced as a separate UI control —
+          // it is derived from the roofCovering label whenever the
+          // covering is asphalt. The field stays in state so legacy saved
+          // reports continue to deserialize and downstream generators can
+          // read it without changes.
           shingleClass: "",
           shingleLength: "",
           shingleExposure: "",
           granuleColor: "",
           ridgeExposure: "",
+          // Material-specific properties surfaced conditionally on the
+          // Roof form based on the selected roof covering. Each block
+          // shares a flat key namespace so saved reports remain a single
+          // shallow object.
+          metalPanelWidth: "",
+          metalRibHeight: "",
+          metalGauge: "",
+          metalFastenerType: "",
+          metalFinish: "",
+          tileProfile: "",
+          tileAttachment: "",
+          tileColor: "",
+          tileExposure: "",
+          slateThickness: "",
+          slateLength: "",
+          slateExposure: "",
+          slateColor: "",
+          woodSpecies: "",
+          woodLength: "",
+          woodGrade: "",
+          woodExposure: "",
+          membraneThickness: "",
+          membraneColor: "",
+          membraneAttachment: "",
+          membraneSeam: "",
+          bitumenSurfacing: "",
+          bitumenPlies: "",
+          bitumenColor: "",
           primarySlope: "",
           additionalSlopes: [],
           guttersPresent: "",
@@ -3344,7 +3449,7 @@ const loadPdfJs = () => {
           const bondConditionText = bondLookup[insp.bondCondition as string]
             || (reportData.inspection.paragraphs?.bondCondition?.text)
             || "";
-          const shingleClass = (desc.shingleClass || "").toLowerCase();
+          const shingleClass = effectiveShingleClass(desc).toLowerCase();
           const thresholdText = shingleClass === "3-tab"
             ? "The threshold size for damage to 3-tab composition shingles is a frozen-solid hailstone of approximately 1 inch impacting perpendicular to the roof surface."
             : shingleClass === "laminated" || shingleClass === "architectural"
@@ -3649,7 +3754,7 @@ const loadPdfJs = () => {
               }
             }
             // Scuffs / blemishes (always)
-            const shingleClass = (desc.shingleClass || "").toLowerCase();
+            const shingleClass = effectiveShingleClass(desc).toLowerCase();
             const isLaminated = shingleClass === "laminated" || shingleClass === "architectural";
             sentences.push(isLaminated
               ? "There were a few old scrapes and blemishes typical of any laminated asphalt shingle roof."
@@ -6554,7 +6659,7 @@ const loadPdfJs = () => {
         const resolveHailThreshold = () => {
           const desc: any = reportData.description;
           const covering = (desc.roofCovering || "").toLowerCase();
-          const cls = (desc.shingleClass || "").toLowerCase();
+          const cls = effectiveShingleClass(desc).toLowerCase();
           if(/metal|standing.seam|r.panel/i.test(covering)){
             return { num: 2.5, label: "2-1/2 inches", item: "metal roof panels" };
           }
@@ -11545,11 +11650,18 @@ const loadPdfJs = () => {
                             const next = e.target.value;
                             // "Other" leaves the free-text input visible
                             // for the user to type a custom covering.
-                            if(next === "Other"){
-                              updateReportSection("description", "roofCovering", "Other");
-                            } else {
-                              updateReportSection("description", "roofCovering", next);
-                            }
+                            const nextCovering = next === "Other" ? "Other" : next;
+                            setReportData(prev => ({
+                              ...prev,
+                              description: {
+                                ...prev.description,
+                                roofCovering: nextCovering,
+                                // Auto-derive shingleClass from the covering
+                                // label so the inspector doesn't have to
+                                // re-pick "Laminated" vs "3-Tab".
+                                shingleClass: getShingleClassFromCovering(nextCovering),
+                              }
+                            }));
                           }}
                         >
                           <option value="">Select</option>
@@ -11566,43 +11678,126 @@ const loadPdfJs = () => {
                           />
                         )}
                       </div>
-                      {isAsphaltShingleRoof(reportData.description.roofCovering) && (
-                        <>
-                          <div>
-                            <div className="lbl">Shingle Class</div>
-                            <div className="storyChipRow" role="radiogroup" aria-label="Shingle class">
-                              {["Laminated","3-Tab"].map(opt => (
-                                <button
-                                  key={opt}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={reportData.description.shingleClass === opt}
-                                  className={"storyChip" + (reportData.description.shingleClass === opt ? " active" : "")}
-                                  onClick={() => updateReportSection("description", "shingleClass", opt)}
-                                >
-                                  {opt}
-                                </button>
-                              ))}
+                      {(() => {
+                        // Material-specific property dropdowns. Rendered as
+                        // a single fragment so the surrounding reportGrid
+                        // continues to lay them out in the same column
+                        // flow as the other roof fields.
+                        const covering = reportData.description.roofCovering || "";
+                        const category = getRoofMaterialCategory(covering);
+                        const renderPicker = (
+                          label: string,
+                          field: string,
+                          options: readonly string[],
+                          placeholder?: string,
+                        ) => {
+                          const current = (reportData.description as any)[field] || "";
+                          const isPreset = options.includes(current);
+                          const selectValue = !current ? "" : (isPreset ? current : OTHER);
+                          return (
+                            <div key={field}>
+                              <div className="lbl">{label}</div>
+                              <select
+                                className="inp"
+                                value={selectValue}
+                                onChange={(e) => {
+                                  const next = e.target.value;
+                                  if (next === OTHER) {
+                                    // Clear so the text input opens empty
+                                    // and the user can type a custom value.
+                                    updateReportSection("description", field, "");
+                                  } else {
+                                    updateReportSection("description", field, next);
+                                  }
+                                }}
+                              >
+                                <option value="">Select</option>
+                                {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                              {(selectValue === OTHER || (!isPreset && current)) && (
+                                <input
+                                  className="inp"
+                                  style={{marginTop:6}}
+                                  value={current}
+                                  onChange={(e) => updateReportSection("description", field, e.target.value)}
+                                  placeholder={placeholder || "Enter value"}
+                                />
+                              )}
                             </div>
-                          </div>
-                          <div>
-                            <div className="lbl">Shingle Length</div>
-                            <input className="inp" value={reportData.description.shingleLength} onChange={(e)=>updateReportSection("description", "shingleLength", e.target.value)} placeholder="e.g., 39 inches" />
-                          </div>
-                          <div>
-                            <div className="lbl">Shingle Exposure</div>
-                            <input className="inp" value={reportData.description.shingleExposure} onChange={(e)=>updateReportSection("description", "shingleExposure", e.target.value)} placeholder="e.g., 5.5 inches" />
-                          </div>
-                          <div>
-                            <div className="lbl">Granule Color</div>
-                            <input className="inp" value={reportData.description.granuleColor || ""} onChange={(e)=>updateReportSection("description", "granuleColor", e.target.value)} placeholder="e.g., gray and tan" />
-                          </div>
-                          <div>
-                            <div className="lbl">Ridge Shingle Exposure</div>
-                            <input className="inp" value={reportData.description.ridgeExposure} onChange={(e)=>updateReportSection("description", "ridgeExposure", e.target.value)} placeholder="e.g., 5 inches" />
-                          </div>
-                        </>
-                      )}
+                          );
+                        };
+                        if (category === "asphalt") {
+                          return (
+                            <>
+                              {renderPicker("Shingle Length", "shingleLength", SHINGLE_LENGTH_OPTIONS, "e.g., 39 inches")}
+                              {renderPicker("Shingle Exposure", "shingleExposure", SHINGLE_EXPOSURE_OPTIONS, "e.g., 5-5/8 inches")}
+                              {renderPicker("Granule Color", "granuleColor", GRANULE_COLOR_OPTIONS, "e.g., gray and tan")}
+                              {renderPicker("Ridge Shingle Exposure", "ridgeExposure", RIDGE_EXPOSURE_OPTIONS, "e.g., 5 inches")}
+                            </>
+                          );
+                        }
+                        if (category === "metal") {
+                          return (
+                            <>
+                              {renderPicker("Panel Width", "metalPanelWidth", METAL_PANEL_WIDTH_OPTIONS)}
+                              {renderPicker("Rib / Seam Height", "metalRibHeight", METAL_RIB_HEIGHT_OPTIONS)}
+                              {renderPicker("Metal Gauge", "metalGauge", METAL_GAUGE_OPTIONS)}
+                              {renderPicker("Fastener Type", "metalFastenerType", METAL_FASTENER_OPTIONS)}
+                              {renderPicker("Finish / Color", "metalFinish", METAL_FINISH_OPTIONS)}
+                            </>
+                          );
+                        }
+                        if (category === "tile") {
+                          return (
+                            <>
+                              {renderPicker("Tile Profile", "tileProfile", TILE_PROFILE_OPTIONS)}
+                              {renderPicker("Attachment Method", "tileAttachment", TILE_ATTACHMENT_OPTIONS)}
+                              {renderPicker("Tile Color", "tileColor", TILE_COLOR_OPTIONS)}
+                              {renderPicker("Tile Exposure", "tileExposure", TILE_EXPOSURE_OPTIONS)}
+                            </>
+                          );
+                        }
+                        if (category === "slate") {
+                          return (
+                            <>
+                              {renderPicker("Slate Thickness", "slateThickness", SLATE_THICKNESS_OPTIONS)}
+                              {renderPicker("Slate Length", "slateLength", SLATE_LENGTH_OPTIONS)}
+                              {renderPicker("Exposure", "slateExposure", SHINGLE_EXPOSURE_OPTIONS)}
+                              {renderPicker("Color", "slateColor", SLATE_COLOR_OPTIONS)}
+                            </>
+                          );
+                        }
+                        if (category === "wood") {
+                          return (
+                            <>
+                              {renderPicker("Wood Species", "woodSpecies", WOOD_SPECIES_OPTIONS)}
+                              {renderPicker("Shake / Shingle Length", "woodLength", WOOD_LENGTH_OPTIONS)}
+                              {renderPicker("Grade", "woodGrade", WOOD_GRADE_OPTIONS)}
+                              {renderPicker("Exposure", "woodExposure", WOOD_EXPOSURE_OPTIONS)}
+                            </>
+                          );
+                        }
+                        if (category === "membrane") {
+                          return (
+                            <>
+                              {renderPicker("Membrane Thickness", "membraneThickness", MEMBRANE_THICKNESS_OPTIONS)}
+                              {renderPicker("Membrane Color", "membraneColor", MEMBRANE_COLOR_OPTIONS)}
+                              {renderPicker("Attachment", "membraneAttachment", MEMBRANE_ATTACHMENT_OPTIONS)}
+                              {renderPicker("Seams", "membraneSeam", MEMBRANE_SEAM_OPTIONS)}
+                            </>
+                          );
+                        }
+                        if (category === "bitumen") {
+                          return (
+                            <>
+                              {renderPicker("Surfacing", "bitumenSurfacing", BITUMEN_SURFACING_OPTIONS)}
+                              {renderPicker("Plies", "bitumenPlies", BITUMEN_PLIES_OPTIONS)}
+                              {renderPicker("Surface Color", "bitumenColor", BITUMEN_COLOR_OPTIONS)}
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
                       <div>
                         <div className="lbl">Primary Roof Slope</div>
                         <select className="inp" value={reportData.description.primarySlope} onChange={(e)=>updateReportSection("description", "primarySlope", e.target.value)}>
@@ -12972,16 +13167,76 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.description.roofGeometry)}</div>
                   <div className="lbl">Roof Covering</div>
                   <div>{valueOrDash(reportData.description.roofCovering)}</div>
-                  <div className="lbl">Shingle Class</div>
-                  <div>{valueOrDash(reportData.description.shingleClass)}</div>
-                  <div className="lbl">Shingle Length</div>
-                  <div>{valueOrDash(reportData.description.shingleLength)}</div>
-                  <div className="lbl">Shingle Exposure</div>
-                  <div>{valueOrDash(reportData.description.shingleExposure)}</div>
-                  <div className="lbl">Granule Color</div>
-                  <div>{valueOrDash(reportData.description.granuleColor)}</div>
-                  <div className="lbl">Ridge Exposure</div>
-                  <div>{valueOrDash(reportData.description.ridgeExposure)}</div>
+                  {(() => {
+                    // Material-specific summary rows. Mirrors the
+                    // category branching in the Roof form so the preview
+                    // shows the same fields the inspector filled in.
+                    const desc: any = reportData.description;
+                    const category = getRoofMaterialCategory(desc.roofCovering || "");
+                    const row = (label: string, value: any) => (
+                      <React.Fragment key={label}>
+                        <div className="lbl">{label}</div>
+                        <div>{valueOrDash(value)}</div>
+                      </React.Fragment>
+                    );
+                    if (category === "asphalt") {
+                      return (<>
+                        {row("Shingle Length", desc.shingleLength)}
+                        {row("Shingle Exposure", desc.shingleExposure)}
+                        {row("Granule Color", desc.granuleColor)}
+                        {row("Ridge Exposure", desc.ridgeExposure)}
+                      </>);
+                    }
+                    if (category === "metal") {
+                      return (<>
+                        {row("Panel Width", desc.metalPanelWidth)}
+                        {row("Rib / Seam Height", desc.metalRibHeight)}
+                        {row("Metal Gauge", desc.metalGauge)}
+                        {row("Fastener Type", desc.metalFastenerType)}
+                        {row("Finish / Color", desc.metalFinish)}
+                      </>);
+                    }
+                    if (category === "tile") {
+                      return (<>
+                        {row("Tile Profile", desc.tileProfile)}
+                        {row("Attachment Method", desc.tileAttachment)}
+                        {row("Tile Color", desc.tileColor)}
+                        {row("Tile Exposure", desc.tileExposure)}
+                      </>);
+                    }
+                    if (category === "slate") {
+                      return (<>
+                        {row("Slate Thickness", desc.slateThickness)}
+                        {row("Slate Length", desc.slateLength)}
+                        {row("Exposure", desc.slateExposure)}
+                        {row("Color", desc.slateColor)}
+                      </>);
+                    }
+                    if (category === "wood") {
+                      return (<>
+                        {row("Wood Species", desc.woodSpecies)}
+                        {row("Shake / Shingle Length", desc.woodLength)}
+                        {row("Grade", desc.woodGrade)}
+                        {row("Exposure", desc.woodExposure)}
+                      </>);
+                    }
+                    if (category === "membrane") {
+                      return (<>
+                        {row("Membrane Thickness", desc.membraneThickness)}
+                        {row("Membrane Color", desc.membraneColor)}
+                        {row("Attachment", desc.membraneAttachment)}
+                        {row("Seams", desc.membraneSeam)}
+                      </>);
+                    }
+                    if (category === "bitumen") {
+                      return (<>
+                        {row("Surfacing", desc.bitumenSurfacing)}
+                        {row("Plies", desc.bitumenPlies)}
+                        {row("Surface Color", desc.bitumenColor)}
+                      </>);
+                    }
+                    return null;
+                  })()}
                   <div className="lbl">Primary Roof Slope</div>
                   <div>{valueOrDash(reportData.description.primarySlope)}</div>
                   <div className="lbl">Additional Roof Slopes</div>

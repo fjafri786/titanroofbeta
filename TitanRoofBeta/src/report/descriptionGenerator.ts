@@ -49,6 +49,28 @@ export const isAsphaltShingleRoof = (roofCovering: string): boolean => {
   return !!value && ASPHALT_RE.test(value);
 };
 
+// Derive the shingle class ("Laminated" | "3-Tab") from a covering label.
+// The UI no longer asks the user to re-pick this after they've chosen a
+// covering — downstream generator code reads the derived value through
+// this helper so legacy reports (where shingleClass may be empty but
+// roofCovering says "Laminated asphalt shingles") still flow correctly.
+export const getShingleClassFromCovering = (roofCovering: string): string => {
+  const value = trim(roofCovering).toLowerCase();
+  if (!value) return "";
+  if (value.includes("laminated")) return "Laminated";
+  if (value.includes("3-tab") || value.includes("three-tab") || value.includes("three tab")) return "3-Tab";
+  return "";
+};
+
+// Effective shingle class: prefer the explicitly stored value, otherwise
+// derive from the covering label. Use this everywhere downstream code
+// needs to branch on laminated-vs-3-tab.
+export const effectiveShingleClass = (description: any): string => {
+  const stored = trim((description || {}).shingleClass);
+  if (stored) return stored;
+  return getShingleClassFromCovering(trim((description || {}).roofCovering));
+};
+
 // Map dropdown enum values to the lowercase report-style phrasing used
 // across Paul's sample reports. Free-text values pass through unchanged.
 const normalizeFoundation = (raw: string): string => {
@@ -659,7 +681,7 @@ const buildShingleMeasurement = (d: any): string => {
   const length = trim(d.shingleLength);
   const exposure = trim(d.shingleExposure);
   if (!length || !exposure) return "";
-  const cls = trim(d.shingleClass);
+  const cls = effectiveShingleClass(d);
   // shingleException is the parenthetical "(An exception was the rear
   // wing that covered a patio. It was surfaced with common three-tab
   // shingles.)" that follows the main measurement. When present, the
