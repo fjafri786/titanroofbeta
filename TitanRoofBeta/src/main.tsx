@@ -13649,9 +13649,7 @@ const loadPdfJs = () => {
                   <div>{valueOrDash(reportData.description.aerialFigureSource)}</div>
                 </div>
               </div>
-            </div>
 
-            <div className="printPage">
               <div className="printSection">
                 <h3>Background</h3>
                 <div className="printKeyValue">
@@ -13687,45 +13685,38 @@ const loadPdfJs = () => {
 
               <div className="printSection">
                 <h3>Dashboard</h3>
-                <table className="dashTable" style={{marginBottom:12}}>
-                  <thead>
-                    <tr>
-                      <th>Direction</th>
-                      <th>Test Square Hits</th>
-                      <th>Max Hail Size</th>
-                      <th>Wind (Creased)</th>
-                      <th>Wind (Torn/Missing)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ROOF_WIND_DIRS.map(dir => (
-                      <tr key={`print-${dir}`}>
-                        <td style={{fontWeight:900}}>{dir}</td>
-                        <td>{getDashStats(dir).tsHits}</td>
-                        <td>{getDashStats(dir).tsMaxHail>0 ? `${getDashStats(dir).tsMaxHail}"` : "—"}</td>
-                        <td>{getDashStats(dir).wind.creased}</td>
-                        <td>{getDashStats(dir).wind.torn_missing}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
                 <table className="dashTable">
                   <thead>
                     <tr>
                       <th>Direction</th>
-                      <th>Appurtenances (Max)</th>
-                      <th>Downspouts (Max)</th>
+                      <th>TS Hits</th>
+                      <th>Max Hail</th>
+                      <th>Wind Cr.</th>
+                      <th>Wind T/M</th>
+                      <th>Apt Spatter</th>
+                      <th>Apt Dent</th>
+                      <th>DS Spatter</th>
+                      <th>DS Dent</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {CARDINAL_DIRS.map(dir => (
-                      <tr key={`print-hail-${dir}`}>
-                        <td style={{fontWeight:900}}>{dir}</td>
-                        <td>{getDashStats(dir).aptMax>0 ? `${getDashStats(dir).aptMax}"` : "—"}</td>
-                        <td>{getDashStats(dir).dsMax>0 ? `${getDashStats(dir).dsMax}"` : "—"}</td>
-                      </tr>
-                    ))}
+                    {ROOF_WIND_DIRS.map(dir => {
+                      const stats = getDashStats(dir);
+                      const hail = hailIndicatorSummary[dir];
+                      return (
+                        <tr key={`print-${dir}`}>
+                          <td style={{fontWeight:900}}>{dir}</td>
+                          <td>{stats.tsHits}</td>
+                          <td>{stats.tsMaxHail>0 ? `${stats.tsMaxHail}"` : "—"}</td>
+                          <td>{stats.wind.creased}</td>
+                          <td>{stats.wind.torn_missing}</td>
+                          <td>{hail?.apt.spatter ? `${hail.apt.spatter}"` : "—"}</td>
+                          <td>{hail?.apt.dent ? `${hail.apt.dent}"` : "—"}</td>
+                          <td>{hail?.ds.spatter ? `${hail.ds.spatter}"` : "—"}</td>
+                          <td>{hail?.ds.dent ? `${hail.ds.dent}"` : "—"}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -13737,10 +13728,13 @@ const loadPdfJs = () => {
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "ts").map(ts => {
                     const tsPhotos = collectTsPhotos(ts);
+                    const hits = (ts.data.bruises||[]).length;
+                    const conditions = (ts.data.conditions||[]).length;
+                    if(!tsPhotos.length && !hits && !conditions) return null;
                     return (
                       <div className="printCard" key={`print-ts-${ts.id}`}>
                         <div style={{fontWeight:800}}>{testSquareLabel(ts.data.dir)}</div>
-                        <div className="tiny">Hits: {(ts.data.bruises||[]).length} • Conditions: {(ts.data.conditions||[]).length}</div>
+                        <div className="tiny">Hits: {hits} • Conditions: {conditions}</div>
                         {tsPhotos.map((p, idx) => (
                           <PrintPhoto
                             key={`${ts.id}-photo-${idx}`}
@@ -13757,6 +13751,9 @@ const loadPdfJs = () => {
                 </div>
               </div>
 
+            </div>
+
+            <div className="printPage">
               <div className="printSection">
                 <h3>Wind Observations</h3>
                 <table className="dashTable">
@@ -13768,87 +13765,74 @@ const loadPdfJs = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {ROOF_WIND_DIRS.map(dir => (
-                      <tr key={`wind-${dir}`}>
-                        <td style={{fontWeight:900}}>{dir}</td>
-                        <td>{getDashStats(dir).wind.creased}</td>
-                        <td>{getDashStats(dir).wind.torn_missing}</td>
-                      </tr>
-                    ))}
+                    {ROOF_WIND_DIRS.map(dir => {
+                      const w = getDashStats(dir).wind;
+                      if(!w.creased && !w.torn_missing) return null;
+                      return (
+                        <tr key={`wind-${dir}`}>
+                          <td style={{fontWeight:900}}>{dir}</td>
+                          <td>{w.creased}</td>
+                          <td>{w.torn_missing}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
                 <div className="printGrid" style={{marginTop:10}}>
-                  {pageItems.filter(i => i.type === "wind").map(w => (
-                    <div className="printCard" key={`wind-${w.id}`}>
-                      <div style={{fontWeight:800}}>{titleCase(windLocationLabel(w.data.dir))}</div>
-                      <div className="tiny">Creased: {w.data.creasedCount || 0} • Torn/Missing: {w.data.tornMissingCount || 0}</div>
-                      {(w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url) ? (
-                        <>
-                          {w.data.creasedPhoto?.url && (
-                            <PrintPhoto
-                              photo={w.data.creasedPhoto}
-                              alt="Creased wind photo"
-                              caption={photoCaption(composeCaption(windCaption("creased", w.data), w.data.caption), w.data.creasedPhoto)}
-                              style={{marginTop:8}}
-                            />
-                          )}
-                          {w.data.tornMissingPhoto?.url && (
-                            <PrintPhoto
-                              photo={w.data.tornMissingPhoto}
-                              alt="Torn or missing wind photo"
-                              caption={photoCaption(composeCaption(windCaption("torn", w.data), w.data.caption), w.data.tornMissingPhoto)}
-                              style={{marginTop:8}}
-                            />
-                          )}
-                          {w.data.overviewPhoto?.url && (
-                            <PrintPhoto
-                              photo={w.data.overviewPhoto}
-                              alt="Wind overview"
-                              caption={photoCaption(composeCaption(windCaption("overview", w.data), w.data.caption), w.data.overviewPhoto)}
-                              style={{marginTop:8}}
-                            />
-                          )}
-                        </>
-                      ) : (
-                        <div className="tiny" style={{marginTop:6}}>No photos attached.</div>
-                      )}
-                    </div>
-                  ))}
+                  {pageItems.filter(i => i.type === "wind").map(w => {
+                    const hasPhoto = w.data.creasedPhoto?.url || w.data.tornMissingPhoto?.url || w.data.overviewPhoto?.url;
+                    const creased = w.data.creasedCount || 0;
+                    const torn = w.data.tornMissingCount || 0;
+                    if(!hasPhoto && !creased && !torn) return null;
+                    return (
+                      <div className="printCard" key={`wind-${w.id}`}>
+                        <div style={{fontWeight:800}}>{titleCase(windLocationLabel(w.data.dir))}</div>
+                        <div className="tiny">Creased: {creased} • Torn/Missing: {torn}</div>
+                        {w.data.creasedPhoto?.url && (
+                          <PrintPhoto
+                            photo={w.data.creasedPhoto}
+                            alt="Creased wind photo"
+                            caption={photoCaption(composeCaption(windCaption("creased", w.data), w.data.caption), w.data.creasedPhoto)}
+                            style={{marginTop:8}}
+                          />
+                        )}
+                        {w.data.tornMissingPhoto?.url && (
+                          <PrintPhoto
+                            photo={w.data.tornMissingPhoto}
+                            alt="Torn or missing wind photo"
+                            caption={photoCaption(composeCaption(windCaption("torn", w.data), w.data.caption), w.data.tornMissingPhoto)}
+                            style={{marginTop:8}}
+                          />
+                        )}
+                        {w.data.overviewPhoto?.url && (
+                          <PrintPhoto
+                            photo={w.data.overviewPhoto}
+                            alt="Wind overview"
+                            caption={photoCaption(composeCaption(windCaption("overview", w.data), w.data.caption), w.data.overviewPhoto)}
+                            style={{marginTop:8}}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
+            </div>
+
+            <div className="printPage">
               <div className="printSection">
                 <h3>Appurtenances + Downspouts</h3>
-                <table className="dashTable" style={{marginBottom:10}}>
-                  <thead>
-                    <tr>
-                      <th>Direction</th>
-                      <th>Appurtenance Spatter Max</th>
-                      <th>Appurtenance Dent Max</th>
-                      <th>Downspout Spatter Max</th>
-                      <th>Downspout Dent Max</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {CARDINAL_DIRS.map(dir => (
-                      <tr key={`hail-${dir}`}>
-                        <td style={{fontWeight:900}}>{dir}</td>
-                        <td>{hailIndicatorSummary[dir].apt.spatter ? `${hailIndicatorSummary[dir].apt.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].apt.dent ? `${hailIndicatorSummary[dir].apt.dent}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.spatter ? `${hailIndicatorSummary[dir].ds.spatter}"` : "—"}</td>
-                        <td>{hailIndicatorSummary[dir].ds.dent ? `${hailIndicatorSummary[dir].ds.dent}"` : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
                 <div className="printGrid">
-                  {pageItems.filter(i => i.type === "apt" || i.type === "ds" || i.type === "eapt").map(it => (
-                    <div className="printCard" key={`hail-${it.id}`}>
-                      <div style={{fontWeight:800}}>{componentTitle(it)}</div>
-                      <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
-                      {(it.data.damageEntries || []).some(entry => entry.photo?.url) ? (
-                        (it.data.damageEntries || []).map((entry, idx) => (
+                  {pageItems.filter(i => i.type === "apt" || i.type === "ds" || i.type === "eapt").map(it => {
+                    const hasDamagePhoto = (it.data.damageEntries || []).some(entry => entry.photo?.url);
+                    const hasOtherPhoto = it.data.detailPhoto?.url || it.data.overviewPhoto?.url;
+                    if(!hasDamagePhoto && !hasOtherPhoto && !isDamaged(it)) return null;
+                    return (
+                      <div className="printCard" key={`hail-${it.id}`}>
+                        <div style={{fontWeight:800}}>{componentTitle(it)}</div>
+                        <div className="tiny">{isDamaged(it) ? damageSummary(it) : "No hail indicator selected"}</div>
+                        {(it.data.damageEntries || []).map((entry, idx) => (
                           entry.photo?.url ? (
                             <PrintPhoto
                               key={`${it.id}-damage-${entry.id}`}
@@ -13858,50 +13842,50 @@ const loadPdfJs = () => {
                               style={{marginTop:8}}
                             />
                           ) : null
-                        ))
-                      ) : (
-                        <div className="tiny" style={{marginTop:6}}>No hail indicator photos attached.</div>
-                      )}
-                      {it.data.detailPhoto?.url && (
-                        <PrintPhoto
-                          photo={it.data.detailPhoto}
-                          alt="Detail"
-                          caption={photoCaption(it.data.caption || `Detail view of the ${componentLabel(it)}`, it.data.detailPhoto)}
-                          style={{marginTop:8}}
-                        />
-                      )}
-                      {it.data.overviewPhoto?.url && (
-                        <PrintPhoto
-                          photo={it.data.overviewPhoto}
-                          alt="Overview"
-                          caption={photoCaption(`Overview of the ${componentLabel(it)}`, it.data.overviewPhoto)}
-                          style={{marginTop:8}}
-                        />
-                      )}
-                    </div>
-                  ))}
+                        ))}
+                        {it.data.detailPhoto?.url && (
+                          <PrintPhoto
+                            photo={it.data.detailPhoto}
+                            alt="Detail"
+                            caption={photoCaption(it.data.caption || `Detail view of the ${componentLabel(it)}`, it.data.detailPhoto)}
+                            style={{marginTop:8}}
+                          />
+                        )}
+                        {it.data.overviewPhoto?.url && (
+                          <PrintPhoto
+                            photo={it.data.overviewPhoto}
+                            alt="Overview"
+                            caption={photoCaption(`Overview of the ${componentLabel(it)}`, it.data.overviewPhoto)}
+                            style={{marginTop:8}}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
+            </div>
+
+            <div className="printPage">
               <div className="printSection">
                 <h3>Observations</h3>
                 <div className="printGrid">
-                  {pageItems.filter(i => i.type === "obs").map(obs => (
-                    <div className="printCard" key={`obs-${obs.id}`}>
-                      <div style={{fontWeight:800}}>{observationCaption(obs)}</div>
-                      <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
-                      {obs.data.photo?.url ? (
+                  {pageItems.filter(i => i.type === "obs").map(obs => {
+                    if(!obs.data.photo?.url) return null;
+                    return (
+                      <div className="printCard" key={`obs-${obs.id}`}>
+                        <div style={{fontWeight:800}}>{observationCaption(obs)}</div>
+                        <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
                         <PrintPhoto
                           photo={obs.data.photo}
                           alt="Observation"
                           caption={photoCaption(composeCaption(observationCaption(obs), obs.data.caption), obs.data.photo)}
                           style={{marginTop:8}}
                         />
-                      ) : (
-                        <div className="tiny" style={{marginTop:6}}>No photo attached.</div>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

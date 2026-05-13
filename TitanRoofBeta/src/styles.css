@@ -4973,7 +4973,7 @@
       }
       .printSection{
         margin-bottom:12px;
-        page-break-inside: avoid;
+        break-inside: auto;
         border:1px solid rgba(226,232,240,0.9);
         border-radius:12px;
         padding:10px 12px 12px;
@@ -6419,7 +6419,7 @@
       @media print{
         body, html{ overflow:visible; }
         .app{ display:block; }
-        .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar, .menuBar, .systemBar, .mobileMenuOverlay, .mobileMenuSheet{ display:none !important; }
+        .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar, .menuBar, .systemBar, .mobileMenuOverlay, .mobileMenuSheet, .unifiedBar{ display:none !important; }
         .printSheet{
           display:block;
           padding:0;
@@ -6433,6 +6433,20 @@
         }
         .printSheet .markerWind{
           font-size: 7px;
+        }
+        .printSheet .printGrid{
+          grid-template-columns: repeat(4, 1fr);
+          gap: 6px;
+        }
+        .printSheet .printCard{
+          padding: 5px;
+        }
+        .printSheet .printPhoto{
+          aspect-ratio: auto;
+          max-height: 80px;
+        }
+        .printSheet .printPhoto img{
+          object-fit: cover;
         }
         .printDiagramPage{ page: diagram; }
         @page{
