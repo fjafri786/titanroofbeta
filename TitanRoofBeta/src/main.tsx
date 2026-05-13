@@ -8362,24 +8362,6 @@ const loadPdfJs = () => {
           </div>
         );
 
-        const exportIndexItems = [
-          "Title Page",
-          "Index",
-          "Project Information",
-          "Description",
-          "Background",
-          "Inspection",
-          "Roof Diagram",
-          "Dashboard",
-          `Test Squares (${pageItems.filter(i => i.type === "ts").length})`,
-          `Wind Observations (${pageItems.filter(i => i.type === "wind").length})`,
-          `Appurtenances + Downspouts (${pageItems.filter(i => i.type === "apt" || i.type === "ds").length})`,
-          `Exterior Items (${pageItems.filter(i => i.type === "eapt").length})`,
-          `Garages (${pageItems.filter(i => i.type === "garage").length})`,
-          `Observations (${pageItems.filter(i => i.type === "obs").length})`,
-          "Report Notes (Description)"
-        ];
-
         const roofPhotoCount = roofPhotoSections.reduce(
           (sum, section) => sum + section.groups.reduce((acc, group) => acc + group.entries.length, 0),
           0
@@ -13148,39 +13130,58 @@ const loadPdfJs = () => {
               </div>
             </div>
 
-            <div className="printPage">
-              <div className="printSection">
-                <h3>Index</h3>
-                <ol className="printIndexList">
-                  {exportIndexItems.map(item => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-
-            <div className="printPage">
-              <div className="printSection">
-                <h3>Project Information</h3>
-                <div className="printKeyValue">
-                  <div className="lbl">Report #</div>
-                  <div>{valueOrDash(reportData.project.reportNumber)}</div>
-                  <div className="lbl">Project Name</div>
-                  <div>{valueOrDash(reportData.project.projectName || residenceName)}</div>
-                  <div className="lbl">Address</div>
-                  <div>{formatAddressLine(reportData.project)}</div>
-                  <div className="lbl">Primary Facing Direction</div>
-                  <div>{valueOrDash(reportData.project.orientation)}</div>
+            <div className="printPage printDiagramPage">
+              <div className="printDiagramWrap">
+                <div className="printDiagramSheet" style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
+                  <div className="bgLayer" style={backgroundStyle}>
+                    {activeBackground?.url && (
+                      activeBackground.type === "application/pdf" ? (
+                        <div className="bgPdfNotice">Rasterizing PDF…</div>
+                      ) : (
+                        <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
+                      )
+                    )}
+                    {mapUrl && (
+                      <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
+                    )}
+                  </div>
+                  <svg className="gridSvg" width="100%" height="100%" viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
+                    {pageItems.filter(i => i.type === "ts").map(renderTSPrint)}
+                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsAreaPrint)}
+                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrowPrint)}
+                  </svg>
+                  {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
+                    const m = markerMeta(i);
+                    return (
+                      <div
+                        key={`print-marker-${i.id}`}
+                        className={`marker${i.type === "wind" ? " markerWind" : ""}`}
+                        style={{
+                          left: `${i.x * 100}%`,
+                          top: `${i.y * 100}%`,
+                          background: m.bg,
+                          borderRadius: m.radius
+                        }}
+                      >
+                        {m.label}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="printDivider" />
-                <div className="printBlock">Parties Present: {reportData.project.parties.length ? reportData.project.parties.map(p => `${p.name || "Unnamed"} (${p.role || "Role"})`).join(", ") : "None listed."}</div>
               </div>
             </div>
 
             <div className="printPage">
               <div className="printSection">
                 <h3>Description</h3>
-                <div className="printKeyValue">
+                <p className="printBlock" style={{marginBottom:10}}>{formatBlock(descriptionParagraph())}</p>
+                <div className="printKeyValue cols2">
                   <div className="lbl">Stories</div>
                   <div>{valueOrDash(reportData.description.stories)}</div>
                   <div className="lbl">Framing</div>
@@ -13330,62 +13331,8 @@ const loadPdfJs = () => {
                   <div className="printBlock">No inspection narrative paragraphs are currently selected.</div>
                 )}
               </div>
-            </div>
 
-            <div className="printPage">
-              <div className="printHeader">
-                <div>
-                  <div className="printTitle">{residenceName} • Roof Diagram Export</div>
-                  <div className="tiny">Roof: {roofSummary} • Primary facing direction: {valueOrDash(reportData.project.orientation)}</div>
-                </div>
-              </div>
-
-              <div className="printDiagramWrap">
-                <div className="printDiagramSheet" style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
-                  <div className="bgLayer" style={backgroundStyle}>
-                    {activeBackground?.url && (
-                      activeBackground.type === "application/pdf" ? (
-                        <div className="bgPdfNotice">Rasterizing PDF…</div>
-                      ) : (
-                        <img className="bgImg" src={activeBackground.url} alt="Roof diagram" />
-                      )
-                    )}
-                    {mapUrl && (
-                      <iframe className="bgMap" title="Google Maps background" src={mapUrl} loading="lazy" />
-                    )}
-                  </div>
-                  <svg className="gridSvg" width="100%" height="100%" viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} preserveAspectRatio="xMidYMid meet">
-                    <defs>
-                      <pattern id="grid-print" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#EEF2F7" strokeWidth="1"/>
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid-print)" opacity={activeBackground?.url || mapUrl ? 0.45 : 1} />
-                    {pageItems.filter(i => i.type === "ts").map(renderTSPrint)}
-                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsAreaPrint)}
-                    {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrowPrint)}
-                  </svg>
-                  {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
-                    const m = markerMeta(i);
-                    return (
-                      <div
-                        key={`print-marker-${i.id}`}
-                        className={`marker${i.type === "wind" ? " markerWind" : ""}`}
-                        style={{
-                          left: `${i.x * 100}%`,
-                          top: `${i.y * 100}%`,
-                          background: m.bg,
-                          borderRadius: m.radius
-                        }}
-                      >
-                        {m.label}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="printSection" style={{marginTop:16}}>
+              <div className="printSection">
                 <h3>Dashboard</h3>
                 <table className="dashTable" style={{marginBottom:12}}>
                   <thead>
@@ -13606,13 +13553,6 @@ const loadPdfJs = () => {
               </div>
             </div>
 
-            <div className="printPage">
-              <div className="printSection">
-                <h3>Report Notes</h3>
-                <div className="printBlock" style={{marginTop:8, fontWeight:800}}>Description</div>
-                <div className="printBlock">{formatBlock(descriptionParagraph())}</div>
-              </div>
-            </div>
           </div>
           </>
         );
