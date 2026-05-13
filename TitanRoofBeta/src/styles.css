@@ -6449,6 +6449,12 @@
           object-fit: cover;
         }
         .printDiagramPage{ page: diagram; }
+        .printDiagramPage .printDiagramSheet{
+          aspect-ratio: auto !important;
+          width: 100%;
+          max-height: calc(100vh - 20mm);
+          overflow: hidden;
+        }
         @page{
           size: portrait;
           margin: 12mm;
