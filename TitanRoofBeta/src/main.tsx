@@ -13872,17 +13872,21 @@ const loadPdfJs = () => {
                 <h3>Observations</h3>
                 <div className="printGrid">
                   {pageItems.filter(i => i.type === "obs").map(obs => {
-                    if(!obs.data.photo?.url) return null;
+                    if(!obs.data.photo?.url && !obs.data.caption) return null;
                     return (
                       <div className="printCard" key={`obs-${obs.id}`}>
                         <div style={{fontWeight:800}}>{observationCaption(obs)}</div>
                         <div className="tiny">{obs.data.points?.length ? "Area observation" : "Pin observation"}</div>
-                        <PrintPhoto
-                          photo={obs.data.photo}
-                          alt="Observation"
-                          caption={photoCaption(composeCaption(observationCaption(obs), obs.data.caption), obs.data.photo)}
-                          style={{marginTop:8}}
-                        />
+                        {obs.data.photo?.url ? (
+                          <PrintPhoto
+                            photo={obs.data.photo}
+                            alt="Observation"
+                            caption={photoCaption(composeCaption(observationCaption(obs), obs.data.caption), obs.data.photo)}
+                            style={{marginTop:8}}
+                          />
+                        ) : (
+                          <div className="tiny">No photo attached.</div>
+                        )}
                       </div>
                     );
                   })}
