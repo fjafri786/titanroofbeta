@@ -45,6 +45,10 @@ export interface UnifiedBarProps {
   // Tools (diagram mode only)
   currentTool: string | null;
   onPickTool: (key: ToolKey) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   onBeginScaleReference: () => void;
   onClearScaleReference: () => void;
   scaleReferenceSet: boolean;
@@ -98,6 +102,7 @@ const I = {
   back: () => (<svg {...sv}><path d="M15 18l-6-6 6-6"/></svg>),
   chevDown: () => (<svg {...sv}><path d="M6 9l6 6 6-6"/></svg>),
   undo: () => (<svg {...sv}><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7"/></svg>),
+  redo: () => (<svg {...sv}><path d="M21 7v6h-6"/><path d="M21 13a9 9 0 1 1-3-7"/></svg>),
   share: () => (<svg {...sv}><path d="M12 3v13"/><path d="M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>),
   dots: () => (<svg {...sv}><circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>),
 
@@ -243,7 +248,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                   {TOOL_DEFS.map(t => {
                     const IconEl = I[t.icon];
                     const active = props.currentTool === t.key;
-                    return (
+                    const chip = (
                       <button
                         key={t.key}
                         type="button"
@@ -256,6 +261,41 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                         <span className="ubToolLabel">{t.short}</span>
                       </button>
                     );
+                    // Insert undo / redo + divider immediately before
+                    // the Draw chip so the toolbar reads:
+                    //   …OBS │ Undo Redo │ DRAW
+                    if(t.key === "free" && props.onUndo && props.onRedo){
+                      return (
+                        <React.Fragment key="free-with-history">
+                          <span className="ubToolDivider" aria-hidden="true" />
+                          <button
+                            type="button"
+                            className="ubToolChip ubHistoryChip"
+                            onClick={props.onUndo}
+                            disabled={!props.canUndo}
+                            title="Undo"
+                            aria-label="Undo"
+                          >
+                            <span className="ubToolIcon"><I.undo /></span>
+                            <span className="ubToolLabel">UNDO</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="ubToolChip ubHistoryChip"
+                            onClick={props.onRedo}
+                            disabled={!props.canRedo}
+                            title="Redo"
+                            aria-label="Redo"
+                          >
+                            <span className="ubToolIcon"><I.redo /></span>
+                            <span className="ubToolLabel">REDO</span>
+                          </button>
+                          <span className="ubToolDivider" aria-hidden="true" />
+                          {chip}
+                        </React.Fragment>
+                      );
+                    }
+                    return chip;
                   })}
                 </div>
               )}
