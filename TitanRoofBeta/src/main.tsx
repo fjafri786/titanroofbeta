@@ -988,6 +988,57 @@ const loadPdfJs = () => {
         return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
       }
 
+      // Resolve the normalized position of a test square's hit-count
+      // circle. The default is the top-right corner of the bbox (the
+      // historical placement); once the user drags it, the explicit
+      // hitsPos in ts.data takes over so the badge can be parked
+      // anywhere on the page.
+      function getTsHitsPos(ts){
+        const pts = ts?.data?.points || [];
+        if(ts?.data?.hitsPos && typeof ts.data.hitsPos.x === "number" && typeof ts.data.hitsPos.y === "number"){
+          return { x: ts.data.hitsPos.x, y: ts.data.hitsPos.y };
+        }
+        if(!pts.length) return { x: 0.5, y: 0.5 };
+        const bb = bboxFromPoints(pts);
+        return { x: bb.maxX, y: bb.minY };
+      }
+
+      // Pick which side of the test square bbox the leader line
+      // should attach to, based on the relative offset of the hit
+      // badge. The side with the larger ratio (|dx|/halfW vs
+      // |dy|/halfH) wins, so dragging the badge mostly to the side
+      // anchors the leader on left/right while dragging it mostly
+      // above/below anchors it on top/bottom.
+      function tsLeaderAnchor(ts){
+        const pts = ts?.data?.points || [];
+        if(!pts.length) return null;
+        const bb = bboxFromPoints(pts);
+        const cx = (bb.minX + bb.maxX) / 2;
+        const cy = (bb.minY + bb.maxY) / 2;
+        const hp = getTsHitsPos(ts);
+        const dx = hp.x - cx;
+        const dy = hp.y - cy;
+        const halfW = Math.max(0.0001, (bb.maxX - bb.minX) / 2);
+        const halfH = Math.max(0.0001, (bb.maxY - bb.minY) / 2);
+        const ratioX = Math.abs(dx) / halfW;
+        const ratioY = Math.abs(dy) / halfH;
+        let ax, ay;
+        if(ratioX >= ratioY){
+          ax = dx >= 0 ? bb.maxX : bb.minX;
+          const t = Math.abs(dx) > 0.0001 ? (ax - cx) / dx : 0;
+          ay = cy + dy * t;
+          if(ay < bb.minY) ay = bb.minY;
+          if(ay > bb.maxY) ay = bb.maxY;
+        } else {
+          ay = dy >= 0 ? bb.maxY : bb.minY;
+          const t = Math.abs(dy) > 0.0001 ? (ay - cy) / dy : 0;
+          ax = cx + dx * t;
+          if(ax < bb.minX) ax = bb.minX;
+          if(ax > bb.maxX) ax = bb.maxX;
+        }
+        return { ax, ay, hx: hp.x, hy: hp.y };
+      }
+
       // Shoelace area, in squared sheet-pixels, for a polygon whose
       // points are stored as normalized [0..1] coords.
       function polygonAreaPx(pts, sheetWidth, sheetHeight){
@@ -1724,6 +1775,62 @@ const loadPdfJs = () => {
         const mobileFitPagesRef = useRef(new Set());
 
         const [items, setItems] = useState([]);
+
+        // Undo / redo. A useRef-backed stack tracks every items mutation
+        // (so we don't have to wrap the ~40 existing setItems call
+        // sites). The skip flag suppresses tracking when undo/redo
+        // itself is the source of the change. historyVersion is bumped
+        // whenever the stacks change so the undo/redo buttons can
+        // disable/enable in sync.
+        const historyRef = useRef<{ past: any[][]; future: any[][] }>({ past: [], future: [] });
+        const skipHistoryRef = useRef(false);
+        const prevItemsRef = useRef(items);
+        const [historyVersion, setHistoryVersion] = useState(0);
+        useEffect(() => {
+          if(items === prevItemsRef.current) return;
+          if(skipHistoryRef.current){
+            skipHistoryRef.current = false;
+            prevItemsRef.current = items;
+            return;
+          }
+          historyRef.current.past.push(prevItemsRef.current);
+          if(historyRef.current.past.length > 100) historyRef.current.past.shift();
+          historyRef.current.future = [];
+          prevItemsRef.current = items;
+          setHistoryVersion(v => v + 1);
+        }, [items]);
+        const undoItems = () => {
+          const { past, future } = historyRef.current;
+          if(past.length === 0) return;
+          const previous = past.pop()!;
+          future.unshift(items);
+          if(future.length > 100) future.pop();
+          skipHistoryRef.current = true;
+          prevItemsRef.current = previous;
+          setItems(previous);
+          setSelectedId(null);
+          setPanelView("items");
+          setHistoryVersion(v => v + 1);
+        };
+        const redoItems = () => {
+          const { past, future } = historyRef.current;
+          if(future.length === 0) return;
+          const next = future.shift()!;
+          past.push(items);
+          skipHistoryRef.current = true;
+          prevItemsRef.current = next;
+          setItems(next);
+          setSelectedId(null);
+          setPanelView("items");
+          setHistoryVersion(v => v + 1);
+        };
+        const canUndo = historyRef.current.past.length > 0;
+        const canRedo = historyRef.current.future.length > 0;
+        // Reference historyVersion so the lint rule + future bundlers
+        // don't strip the dependency; the value itself isn't read but
+        // its change forces canUndo/canRedo to re-evaluate.
+        void historyVersion;
+
         const [selectedId, setSelectedId] = useState(null);
         const [panelView, setPanelView] = useState("items"); // items | props
         const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
@@ -1791,6 +1898,9 @@ const loadPdfJs = () => {
         // Preview bubbles clamp their body to ~10 lines by default; this
         // tracks which sections the user has expanded to see the full text.
         const [previewExpandedSections, setPreviewExpandedSections] = useState<Record<string, boolean>>({});
+        // Briefly highlights the Copy button so the inspector knows the
+        // section text landed on the clipboard. Cleared by a timer.
+        const [previewCopied, setPreviewCopied] = useState<string | null>(null);
         // Per-section collapsed state for the Project/Description/
         // Background/Inspection form bubbles. Keys are stable IDs
         // ("projectInfo", "parties", "structure", …). Missing keys
@@ -2664,17 +2774,33 @@ const loadPdfJs = () => {
           };
         }, []);
 
-        // Esc clears tool
+        // Esc clears tool. Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or
+        // Cmd/Ctrl+Y = redo. Suppress when an input is focused so the
+        // browser's text-field undo keeps working.
         useEffect(() => {
           const onKey = (e) => {
             if(e.key === "Escape"){
               setTool(null);
               setDrag(null);
+              return;
+            }
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName?.toLowerCase();
+            if(tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+            const mod = e.metaKey || e.ctrlKey;
+            if(!mod) return;
+            const k = e.key.toLowerCase();
+            if(k === "z" && !e.shiftKey){
+              e.preventDefault();
+              undoItems();
+            } else if((k === "z" && e.shiftKey) || k === "y"){
+              e.preventDefault();
+              redoItems();
             }
           };
           window.addEventListener("keydown", onKey);
           return () => window.removeEventListener("keydown", onKey);
-        }, []);
+        }, [items]);
 
         const [viewportSize, setViewportSize] = useState({ w: window.innerWidth, h: window.innerHeight });
         useEffect(() => {
@@ -4126,9 +4252,14 @@ const loadPdfJs = () => {
             // Persist the last APT type + direction so repeat placements
             // (e.g. "all south-sloped plumbing stacks") don't force the
             // inspector to reselect the same subtype for each item.
+            // Ridge vents sit on the ridge, not on a cardinal slope —
+            // default their location to "Ridge" so the report and the
+            // inspector both reflect reality.
+            const aptType = aptLastType || "EF";
+            const defaultDir = aptType === "RV" ? "Ridge" : (aptLastDir || "N");
             base.data = {
-              type: aptLastType || "EF",
-              dir: aptLastDir || "N",
+              type: aptType,
+              dir: defaultDir,
               locked: false,
               caption: "",
               detailPhoto: null,
@@ -4265,6 +4396,10 @@ const loadPdfJs = () => {
           setSelectedId(it.id);
           setPanelView("props");
           if(isMobile) setMobilePanelOpen(true);
+          // Deselect the tool after placement so accidental taps while
+          // balancing on the roof don't add extra items. The inspector
+          // has to re-tap the tool to place another.
+          setTool(null);
         };
 
         const updateItemData = (k, v) => {
@@ -4978,6 +5113,18 @@ const loadPdfJs = () => {
 
         // === HIT TEST ===
         const findHit = (norm) => {
+          // Hits circle on the SELECTED test square is draggable so
+          // the inspector can move it off the bbox corner when it
+          // overlaps another feature. Check this before the polygon
+          // handles so the hit ring wins over an underlying handle.
+          const selTs = pageItems.find(i => i.id === selectedId && i.type === "ts");
+          if(selTs && !selTs.data.locked){
+            const hp = getTsHitsPos(selTs);
+            const distH = Math.hypot(hp.x - norm.x, hp.y - norm.y);
+            if(distH < 0.014){
+              return { kind: "ts-hits-handle", id: selTs.id };
+            }
+          }
           const sel = pageItems.find(i => i.id === selectedId && (
             i.type === "ts"
             || (i.type === "obs" && i.data.kind === "area" && i.data.points?.length)
@@ -5137,6 +5284,10 @@ const loadPdfJs = () => {
             const it = items.find(x => x.id === hit.id);
             if(!it) return;
 
+            if(hit.kind === "ts-hits-handle" && it.type === "ts" && !it.data.locked){
+              setDrag({ mode:"ts-hits-move", id: it.id });
+              return;
+            }
             if(hit.kind === "poly-handle" && !it.data.locked){
               if(it.type === "ts"){
                 setDrag({ mode:"ts-point", id: it.id, pointIndex: hit.pointIndex });
@@ -5343,6 +5494,14 @@ const loadPdfJs = () => {
             return;
           }
 
+          if(drag.mode === "ts-hits-move"){
+            e.preventDefault();
+            const nx = clamp(norm.x, 0, 1);
+            const ny = clamp(norm.y, 0, 1);
+            setItems(prev => prev.map(i => i.id === drag.id ? { ...i, data: { ...i.data, hitsPos: { x: nx, y: ny } } } : i));
+            return;
+          }
+
           if(drag.mode === "obs-move"){
             e.preventDefault();
             const dx = norm.x - drag.start.x;
@@ -5432,6 +5591,7 @@ const loadPdfJs = () => {
               setItems(prev => [...prev, it]);
               setSelectedId(it.id);
               setPanelView("props");
+              setTool(null);
             }
             setFreeStroke(null);
             setFreeSuggestion(null);
@@ -5490,6 +5650,7 @@ const loadPdfJs = () => {
                 setItems(prev => [...prev, it]);
                 setSelectedId(it.id);
                 setPanelView("props");
+                setTool(null);
               }
             }
           }
@@ -5513,6 +5674,7 @@ const loadPdfJs = () => {
               setItems(prev => [...prev, it]);
               setSelectedId(it.id);
               setPanelView("props");
+              setTool(null);
             }
           }
 
@@ -5536,6 +5698,7 @@ const loadPdfJs = () => {
               setItems(prev => [...prev, it]);
               setSelectedId(it.id);
               setPanelView("props");
+              setTool(null);
             } else if(start){
               if(obsTool === "poly"){
                 const size = 0.03;
@@ -5554,11 +5717,13 @@ const loadPdfJs = () => {
                 setItems(prev => [...prev, it]);
                 setSelectedId(it.id);
                 setPanelView("props");
+                setTool(null);
               } else {
                 const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
                 setItems(prev => [...prev, it]);
                 setSelectedId(it.id);
                 setPanelView("props");
+                setTool(null);
               }
             }
           }
@@ -5573,11 +5738,13 @@ const loadPdfJs = () => {
                 setItems(prev => [...prev, it]);
                 setSelectedId(it.id);
                 setPanelView("props");
+                setTool(null);
               } else {
                 const it = createItem("obs", { x: start.x, y: start.y }, { kind: "pin" });
                 setItems(prev => [...prev, it]);
                 setSelectedId(it.id);
                 setPanelView("props");
+                setTool(null);
               }
             }
           }
@@ -5693,10 +5860,16 @@ const loadPdfJs = () => {
           const isSel = selectedId === ts.id;
 
           const bb = bboxFromPoints(pts);
-          const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
+
+          const hp = getTsHitsPos(ts);
+          const hitsPx = { x: toPxX(hp.x), y: toPxY(hp.y) };
+          const anchor = tsLeaderAnchor(ts);
+          const showLeader = !!(ts.data.hitsPos && anchor);
+          const leaderAx = anchor ? toPxX(anchor.ax) : 0;
+          const leaderAy = anchor ? toPxY(anchor.ay) : 0;
 
           return (
             <g key={ts.id}>
@@ -5722,8 +5895,25 @@ const loadPdfJs = () => {
                 </g>
               )}
 
-              <circle cx={topRight.x} cy={topRight.y} r="9" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
+              {showLeader && (
+                <line
+                  x1={leaderAx}
+                  y1={leaderAy}
+                  x2={hitsPx.x}
+                  y2={hitsPx.y}
+                  stroke="var(--c-ts)"
+                  strokeWidth="1.5"
+                  strokeDasharray="3,3"
+                />
+              )}
+              <circle
+                cx={hitsPx.x}
+                cy={hitsPx.y}
+                r="9"
+                fill="var(--c-ts)"
+                style={isSel && !ts.data.locked ? { cursor: "move" } : undefined}
+              />
+              <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
 
@@ -5741,10 +5931,15 @@ const loadPdfJs = () => {
           const pts = ts.data.points || [];
           const ptsPx = pts.map(p => `${toPxX(p.x)},${toPxY(p.y)}`).join(" ");
           const bb = bboxFromPoints(pts);
-          const topRight = { x: toPxX(bb.maxX), y: toPxY(bb.minY) };
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
+          const hp = getTsHitsPos(ts);
+          const hitsPx = { x: toPxX(hp.x), y: toPxY(hp.y) };
+          const anchor = tsLeaderAnchor(ts);
+          const showLeader = !!(ts.data.hitsPos && anchor);
+          const leaderAx = anchor ? toPxX(anchor.ax) : 0;
+          const leaderAy = anchor ? toPxY(anchor.ay) : 0;
           return (
             <g key={`print-${ts.id}`}>
               <polygon
@@ -5768,8 +5963,19 @@ const loadPdfJs = () => {
                   <path d="M1.2 3V2a1.8 1.8 0 013.6 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
               )}
-              <circle cx={topRight.x} cy={topRight.y} r="9" fill="var(--c-ts)" />
-              <text x={topRight.x} y={topRight.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
+              {showLeader && (
+                <line
+                  x1={leaderAx}
+                  y1={leaderAy}
+                  x2={hitsPx.x}
+                  y2={hitsPx.y}
+                  stroke="var(--c-ts)"
+                  strokeWidth="1.5"
+                  strokeDasharray="3,3"
+                />
+              )}
+              <circle cx={hitsPx.x} cy={hitsPx.y} r="9" fill="var(--c-ts)" />
+              <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
                 {(ts.data.bruises||[]).length}
               </text>
             </g>
@@ -7166,6 +7372,30 @@ const loadPdfJs = () => {
             setPreviewDraft("");
           }
         };
+        const copyPreviewSection = async (key: string, text: string) => {
+          if(!text) return;
+          try {
+            if(navigator.clipboard && navigator.clipboard.writeText){
+              await navigator.clipboard.writeText(text);
+            } else {
+              // Fallback for older Safari and contexts without the
+              // async clipboard API.
+              const ta = document.createElement("textarea");
+              ta.value = text;
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.focus();
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+            }
+            setPreviewCopied(key);
+            window.setTimeout(() => setPreviewCopied(curr => curr === key ? null : curr), 1500);
+          } catch(err){
+            console.warn("Copy failed", err);
+          }
+        };
 
         const collectTsPhotos = (ts) => {
           const photos = [];
@@ -7220,11 +7450,33 @@ const loadPdfJs = () => {
                 </div>
               )}
               <div className="photoFieldActions">
-                <label className={"btn photoFieldPickBtn" + (hasPhoto ? "" : " btnPrimary btnFull")}>
+                <label className={"btn photoFieldPickBtn" + (hasPhoto ? "" : " btnPrimary")}>
                   <span>{hasPhoto ? `Replace ${noun}` : `Choose ${noun}`}</span>
                   <input
                     type="file"
                     accept="image/*"
+                    style={{display:"none"}}
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if(f) await setter(fieldKey, f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {/* iPadOS Safari sometimes ignores the camera option in
+                    the standard file-picker sheet when the input is
+                    hidden + triggered by a label tap, especially in
+                    standalone web-app mode. A dedicated input with
+                    capture="environment" opens the rear camera directly
+                    so the inspector always has a working camera path
+                    while still being able to pick from the library
+                    above. */}
+                <label className="btn photoFieldCameraBtn" title={`Take ${noun} with camera`}>
+                  <span>Camera</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
                     style={{display:"none"}}
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
@@ -8566,12 +8818,33 @@ const loadPdfJs = () => {
                             ) : (
                               <div className="photoPlaceholder">No photo selected</div>
                             )}
-                            <input
-                              className="inp"
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleExteriorPhotoUpload(entry.id, e.target.files?.[0])}
-                            />
+                            <div className="exteriorPhotoInputs">
+                              <label className="btn exteriorPhotoBtn">
+                                <span>{entry.photo?.url ? "Replace photo" : "Choose photo"}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  style={{display:"none"}}
+                                  onChange={(e) => {
+                                    handleExteriorPhotoUpload(entry.id, e.target.files?.[0]);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              <label className="btn exteriorPhotoBtn" title="Take photo with camera">
+                                <span>Camera</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  style={{display:"none"}}
+                                  onChange={(e) => {
+                                    handleExteriorPhotoUpload(entry.id, e.target.files?.[0]);
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
                           </div>
                           <div className="exteriorFields">
                             <div>
@@ -8673,6 +8946,10 @@ const loadPdfJs = () => {
               onToggleSidebar={isMobile ? undefined : () => setSidebarCollapsed(v => !v)}
               currentTool={tool}
               onPickTool={(key) => handleToolSelect(key)}
+              onUndo={undoItems}
+              onRedo={redoItems}
+              canUndo={canUndo}
+              canRedo={canRedo}
               onBeginScaleReference={beginScaleReference}
               onClearScaleReference={() => setScaleRef(null)}
               scaleReferenceSet={!!scaleRef}
@@ -9234,6 +9511,29 @@ const loadPdfJs = () => {
                             );
                           }
                         }
+                        const showCaption = i.data.showLabel !== false && (i.data.caption || "").trim();
+                        let captionEl = null;
+                        if(showCaption){
+                          const bb2 = bboxFromPoints(pts);
+                          const cx = ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
+                          // Place the label just below the bounding box
+                          // so it doesn't collide with the measure label
+                          // above the shape.
+                          const cy = bb2.maxY * sheetHeight + 12;
+                          captionEl = (
+                            <text
+                              x={cx}
+                              y={cy}
+                              fill={color}
+                              fontSize="11"
+                              fontWeight="700"
+                              textAnchor="middle"
+                              style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 3 } as any}
+                            >
+                              {i.data.caption}
+                            </text>
+                          );
+                        }
                         return (
                           <g key={i.id} opacity={isSel ? 1 : 0.95} style={{ cursor: "pointer" }}>
                             <path
@@ -9246,6 +9546,7 @@ const loadPdfJs = () => {
                             />
                             {arrowHead}
                             {measureLabel}
+                            {captionEl}
                           </g>
                         );
                       })}
@@ -10216,6 +10517,17 @@ const loadPdfJs = () => {
                               <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Notes relevant to sampled area..."/>
                             </div>
 
+                            {activeItem.data.hitsPos && (
+                              <button
+                                className="btn btnFull"
+                                style={{marginBottom:10}}
+                                onClick={()=>updateItemData("hitsPos", null)}
+                                title="Move the hit-count badge back to the test square's top-right corner"
+                              >
+                                Reset hits position
+                              </button>
+                            )}
+
                             <button className="btn btnDanger btnFull" onClick={deleteSelected}>Delete Test Square</button>
                           </>
                         )}
@@ -10225,18 +10537,36 @@ const loadPdfJs = () => {
                           <>
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Type</div>
-                              <select className="inp" value={activeItem.data.type} onChange={(e)=>updateItemData("type", e.target.value)}>
+                              <select className="inp" value={activeItem.data.type} onChange={(e)=>{
+                                const next = e.target.value;
+                                updateItemData("type", next);
+                                // Ridge vents sit on the ridge — auto-flip
+                                // the location when the type changes to or
+                                // from RV so the field doesn't keep an N/S
+                                // direction that doesn't apply.
+                                if(next === "RV" && activeItem.data.dir !== "Ridge"){
+                                  updateItemData("dir", "Ridge");
+                                } else if(next !== "RV" && activeItem.data.dir === "Ridge"){
+                                  updateItemData("dir", aptLastDir || "N");
+                                }
+                              }}>
                                 {APT_TYPES.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                               </select>
                             </div>
 
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Location Side</div>
-                              <div className="radioGrid">
-                                {CARDINAL_DIRS.map(d => (
-                                  <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
-                                ))}
-                              </div>
+                              <div className="lbl">Location {activeItem.data.type === "RV" ? "" : "Side"}</div>
+                              {activeItem.data.type === "RV" ? (
+                                <div className="radioGrid">
+                                  <div className="radio active" style={{gridColumn:"1 / -1"}}>Ridge</div>
+                                </div>
+                              ) : (
+                                <div className="radioGrid">
+                                  {CARDINAL_DIRS.map(d => (
+                                    <div key={d} className={"radio " + (activeItem.data.dir===d ? "active":"")} onClick={()=>updateItemData("dir", d)}>{d}</div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
 
                             <div className="hr"></div>
@@ -11153,7 +11483,21 @@ const loadPdfJs = () => {
                               </div>
                             </div>
                             <div style={{marginBottom:10}}>
-                              <div className="lbl">Label</div>
+                              <div className="row" style={{alignItems:"center", justifyContent:"space-between", marginBottom:6}}>
+                                <div className="lbl" style={{margin:0}}>Label</div>
+                                <label
+                                  className="drawLabelToggle"
+                                  title="Show this label on the diagram"
+                                >
+                                  <span className="drawLabelToggleText">Show on diagram</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={activeItem.data.showLabel !== false}
+                                    onChange={(e)=>updateItemData("showLabel", e.target.checked)}
+                                  />
+                                  <span className="drawLabelToggleSwitch" aria-hidden="true" />
+                                </label>
+                              </div>
                               <textarea
                                 className="inp"
                                 value={activeItem.data.caption}
@@ -11309,6 +11653,15 @@ const loadPdfJs = () => {
                               Regenerate
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className={"previewActionBtn previewCopyBtn" + (previewCopied === section.key ? " copied" : "")}
+                            onClick={() => copyPreviewSection(section.key, bodyText)}
+                            disabled={!bodyText}
+                            title="Copy this section's text to the clipboard"
+                          >
+                            {previewCopied === section.key ? "Copied" : "Copy"}
+                          </button>
                         </div>
                       </div>
                     );
