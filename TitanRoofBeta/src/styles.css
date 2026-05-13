@@ -6418,7 +6418,18 @@
 
       @media print{
         body, html{ overflow:visible; }
-        .app{ display:block; }
+        .app{
+          display:block;
+          height:auto;
+          min-height:0;
+          padding-top:0;
+        }
+        .printSection{
+          border:none;
+          border-radius:0;
+          padding:0 0 12px 0;
+          background:transparent;
+        }
         .canvasZone, .panel, .reportView, .photosView, .authOverlay, .modeToggle, .sidebarToggle, .sidebarDock, .saveToast, .modalBackdrop, .topBar, .propertiesBar, .menuBar, .systemBar, .mobileMenuOverlay, .mobileMenuSheet, .unifiedBar{ display:none !important; }
         .printSheet{
           display:block;
@@ -6450,9 +6461,8 @@
         }
         .printDiagramPage{ page: diagram; }
         .printDiagramPage .printDiagramSheet{
-          aspect-ratio: auto !important;
-          width: 100%;
           max-height: calc(100vh - 20mm);
+          max-width: 100%;
           overflow: hidden;
         }
         @page{
