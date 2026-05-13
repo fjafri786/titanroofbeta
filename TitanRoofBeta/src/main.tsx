@@ -2346,12 +2346,66 @@ const loadPdfJs = () => {
 
         const exportTrp = useCallback(() => {
           const snapshot = buildState();
+
+          // Wrap the engine snapshot in a ProjectRecord-shaped object so the
+          // dashboard importer (which requires a top-level `sections` array)
+          // will accept files exported from the workspace.
+          let exportData: unknown;
+          if (openProjectRecord && Array.isArray((openProjectRecord as any).sections)) {
+            const updatedRecord: any = JSON.parse(JSON.stringify(openProjectRecord));
+            if (
+              updatedRecord.sections[0] &&
+              updatedRecord.sections[0].pages &&
+              updatedRecord.sections[0].pages[0] &&
+              updatedRecord.sections[0].pages[0].engine
+            ) {
+              updatedRecord.sections[0].pages[0].engine.state = snapshot;
+            }
+            updatedRecord.updatedAt = new Date().toISOString();
+            exportData = updatedRecord;
+          } else {
+            const now = new Date().toISOString();
+            const fallbackId =
+              typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            exportData = {
+              name: residenceName || reportData?.project?.projectName || "Untitled Project",
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+              status: "active",
+              sections: [
+                {
+                  sectionId: fallbackId,
+                  name: "Pages",
+                  order: 0,
+                  pages: [
+                    {
+                      pageId: `${fallbackId}-p1`,
+                      name: "Page 1",
+                      order: 0,
+                      engine: {
+                        name: "legacy-v4",
+                        version: "4.2.3",
+                        state: snapshot,
+                      },
+                      notes: "",
+                    },
+                  ],
+                },
+              ],
+              attachments: [],
+              schemaVersion: 1,
+            };
+          }
+
           const payload = {
             app: "TitanRoof 4.2.3 Beta",
             version: "4.2.3",
             format: "titanroof-project",
             exportedAt: new Date().toISOString(),
-            data: snapshot
+            data: exportData,
           };
           const json = JSON.stringify(payload, null, 2);
           const blob = new Blob([json], { type: "application/json" });
@@ -2371,7 +2425,7 @@ const loadPdfJs = () => {
           // Revoke on next tick to avoid Safari/iPadOS aborting the download
           setTimeout(() => URL.revokeObjectURL(url), 1000);
           setLastSavedAt({ source: "export", time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) });
-        }, [buildState, residenceName, reportData]);
+        }, [buildState, residenceName, reportData, openProjectRecord]);
 
         const importTrp = useCallback((file) => {
           if(!file) return;
