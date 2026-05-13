@@ -11692,37 +11692,21 @@ const loadPdfJs = () => {
                           placeholder?: string,
                         ) => {
                           const current = (reportData.description as any)[field] || "";
-                          const isPreset = options.includes(current);
-                          const selectValue = !current ? "" : (isPreset ? current : OTHER);
+                          const listId = `opts-${field}`;
+                          const suggestions = options.filter(o => o !== OTHER);
                           return (
                             <div key={field}>
                               <div className="lbl">{label}</div>
-                              <select
+                              <input
                                 className="inp"
-                                value={selectValue}
-                                onChange={(e) => {
-                                  const next = e.target.value;
-                                  if (next === OTHER) {
-                                    // Clear so the text input opens empty
-                                    // and the user can type a custom value.
-                                    updateReportSection("description", field, "");
-                                  } else {
-                                    updateReportSection("description", field, next);
-                                  }
-                                }}
-                              >
-                                <option value="">Select</option>
-                                {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                              </select>
-                              {(selectValue === OTHER || (!isPreset && current)) && (
-                                <input
-                                  className="inp"
-                                  style={{marginTop:6}}
-                                  value={current}
-                                  onChange={(e) => updateReportSection("description", field, e.target.value)}
-                                  placeholder={placeholder || "Enter value"}
-                                />
-                              )}
+                                list={listId}
+                                value={current}
+                                onChange={(e) => updateReportSection("description", field, e.target.value)}
+                                placeholder={placeholder || "Select or type a value"}
+                              />
+                              <datalist id={listId}>
+                                {suggestions.map(opt => <option key={opt} value={opt} />)}
+                              </datalist>
                             </div>
                           );
                         };
