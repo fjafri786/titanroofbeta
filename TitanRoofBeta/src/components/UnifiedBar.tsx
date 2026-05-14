@@ -187,13 +187,7 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
         {/* Left: brand + back + project title + view tabs + (when diagram) tool strip */}
         <div className="ubLeft">
           <div className="ubBrand" title={`TitanRoof Beta v${APP_VERSION}`}>
-            <TitanRoofLogo size={26} />
-            <span className="ubBrandText">
-              <span className="ubBrandName">TitanRoof</span>
-              <span className="ubBrandMeta">
-                Beta <span className="ubBrandVersion">v{APP_VERSION}</span>
-              </span>
-            </span>
+            <TitanRoofLogo size={24} />
           </div>
           {route === "workspace" && (
             <button
@@ -277,7 +271,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                         aria-label="Undo"
                       >
                         <span className="ubToolIcon"><I.undo /></span>
-                        <span className="ubToolLabel">UNDO</span>
                       </button>
                       <button
                         type="button"
@@ -288,7 +281,6 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                         aria-label="Redo"
                       >
                         <span className="ubToolIcon"><I.redo /></span>
-                        <span className="ubToolLabel">REDO</span>
                       </button>
                     </>
                   )}
