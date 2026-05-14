@@ -1745,6 +1745,13 @@ const loadPdfJs = () => {
           "titanroof.view.scopeVisibility",
           { roof: true, exterior: true }
         );
+        // Per-category visibility — the eye toggle on each group header
+        // hides that category's markers from the diagram so the
+        // inspector can focus on one segment at a time.
+        const [categoryVisibility, setCategoryVisibility] = usePersistedState<Record<string, boolean>>(
+          "titanroof.view.categoryVisibility",
+          { ts: true, apt: true, ds: true, eapt: true, garage: true, obs: true, wind: true, free: true }
+        );
         // TS / WIND / OBS last-used sub-selections. Mirrors the APT/DS
         // pattern above — when the inspector changes one of these fields
         // on an existing item, the next freshly placed item of the same
@@ -1990,13 +1997,14 @@ const loadPdfJs = () => {
             return null;
           };
           const scopeFiltered = pageItems.filter(item => {
+            if(categoryVisibility[item.type] === false) return false;
             const s = scopeOf(item);
             if(!s) return true;
             return !!scopeVisibility[s];
           });
           if(!dashFocusDir) return scopeFiltered;
           return scopeFiltered.filter(item => item.data?.dir === dashFocusDir);
-        }, [dashFocusDir, pageItems, scopeVisibility]);
+        }, [dashFocusDir, pageItems, scopeVisibility, categoryVisibility]);
         const activeItem = items.find(i => i.id === selectedId);
         const activePageIndex = useMemo(() => pages.findIndex(page => page.id === activePageId), [pages, activePageId]);
         const mapZoom = activePage?.map?.zoom || 18;
@@ -5125,6 +5133,16 @@ const loadPdfJs = () => {
               return { kind: "ts-hits-handle", id: selTs.id };
             }
           }
+          // Draggable text label on the SELECTED draw / observation
+          // item. Checked before polygon handles so grabbing the label
+          // wins over an underlying vertex handle.
+          const selLabelItem = pageItems.find(i => i.id === selectedId && (i.type === "free" || i.type === "obs"));
+          if(selLabelItem && !selLabelItem.data.locked){
+            const box = labelHitBox(selLabelItem);
+            if(box && norm.x >= box.minX && norm.x <= box.maxX && norm.y >= box.minY && norm.y <= box.maxY){
+              return { kind: "label-handle", id: selLabelItem.id };
+            }
+          }
           const sel = pageItems.find(i => i.id === selectedId && (
             i.type === "ts"
             || (i.type === "obs" && i.data.kind === "area" && i.data.points?.length)
@@ -5286,6 +5304,11 @@ const loadPdfJs = () => {
 
             if(hit.kind === "ts-hits-handle" && it.type === "ts" && !it.data.locked){
               setDrag({ mode:"ts-hits-move", id: it.id });
+              return;
+            }
+            if(hit.kind === "label-handle" && !it.data.locked){
+              const off = it.data.labelOffset || { x: 0, y: 0 };
+              setDrag({ mode:"label-move", id: it.id, start: norm, origin: { x: off.x || 0, y: off.y || 0 } });
               return;
             }
             if(hit.kind === "poly-handle" && !it.data.locked){
@@ -5499,6 +5522,15 @@ const loadPdfJs = () => {
             const nx = clamp(norm.x, 0, 1);
             const ny = clamp(norm.y, 0, 1);
             setItems(prev => prev.map(i => i.id === drag.id ? { ...i, data: { ...i.data, hitsPos: { x: nx, y: ny } } } : i));
+            return;
+          }
+
+          if(drag.mode === "label-move"){
+            e.preventDefault();
+            const dx = norm.x - drag.start.x;
+            const dy = norm.y - drag.start.y;
+            const nextOffset = { x: drag.origin.x + dx, y: drag.origin.y + dy };
+            setItems(prev => prev.map(i => i.id === drag.id ? { ...i, data: { ...i.data, labelOffset: nextOffset } } : i));
             return;
           }
 
@@ -5825,6 +5857,84 @@ const loadPdfJs = () => {
         const sheetHeight = sheetMetrics.height;
         const toPxX = (value) => value * sheetWidth;
         const toPxY = (value) => value * sheetHeight;
+
+        // === Movable text labels ===
+        // DRAW captions and observation labels can be dragged off their
+        // default anchor. The offset is stored normalized in
+        // item.data.labelOffset so it travels with the shape when the
+        // shape itself is moved. Locking the item also locks the label.
+        const labelTextOf = (item) => {
+          if(!item) return "";
+          if(item.type === "free"){
+            if(item.data.showLabel === false) return "";
+            return (item.data.caption || "").trim();
+          }
+          if(item.type === "obs"){
+            if(item.data.showLabel === false) return "";
+            if(item.data.kind === "arrow") return (item.data.label || "").trim();
+            if(item.data.kind === "area") return `${item.name} • ${item.data.code}`;
+          }
+          return "";
+        };
+        const labelBaseAnchorOf = (item) => {
+          if(!item) return null;
+          if(item.type === "free"){
+            const pts = item.data.points || [];
+            if(pts.length < 2) return null;
+            const bb = bboxFromPoints(pts);
+            return { x: (bb.minX + bb.maxX) / 2, y: bb.maxY + 12 / sheetHeight, textAnchor: "middle" as const };
+          }
+          if(item.type === "obs" && item.data.kind === "arrow"){
+            const [a, b] = item.data.points || [];
+            if(!a || !b) return null;
+            const ax = a.x * sheetWidth, ay = a.y * sheetHeight;
+            const bx = b.x * sheetWidth, by = b.y * sheetHeight;
+            const angle = Math.atan2(by - ay, bx - ax);
+            const labelOffset = 16;
+            const isLabelStart = (item.data.arrowLabelPosition || "end") === "start";
+            const labelAngle = isLabelStart ? angle + Math.PI : angle;
+            const anchorX = isLabelStart ? ax : bx;
+            const anchorY = isLabelStart ? ay : by;
+            return {
+              x: (anchorX + Math.cos(labelAngle) * labelOffset) / sheetWidth,
+              y: (anchorY + Math.sin(labelAngle) * labelOffset) / sheetHeight,
+              textAnchor: "start" as const,
+            };
+          }
+          if(item.type === "obs" && item.data.kind === "area"){
+            const pts = item.data.points || [];
+            if(!pts.length) return null;
+            const bb = bboxFromPoints(pts);
+            return { x: bb.minX + 7 / sheetWidth, y: bb.minY + 14 / sheetHeight, textAnchor: "start" as const };
+          }
+          return null;
+        };
+        const labelAnchorOf = (item) => {
+          const base = labelBaseAnchorOf(item);
+          if(!base) return null;
+          const off = item?.data?.labelOffset || { x: 0, y: 0 };
+          return { x: base.x + (off.x || 0), y: base.y + (off.y || 0), textAnchor: base.textAnchor };
+        };
+        const labelHitBox = (item) => {
+          const text = labelTextOf(item);
+          if(!text) return null;
+          const anchor = labelAnchorOf(item);
+          if(!anchor) return null;
+          const fontPx = item.type === "free" ? 11 : 10;
+          const wPx = Math.max(fontPx, text.length * fontPx * 0.62);
+          const padPx = 4;
+          const minXpx = (anchor.textAnchor === "middle" ? anchor.x * sheetWidth - wPx / 2 : anchor.x * sheetWidth) - padPx;
+          const maxXpx = minXpx + wPx + padPx * 2;
+          // <text> y is the baseline; glyphs sit mostly above it.
+          const minYpx = anchor.y * sheetHeight - fontPx - padPx;
+          const maxYpx = anchor.y * sheetHeight + fontPx * 0.35 + padPx;
+          return {
+            minX: minXpx / sheetWidth,
+            maxX: maxXpx / sheetWidth,
+            minY: minYpx / sheetHeight,
+            maxY: maxYpx / sheetHeight,
+          };
+        };
         const backgroundStyle = sheetMetrics.rotation
           ? { transform: `rotate(${sheetMetrics.rotation}deg)` }
           : undefined;
@@ -5864,10 +5974,21 @@ const loadPdfJs = () => {
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
 
+          // The label = name + area text. The cardinal direction is
+          // kept on the diagram either way (feedback item 3).
+          const showLabel = ts.data.showLabel !== false;
+          const dirY = showLabel ? 20 : 11;
+
+          // Hide the hit-count badge (and its leader) entirely when
+          // there are no recorded hits — empty circles cluttered the
+          // diagram (feedback item 3).
+          const hitCount = (ts.data.bruises||[]).length;
+          const showHits = hitCount > 0;
+
           const hp = getTsHitsPos(ts);
           const hitsPx = { x: toPxX(hp.x), y: toPxY(hp.y) };
           const anchor = tsLeaderAnchor(ts);
-          const showLeader = !!(ts.data.hitsPos && anchor);
+          const showLeader = showHits && !!(ts.data.hitsPos && anchor);
           const leaderAx = anchor ? toPxX(anchor.ax) : 0;
           const leaderAy = anchor ? toPxY(anchor.ay) : 0;
 
@@ -5879,17 +6000,19 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
-              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+20} fill="var(--c-ts)" fontWeight="700" fontSize="7">
+              {showLabel && (
+                <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
+              )}
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+dirY} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                 {ts.data.dir}
               </text>
-              {areaLabel && (
+              {showLabel && areaLabel && (
                 <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+28} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                   {areaLabel}
                 </text>
               )}
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+14})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+dirY-6})`} fill="var(--c-ts)" stroke="var(--c-ts)">
                   <rect x="0" y="3" width="6" height="4" rx="1" fill="var(--c-ts)" />
                   <path d="M1.2 3V2a1.8 1.8 0 013.6 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
@@ -5906,16 +6029,20 @@ const loadPdfJs = () => {
                   strokeDasharray="3,3"
                 />
               )}
-              <circle
-                cx={hitsPx.x}
-                cy={hitsPx.y}
-                r="9"
-                fill="var(--c-ts)"
-                style={isSel && !ts.data.locked ? { cursor: "move" } : undefined}
-              />
-              <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
-                {(ts.data.bruises||[]).length}
-              </text>
+              {showHits && (
+                <>
+                  <circle
+                    cx={hitsPx.x}
+                    cy={hitsPx.y}
+                    r="9"
+                    fill="var(--c-ts)"
+                    style={isSel && !ts.data.locked ? { cursor: "move" } : undefined}
+                  />
+                  <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
+                    {hitCount}
+                  </text>
+                </>
+              )}
 
               {isSel && !ts.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
@@ -5934,10 +6061,14 @@ const loadPdfJs = () => {
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
+          const showLabel = ts.data.showLabel !== false;
+          const dirY = showLabel ? 20 : 11;
+          const hitCount = (ts.data.bruises||[]).length;
+          const showHits = hitCount > 0;
           const hp = getTsHitsPos(ts);
           const hitsPx = { x: toPxX(hp.x), y: toPxY(hp.y) };
           const anchor = tsLeaderAnchor(ts);
-          const showLeader = !!(ts.data.hitsPos && anchor);
+          const showLeader = showHits && !!(ts.data.hitsPos && anchor);
           const leaderAx = anchor ? toPxX(anchor.ax) : 0;
           const leaderAy = anchor ? toPxY(anchor.ay) : 0;
           return (
@@ -5948,17 +6079,19 @@ const loadPdfJs = () => {
                 stroke="var(--c-ts)"
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
-              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+20} fill="var(--c-ts)" fontWeight="700" fontSize="7">
+              {showLabel && (
+                <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+11} fill="var(--c-ts)" fontWeight="800" fontSize="8">{ts.name}</text>
+              )}
+              <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+dirY} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                 {ts.data.dir}
               </text>
-              {areaLabel && (
+              {showLabel && areaLabel && (
                 <text x={toPxX(bb.minX)+5} y={toPxY(bb.minY)+28} fill="var(--c-ts)" fontWeight="700" fontSize="7">
                   {areaLabel}
                 </text>
               )}
               {ts.data.locked && (
-                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+14})`} fill="var(--c-ts)" stroke="var(--c-ts)">
+                <g transform={`translate(${toPxX(bb.minX)+5 + (ts.data.dir?.length || 0)*4 + 3}, ${toPxY(bb.minY)+dirY-6})`} fill="var(--c-ts)" stroke="var(--c-ts)">
                   <rect x="0" y="3" width="6" height="4" rx="1" fill="var(--c-ts)" />
                   <path d="M1.2 3V2a1.8 1.8 0 013.6 0V3" fill="none" strokeWidth="1" strokeLinecap="round" />
                 </g>
@@ -5974,10 +6107,14 @@ const loadPdfJs = () => {
                   strokeDasharray="3,3"
                 />
               )}
-              <circle cx={hitsPx.x} cy={hitsPx.y} r="9" fill="var(--c-ts)" />
-              <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
-                {(ts.data.bruises||[]).length}
-              </text>
+              {showHits && (
+                <>
+                  <circle cx={hitsPx.x} cy={hitsPx.y} r="9" fill="var(--c-ts)" />
+                  <text x={hitsPx.x} y={hitsPx.y+3} fill="#fff" textAnchor="middle" fontSize="9" fontWeight="800">
+                    {hitCount}
+                  </text>
+                </>
+              )}
             </g>
           );
         };
@@ -6005,6 +6142,10 @@ const loadPdfJs = () => {
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
+          const showLabel = obs.data.showLabel !== false;
+          const lblAnchor = labelAnchorOf(obs);
+          const lblX = lblAnchor ? lblAnchor.x * sheetWidth : toPxX(bb.minX)+7;
+          const lblY = lblAnchor ? lblAnchor.y * sheetHeight : toPxY(bb.minY)+14;
           return (
             <g key={obs.id}>
               <polygon
@@ -6013,13 +6154,24 @@ const loadPdfJs = () => {
                 stroke={oc}
                 strokeWidth={isSel ? 3 : 2}
               />
-              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill={oc} fontWeight="800" fontSize="10">
-                {obs.name} • {obs.data.code}
-              </text>
-              {areaLabel && (
-                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill={oc} fontWeight="700" fontSize="9">
-                  {areaLabel}
-                </text>
+              {showLabel && (
+                <>
+                  <text
+                    x={lblX}
+                    y={lblY}
+                    fill={oc}
+                    fontWeight="800"
+                    fontSize="10"
+                    style={isSel && !obs.data.locked ? { cursor: "move" } : undefined}
+                  >
+                    {obs.name} • {obs.data.code}
+                  </text>
+                  {areaLabel && (
+                    <text x={lblX} y={lblY+11} fill={oc} fontWeight="700" fontSize="9">
+                      {areaLabel}
+                    </text>
+                  )}
+                </>
               )}
               {isSel && !obs.data.locked && pts.map((p, idx) => (
                 <g key={idx}>
@@ -6055,14 +6207,10 @@ const loadPdfJs = () => {
             }
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill={oc} />;
           };
-          const labelOffset = 16;
-          const labelPosition = obs.data.arrowLabelPosition || "end";
-          const isLabelStart = labelPosition === "start";
-          const labelAngle = isLabelStart ? angle + Math.PI : angle;
-          const labelAnchorX = isLabelStart ? ax : bx;
-          const labelAnchorY = isLabelStart ? ay : by;
-          const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
-          const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
+          const showLabel = obs.data.showLabel !== false;
+          const lblAnchor = labelAnchorOf(obs);
+          const labelX = lblAnchor ? lblAnchor.x * sheetWidth : bx;
+          const labelY = lblAnchor ? lblAnchor.y * sheetHeight : by;
           const lengthLabel = scaleRef
             ? formatLengthFromPx(Math.hypot(bx - ax, by - ay), scaleRef, sheetWidth, sheetHeight)
             : null;
@@ -6076,8 +6224,15 @@ const loadPdfJs = () => {
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke={oc} strokeWidth={isSel ? 3 : 2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
-              {obs.data.label && (
-                <text x={labelX} y={labelY} fill={oc} fontWeight="800" fontSize="10">
+              {showLabel && obs.data.label && (
+                <text
+                  x={labelX}
+                  y={labelY}
+                  fill={oc}
+                  fontWeight="800"
+                  fontSize="10"
+                  style={isSel && !obs.data.locked ? { cursor: "move" } : undefined}
+                >
                   {obs.data.label}
                 </text>
               )}
@@ -6106,6 +6261,10 @@ const loadPdfJs = () => {
           const areaLabel = scaleRef
             ? formatAreaFromPx2(polygonAreaPx(pts, sheetWidth, sheetHeight), scaleRef, sheetWidth, sheetHeight)
             : null;
+          const showLabel = obs.data.showLabel !== false;
+          const lblAnchor = labelAnchorOf(obs);
+          const lblX = lblAnchor ? lblAnchor.x * sheetWidth : toPxX(bb.minX)+7;
+          const lblY = lblAnchor ? lblAnchor.y * sheetHeight : toPxY(bb.minY)+14;
           return (
             <g key={`print-${obs.id}`}>
               <polygon
@@ -6114,13 +6273,17 @@ const loadPdfJs = () => {
                 stroke={oc}
                 strokeWidth={2}
               />
-              <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+14} fill={oc} fontWeight="800" fontSize="10">
-                {obs.name} • {obs.data.code}
-              </text>
-              {areaLabel && (
-                <text x={toPxX(bb.minX)+7} y={toPxY(bb.minY)+25} fill={oc} fontWeight="700" fontSize="9">
-                  {areaLabel}
-                </text>
+              {showLabel && (
+                <>
+                  <text x={lblX} y={lblY} fill={oc} fontWeight="800" fontSize="10">
+                    {obs.name} • {obs.data.code}
+                  </text>
+                  {areaLabel && (
+                    <text x={lblX} y={lblY+11} fill={oc} fontWeight="700" fontSize="9">
+                      {areaLabel}
+                    </text>
+                  )}
+                </>
               )}
             </g>
           );
@@ -6149,14 +6312,10 @@ const loadPdfJs = () => {
             }
             return <polygon points={`${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`} fill={oc} />;
           };
-          const labelOffset = 16;
-          const labelPosition = obs.data.arrowLabelPosition || "end";
-          const isLabelStart = labelPosition === "start";
-          const labelAngle = isLabelStart ? angle + Math.PI : angle;
-          const labelAnchorX = isLabelStart ? ax : bx;
-          const labelAnchorY = isLabelStart ? ay : by;
-          const labelX = labelAnchorX + Math.cos(labelAngle) * labelOffset;
-          const labelY = labelAnchorY + Math.sin(labelAngle) * labelOffset;
+          const showLabel = obs.data.showLabel !== false;
+          const lblAnchor = labelAnchorOf(obs);
+          const labelX = lblAnchor ? lblAnchor.x * sheetWidth : bx;
+          const labelY = lblAnchor ? lblAnchor.y * sheetHeight : by;
           const lengthLabel = scaleRef
             ? formatLengthFromPx(Math.hypot(bx - ax, by - ay), scaleRef, sheetWidth, sheetHeight)
             : null;
@@ -6170,7 +6329,7 @@ const loadPdfJs = () => {
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke={oc} strokeWidth={2} />
               {drawHead(bx, by)}
               {obs.data.arrowType === "double" && drawHead(ax, ay, true)}
-              {obs.data.label && (
+              {showLabel && obs.data.label && (
                 <text x={labelX} y={labelY} fill={oc} fontWeight="800" fontSize="10">
                   {obs.data.label}
                 </text>
@@ -6249,9 +6408,10 @@ const loadPdfJs = () => {
           }
           let captionEl = null;
           if(i.data.showLabel !== false && (i.data.caption || "").trim()){
+            const lblAnchor = labelAnchorOf(i);
             const bb2 = bboxFromPoints(pts);
-            const cx = ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
-            const cy = bb2.maxY * sheetHeight + 12;
+            const cx = lblAnchor ? lblAnchor.x * sheetWidth : ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
+            const cy = lblAnchor ? lblAnchor.y * sheetHeight : bb2.maxY * sheetHeight + 12;
             captionEl = (
               <text
                 x={cx}
@@ -9614,11 +9774,13 @@ const loadPdfJs = () => {
                         let captionEl = null;
                         if(showCaption){
                           const bb2 = bboxFromPoints(pts);
-                          const cx = ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
-                          // Place the label just below the bounding box
-                          // so it doesn't collide with the measure label
-                          // above the shape.
-                          const cy = bb2.maxY * sheetHeight + 12;
+                          // Default placement is centered just below the
+                          // bounding box (clear of the measure label
+                          // above). Once dragged, labelOffset parks it
+                          // anywhere and travels with the shape.
+                          const lblAnchor = labelAnchorOf(i);
+                          const cx = lblAnchor ? lblAnchor.x * sheetWidth : ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
+                          const cy = lblAnchor ? lblAnchor.y * sheetHeight : bb2.maxY * sheetHeight + 12;
                           captionEl = (
                             <text
                               x={cx}
@@ -9627,7 +9789,7 @@ const loadPdfJs = () => {
                               fontSize="11"
                               fontWeight="700"
                               textAnchor="middle"
-                              style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 3 } as any}
+                              style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 3, cursor: isSel && !i.data.locked ? "move" : "pointer" } as any}
                             >
                               {i.data.caption}
                             </text>
@@ -10390,6 +10552,24 @@ const loadPdfJs = () => {
                               <span className="groupCount">{group.length}</span>
                             </div>
                             <div className="groupActions">
+                              {(() => {
+                                const catVisible = categoryVisibility[type] !== false;
+                                return (
+                                  <button
+                                    type="button"
+                                    className={"iconBtn groupEyeBtn" + (catVisible ? "" : " hidden")}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCategoryVisibility(prev => ({ ...prev, [type]: !catVisible }));
+                                    }}
+                                    title={catVisible ? `Hide all ${title} on the diagram` : `Show all ${title} on the diagram`}
+                                    aria-label={catVisible ? `Hide all ${title}` : `Show all ${title}`}
+                                    aria-pressed={!catVisible}
+                                  >
+                                    <Icon name={catVisible ? "eye" : "eyeOff"} />
+                                  </button>
+                                );
+                              })()}
                               <button
                                 type="button"
                                 className={"iconBtn groupLockBtn" + (allLocked ? " active" : "")}
@@ -10614,6 +10794,27 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Notes</div>
                               <textarea className="inp" value={activeItem.data.caption} onChange={(e)=>updateItemData("caption", e.target.value)} placeholder="Notes relevant to sampled area..."/>
+                            </div>
+
+                            <div style={{marginBottom:10}}>
+                              <div className="row" style={{alignItems:"center", justifyContent:"space-between"}}>
+                                <div className="lbl" style={{margin:0}}>Diagram Label</div>
+                                <label
+                                  className="drawLabelToggle"
+                                  title="Show this test square's name label on the diagram"
+                                >
+                                  <span className="drawLabelToggleText">Show on diagram</span>
+                                  <input
+                                    type="checkbox"
+                                    checked={activeItem.data.showLabel !== false}
+                                    onChange={(e)=>updateItemData("showLabel", e.target.checked)}
+                                  />
+                                  <span className="drawLabelToggleSwitch" aria-hidden="true" />
+                                </label>
+                              </div>
+                              <div className="tiny" style={{marginTop:4}}>
+                                Hides the name and area text. The cardinal direction stays on the diagram either way.
+                              </div>
                             </div>
 
                             {activeItem.data.hitsPos && (
@@ -11341,7 +11542,10 @@ const loadPdfJs = () => {
                             <div style={{marginBottom:10}}>
                               <div className="lbl">Direction (optional)</div>
                               <div className="radioGrid">
-                                {CARDINAL_DIRS.map(d => (
+                                {/* Roof observations can sit on a ridge or hip,
+                                    not just a cardinal slope, so those options
+                                    join the grid when the area is set to roof. */}
+                                {[...CARDINAL_DIRS, ...(activeItem.data.area === "roof" ? ["Ridge", "Hip"] : [])].map(d => (
                                   <div
                                     key={d}
                                     className={"radio " + (activeItem.data.dir === d ? "active" : "")}
@@ -11470,6 +11674,29 @@ const loadPdfJs = () => {
                                   </select>
                                 </div>
                               </>
+                            )}
+
+                            {(activeItem.data.kind === "arrow" || activeItem.data.kind === "area") && (
+                              <div style={{marginBottom:10}}>
+                                <div className="row" style={{alignItems:"center", justifyContent:"space-between"}}>
+                                  <div className="lbl" style={{margin:0}}>Diagram Label</div>
+                                  <label
+                                    className="drawLabelToggle"
+                                    title="Show this observation's label on the diagram"
+                                  >
+                                    <span className="drawLabelToggleText">Show on diagram</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={activeItem.data.showLabel !== false}
+                                      onChange={(e)=>updateItemData("showLabel", e.target.checked)}
+                                    />
+                                    <span className="drawLabelToggleSwitch" aria-hidden="true" />
+                                  </label>
+                                </div>
+                                <div className="tiny" style={{marginTop:4}}>
+                                  Hide the label when the observation should be noted but the diagram is cleaner without it.
+                                </div>
+                              </div>
                             )}
 
                             <div style={{marginBottom:10}}>

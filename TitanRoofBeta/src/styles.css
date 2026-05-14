@@ -2929,17 +2929,24 @@
         gap:6px;
         flex:0 0 auto;
       }
-      .groupHeader .groupLockBtn{
+      .groupHeader .groupLockBtn,
+      .groupHeader .groupEyeBtn{
         width:24px;
         height:24px;
         border-radius:8px;
         color: var(--sub);
       }
-      .groupHeader .groupLockBtn svg{ width:13px; height:13px; }
+      .groupHeader .groupLockBtn svg,
+      .groupHeader .groupEyeBtn svg{ width:13px; height:13px; }
       .groupHeader .groupLockBtn.active{
         background: rgba(11,167,165,0.14);
         border-color: rgba(11,167,165,0.45);
         color: var(--teal);
+      }
+      .groupHeader .groupEyeBtn.hidden{
+        background: rgba(148,163,184,0.18);
+        border-color: rgba(148,163,184,0.5);
+        color: var(--sub);
       }
       .itemsPanelBulk{
         display:flex;
@@ -6916,55 +6923,27 @@
         border-bottom: 1px solid rgba(148,163,184,0.32);
         box-shadow: 0 1px 0 rgba(255,255,255,0.9) inset;
       }
-      /* Brand cluster (logo + TitanRoof + Beta v4.2.3) — white ink
-         on a blue gradient so the brand pops without overwhelming the
-         rest of the bar. Everything else in the bar keeps its existing
-         neutral look. */
+      /* Brand mark — compact TR logo in a simple blue square. The
+         "TitanRoof Beta v4.2.3" wordmark was dropped so the bar reads
+         tighter and items pack toward the left edge. */
       .ubBrand{
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        padding: 6px 12px 6px 10px;
-        margin-right: 10px;
-        border-radius: 10px;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        margin-right: 6px;
+        border-radius: 8px;
         background: linear-gradient(135deg, #0EA5E9 0%, #2563EB 50%, #1E40AF 100%);
         box-shadow: 0 1px 2px rgba(15,23,42,0.18);
         color: #ffffff;
         flex: 0 0 auto;
-        min-width: 0;
-        max-height: calc(var(--unifiedbar-height) - 18px);
         user-select: none;
       }
       .ubBrand svg{ color: #ffffff; }
-      .ubBrandText{
-        display: inline-flex;
-        flex-direction: column;
-        align-items: flex-start;
-        line-height: 1;
-        min-width: 0;
-      }
-      .ubBrandName{
-        font-size: 16px;
-        font-weight: 900;
-        letter-spacing: 0.2px;
-        color: #ffffff;
-      }
-      .ubBrandMeta{
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.6px;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.8);
-        margin-top: 4px;
-      }
-      .ubBrandVersion{
-        font-weight: 600;
-        opacity: 0.9;
-        margin-left: 2px;
-      }
       @media (max-width: 820px){
-        .ubBrandText{ display: none; }
-        .ubBrand{ margin-right: 4px; padding: 5px 8px; }
+        .ubBrand{ margin-right: 4px; width: 30px; height: 30px; }
       }
       .ubRow{
         display: flex;
@@ -7410,9 +7389,9 @@
       .ubToolStrip{
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        margin-left: 6px;
-        padding: 2px 0 2px 12px;
+        gap: 1px;
+        margin-left: 4px;
+        padding: 2px 0 2px 8px;
         border-left: 1px solid rgba(148,163,184,0.35);
         overflow-x: auto;
         overflow-y: hidden;
@@ -7428,16 +7407,16 @@
       .ubToolChip{
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        padding: 6px 12px;
-        min-height: 35px;
-        border-radius: 8px;
+        gap: 4px;
+        padding: 3px 6px;
+        min-height: 28px;
+        border-radius: 7px;
         border: none;
         background: transparent;
         color: #334155;
-        font-size: 13px;
+        font-size: 11px;
         font-weight: 800;
-        letter-spacing: 0.25px;
+        letter-spacing: 0.2px;
         cursor: pointer;
         transition: background 0.1s ease, color 0.1s ease, transform 0.1s ease;
       }
@@ -7448,14 +7427,14 @@
       .ubToolChip:active{ transform: scale(0.96); }
       .ubToolChip .ubToolIcon{
         display: inline-flex;
-        width: 26px;
-        height: 26px;
+        width: 22px;
+        height: 22px;
         align-items: center;
         justify-content: center;
         border-radius: 6px;
         color: #64748B;
       }
-      .ubToolChip .ubToolIcon .ubIcon{ width: 22px; height: 22px; }
+      .ubToolChip .ubToolIcon .ubIcon{ width: 18px; height: 18px; }
       .ubToolChip .ubToolLabel{ display: inline-block; }
       /* Color mode: tool chips carry their tool color on the icon at
          rest, not only when active, so the strip reads as a colorful
@@ -7484,8 +7463,8 @@
       .ubToolDivider{
         display: inline-block;
         width: 1px;
-        height: 22px;
-        margin: 0 4px;
+        height: 18px;
+        margin: 0 3px;
         background: rgba(148,163,184,0.45);
         flex: 0 0 auto;
       }
@@ -7517,8 +7496,7 @@
       body.isTabletLike .ubIconBtn .ubIcon{ width: 16px; height: 16px; }
       body.isTabletLike .ubRightDivider{ margin: 0 3px; }
       body.isTabletLike .ubUserBtn{ width: 30px; height: 30px; margin-left: 4px; }
-      body.isTabletLike .ubBrand{ padding: 4px 8px; margin-right: 6px; }
-      body.isTabletLike .ubBrandText{ display: none; }
+      body.isTabletLike .ubBrand{ width: 30px; height: 30px; margin-right: 6px; }
       body.isTabletLike .ubPillLabel{ display: none; }
       body.isTabletLike .ubPillBtn{ padding: 4px 6px; }
       body.isTabletLike .ubPillIcon .ubIcon{ width: 16px; height: 16px; }
@@ -7560,12 +7538,11 @@
         .ubIconBtn .ubIcon{ width: 16px; height: 16px; }
         .ubRightDivider{ margin: 0 3px; }
         .ubUserBtn{ width: 30px; height: 30px; margin-left: 4px; }
-        /* Keep the Titan Roof brand pill visible across every iPad
-           orientation — the blue pill is the primary wayfinding
+        /* Keep the Titan Roof brand mark visible across every iPad
+           orientation — the blue square is the primary wayfinding
            anchor, so hiding it in portrait made the bar feel
-           inconsistent between orientations. Tighten padding
-           instead so the icon row still fits. */
-        .ubBrand{ padding: 4px 8px; margin-right: 6px; }
+           inconsistent between orientations. */
+        .ubBrand{ width: 30px; height: 30px; margin-right: 6px; }
         .ubPillLabel{ display: none; }
         .ubPillBtn{ padding: 4px 6px; }
         .ubPillIcon .ubIcon{ width: 16px; height: 16px; }
@@ -7580,7 +7557,6 @@
       @media (max-width: 1080px){
         .ubTitle{ font-size: 15px; }
         .ubTitleBlock{ max-width: min(28vw, 220px); }
-        .ubBrand{ padding: 3px 5px; }
       }
 
       /* Compact layout adjustments by orientation.
