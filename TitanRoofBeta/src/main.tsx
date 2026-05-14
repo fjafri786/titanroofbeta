@@ -6184,6 +6184,105 @@ const loadPdfJs = () => {
           );
         };
 
+        // Free-draw / DRAW-tool annotations in the export sheet. Mirrors
+        // the live-canvas <path> render (selection chrome stripped) so
+        // rectangles, freehand strokes, arrows, etc. survive into the PDF.
+        const renderFreePrint = (i) => {
+          const pts = i.data.points || [];
+          if(pts.length < 2) return null;
+          const shape = i.data.shape;
+          const color = i.data.color || "#0EA5E9";
+          const sw = i.data.strokeWidth || 2;
+          const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${toPxX(p.x)},${toPxY(p.y)}`).join(" ") + (i.data.closed ? " Z" : "");
+          let arrowHead = null;
+          if(shape === "arrow" && pts.length >= 2){
+            const a = pts[pts.length - 2];
+            const b = pts[pts.length - 1];
+            const ax = toPxX(a.x), ay = toPxY(a.y);
+            const bx = toPxX(b.x), by = toPxY(b.y);
+            const ang = Math.atan2(by - ay, bx - ax);
+            const headSize = Math.max(10, sw * 4);
+            const hx1 = bx - headSize * Math.cos(ang - Math.PI / 6);
+            const hy1 = by - headSize * Math.sin(ang - Math.PI / 6);
+            const hx2 = bx - headSize * Math.cos(ang + Math.PI / 6);
+            const hy2 = by - headSize * Math.sin(ang + Math.PI / 6);
+            arrowHead = <polygon points={`${bx},${by} ${hx1},${hy1} ${hx2},${hy2}`} fill={color} />;
+          }
+          let measureLabel = null;
+          if(scaleRef){
+            const bb = bboxFromPoints(pts);
+            const w = (bb.maxX - bb.minX) * sheetWidth;
+            const h = (bb.maxY - bb.minY) * sheetHeight;
+            const fmtL = (px) => formatLengthFromPx(px, scaleRef, sheetWidth, sheetHeight);
+            const fmtA = (px2) => formatAreaFromPx2(px2, scaleRef, sheetWidth, sheetHeight);
+            let text: string | null = null;
+            let x = bb.minX * sheetWidth;
+            let y = bb.minY * sheetHeight - 4;
+            if(shape === "rect"){
+              text = `${fmtL(w)} × ${fmtL(h)} (${fmtA(w * h)})`;
+            } else if(shape === "circle"){
+              const rxL = fmtL(w / 2), ryL = fmtL(h / 2);
+              const area = Math.PI * (w / 2) * (h / 2);
+              text = Math.abs(w - h) < 1
+                ? `ø ${fmtL(w)} (${fmtA(area)})`
+                : `${rxL} × ${ryL} (${fmtA(area)})`;
+            } else if(shape === "line" || shape === "arrow"){
+              const a = pts[0], b = pts[pts.length - 1];
+              const len = Math.hypot((b.x - a.x) * sheetWidth, (b.y - a.y) * sheetHeight);
+              text = fmtL(len);
+              x = ((a.x + b.x) / 2) * sheetWidth;
+              y = ((a.y + b.y) / 2) * sheetHeight - 6;
+            } else if(shape === "triangle"){
+              text = fmtA(polygonAreaPx(pts, sheetWidth, sheetHeight));
+            } else if(i.data.closed){
+              text = fmtA(polygonAreaPx(pts, sheetWidth, sheetHeight));
+            } else {
+              text = fmtL(polylineLengthPx(pts, sheetWidth, sheetHeight, false));
+            }
+            if(text){
+              measureLabel = (
+                <text x={x} y={y} fill={color} fontSize="10" fontWeight="700" style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.8)", strokeWidth: 3 } as any}>
+                  {text}
+                </text>
+              );
+            }
+          }
+          let captionEl = null;
+          if(i.data.showLabel !== false && (i.data.caption || "").trim()){
+            const bb2 = bboxFromPoints(pts);
+            const cx = ((bb2.minX + bb2.maxX) / 2) * sheetWidth;
+            const cy = bb2.maxY * sheetHeight + 12;
+            captionEl = (
+              <text
+                x={cx}
+                y={cy}
+                fill={color}
+                fontSize="11"
+                fontWeight="700"
+                textAnchor="middle"
+                style={{ paintOrder: "stroke", stroke: "rgba(255,255,255,0.85)", strokeWidth: 3 } as any}
+              >
+                {i.data.caption}
+              </text>
+            );
+          }
+          return (
+            <g key={`print-${i.id}`}>
+              <path
+                d={d}
+                fill={i.data.closed ? `${color}1a` : "none"}
+                stroke={color}
+                strokeWidth={sw}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {arrowHead}
+              {measureLabel}
+              {captionEl}
+            </g>
+          );
+        };
+
         // === Marker meta (DS shows number) ===
         const markerMeta = (i) => {
           if(i.type === "apt"){
@@ -13508,8 +13607,9 @@ const loadPdfJs = () => {
                     {pageItems.filter(i => i.type === "ts").map(renderTSPrint)}
                     {pageItems.filter(i => i.type === "obs" && i.data.kind === "area" && i.data.points?.length).map(renderObsAreaPrint)}
                     {pageItems.filter(i => i.type === "obs" && i.data.kind === "arrow" && i.data.points?.length === 2).map(renderObsArrowPrint)}
+                    {pageItems.filter(i => i.type === "free" && i.data.points?.length > 1).map(renderFreePrint)}
                   </svg>
-                  {pageItems.filter(i => i.type !== "ts" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
+                  {pageItems.filter(i => i.type !== "ts" && i.type !== "free" && !(i.type === "obs" && i.data.kind !== "pin")).map(i => {
                     const m = markerMeta(i);
                     return (
                       <div

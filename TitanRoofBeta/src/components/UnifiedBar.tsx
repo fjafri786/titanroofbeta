@@ -245,10 +245,13 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
               </div>
               {isDiagram && (
                 <div className="ubToolStrip" role="toolbar" aria-label="Drawing tools">
+                  {/* All drawing tools — including Draw — render together,
+                      then a divider and undo / redo, so the toolbar reads:
+                        …OBS DRAW │ Undo Redo */}
                   {TOOL_DEFS.map(t => {
                     const IconEl = I[t.icon];
                     const active = props.currentTool === t.key;
-                    const chip = (
+                    return (
                       <button
                         key={t.key}
                         type="button"
@@ -261,42 +264,34 @@ const UnifiedBar: React.FC<UnifiedBarProps> = (props) => {
                         <span className="ubToolLabel">{t.short}</span>
                       </button>
                     );
-                    // Insert undo / redo + divider immediately before
-                    // the Draw chip so the toolbar reads:
-                    //   …OBS │ Undo Redo │ DRAW
-                    if(t.key === "free" && props.onUndo && props.onRedo){
-                      return (
-                        <React.Fragment key="free-with-history">
-                          <span className="ubToolDivider" aria-hidden="true" />
-                          <button
-                            type="button"
-                            className="ubToolChip ubHistoryChip"
-                            onClick={props.onUndo}
-                            disabled={!props.canUndo}
-                            title="Undo"
-                            aria-label="Undo"
-                          >
-                            <span className="ubToolIcon"><I.undo /></span>
-                            <span className="ubToolLabel">UNDO</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="ubToolChip ubHistoryChip"
-                            onClick={props.onRedo}
-                            disabled={!props.canRedo}
-                            title="Redo"
-                            aria-label="Redo"
-                          >
-                            <span className="ubToolIcon"><I.redo /></span>
-                            <span className="ubToolLabel">REDO</span>
-                          </button>
-                          <span className="ubToolDivider" aria-hidden="true" />
-                          {chip}
-                        </React.Fragment>
-                      );
-                    }
-                    return chip;
                   })}
+                  {props.onUndo && props.onRedo && (
+                    <>
+                      <span className="ubToolDivider" aria-hidden="true" />
+                      <button
+                        type="button"
+                        className="ubToolChip ubHistoryChip"
+                        onClick={props.onUndo}
+                        disabled={!props.canUndo}
+                        title="Undo"
+                        aria-label="Undo"
+                      >
+                        <span className="ubToolIcon"><I.undo /></span>
+                        <span className="ubToolLabel">UNDO</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="ubToolChip ubHistoryChip"
+                        onClick={props.onRedo}
+                        disabled={!props.canRedo}
+                        title="Redo"
+                        aria-label="Redo"
+                      >
+                        <span className="ubToolIcon"><I.redo /></span>
+                        <span className="ubToolLabel">REDO</span>
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
