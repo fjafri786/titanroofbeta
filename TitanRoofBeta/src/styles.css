@@ -6451,6 +6451,8 @@
         }
         .printSheet .printCard{
           padding: 5px;
+          background: #fff;
+          border-color: #E2E8F0;
         }
         .printSheet .printPhoto{
           aspect-ratio: auto;
