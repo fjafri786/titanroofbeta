@@ -6461,8 +6461,10 @@
         .printSheet .printPhoto img{
           object-fit: cover;
         }
-        .printDiagramPage{ page: diagram; }
-        .printDiagramPage .printDiagramSheet{
+        .printDiagramLandscape { page: diagramLandscape; }
+        .printDiagramPortrait  { page: diagramPortrait;  }
+        .printDiagramLandscape .printDiagramSheet,
+        .printDiagramPortrait .printDiagramSheet{
           max-height: calc(100vh - 20mm);
           max-width: 100%;
           overflow: hidden;
@@ -6471,8 +6473,12 @@
           size: portrait;
           margin: 12mm;
         }
-        @page diagram{
+        @page diagramLandscape{
           size: landscape;
+          margin: 10mm;
+        }
+        @page diagramPortrait{
+          size: portrait;
           margin: 10mm;
         }
       }
