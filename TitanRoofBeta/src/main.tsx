@@ -13483,7 +13483,7 @@ const loadPdfJs = () => {
               </div>
             </div>
 
-            <div className="printPage printDiagramPage">
+            <div className={`printPage printDiagramPage ${sheetWidth >= sheetHeight ? 'printDiagramLandscape' : 'printDiagramPortrait'}`}>
               <div className="printDiagramWrap">
                 <div className="printDiagramSheet" style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
                   <div className="bgLayer" style={backgroundStyle}>
